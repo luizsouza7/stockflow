@@ -1,0 +1,208 @@
+import { FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { createProduct, localDb, updateProduct } from '../services/db/localDb';
+import type { ProductFormData } from '../types/Product';
+
+const initialFormData: ProductFormData = {
+  name: '',
+  code: '',
+  category: '',
+  price: 0,
+  currentQuantity: 0,
+  minimumStock: 0,
+};
+
+export function ProductForm() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const productId = id ? Number(id) : undefined;
+  const isEditing = Boolean(productId);
+  const [formData, setFormData] = useState<ProductFormData>(initialFormData);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!productId) {
+      return;
+    }
+
+    localDb.products.get(productId).then((product) => {
+      if (product) {
+        setFormData({
+          name: product.name,
+          code: product.code,
+          category: product.category,
+          price: product.price,
+          currentQuantity: product.currentQuantity,
+          minimumStock: product.minimumStock,
+        });
+      }
+    });
+  }, [productId]);
+
+  function updateField(field: keyof ProductFormData, value: string) {
+    const numericFields: Array<keyof ProductFormData> = [
+      'price',
+      'currentQuantity',
+      'minimumStock',
+    ];
+
+    setFormData((current) => ({
+      ...current,
+      [field]: numericFields.includes(field) ? Number(value) : value,
+    }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+
+    if (!formData.name.trim() || !formData.code.trim() || !formData.category.trim()) {
+      setError('Preencha nome, codigo e categoria.');
+      return;
+    }
+
+    if (
+      !Number.isFinite(formData.price) ||
+      !Number.isInteger(formData.currentQuantity) ||
+      !Number.isInteger(formData.minimumStock)
+    ) {
+      setError('Informe valores numericos validos.');
+      return;
+    }
+
+    if (formData.price < 0 || formData.currentQuantity < 0 || formData.minimumStock < 0) {
+      setError('Valores numericos nao podem ser negativos.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    if (isEditing && productId) {
+      await updateProduct(productId, formData);
+    } else {
+      await createProduct({
+        ...formData,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'pending',
+      });
+    }
+
+    navigate('/produtos');
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <section>
+        <h1 className="text-2xl font-bold text-slate-950">
+          {isEditing ? 'Editar produto' : 'Novo produto'}
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Os dados serao salvos localmente neste dispositivo.
+        </p>
+      </section>
+
+      <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        {error && (
+          <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+            {error}
+          </div>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Nome" id="name">
+            <input
+              id="name"
+              value={formData.name}
+              onChange={(event) => updateField('name', event.target.value)}
+              className="input"
+              required
+            />
+          </Field>
+          <Field label="Codigo" id="code">
+            <input
+              id="code"
+              value={formData.code}
+              onChange={(event) => updateField('code', event.target.value)}
+              className="input"
+              required
+            />
+          </Field>
+          <Field label="Categoria" id="category">
+            <input
+              id="category"
+              value={formData.category}
+              onChange={(event) => updateField('category', event.target.value)}
+              className="input"
+              required
+            />
+          </Field>
+          <Field label="Preco" id="price">
+            <input
+              id="price"
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.price}
+              onChange={(event) => updateField('price', event.target.value)}
+              className="input"
+              required
+            />
+          </Field>
+          <Field label="Quantidade atual" id="currentQuantity">
+            <input
+              id="currentQuantity"
+              type="number"
+              min="0"
+              value={formData.currentQuantity}
+              onChange={(event) => updateField('currentQuantity', event.target.value)}
+              className="input"
+              required
+            />
+          </Field>
+          <Field label="Estoque minimo" id="minimumStock">
+            <input
+              id="minimumStock"
+              type="number"
+              min="0"
+              value={formData.minimumStock}
+              onChange={(event) => updateField('minimumStock', event.target.value)}
+              className="input"
+              required
+            />
+          </Field>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Link
+            to="/produtos"
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          >
+            Cancelar
+          </Link>
+          <button
+            type="submit"
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-900"
+          >
+            Salvar produto
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+interface FieldProps {
+  label: string;
+  id: string;
+  children: ReactNode;
+}
+
+function Field({ label, id, children }: FieldProps) {
+  return (
+    <label className="block text-sm font-medium text-slate-700" htmlFor={id}>
+      {label}
+      <div className="mt-2">{children}</div>
+    </label>
+  );
+}

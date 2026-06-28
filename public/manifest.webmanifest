@@ -1,0 +1,17 @@
+{
+  "name": "StockFlow",
+  "short_name": "StockFlow",
+  "description": "Controle de estoque offline para pequenos comercios.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
