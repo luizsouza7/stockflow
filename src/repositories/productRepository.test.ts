@@ -9,7 +9,6 @@ async function createProduct(name: string) {
   return productService.create({
     name,
     code: name.toUpperCase(),
-    category: 'Teste',
     salePriceInCents: 1000,
     currentQuantity: 5,
     minimumStock: 2,

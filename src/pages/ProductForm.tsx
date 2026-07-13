@@ -3,11 +3,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { productService } from '../services/productService';
 import type { ProductFormData } from '../types/Product';
 import { formatCentsForInput, parseCurrencyToCents } from '../utils/formatters';
+import { categoryService } from '../services/categoryService';
+import { useDexieQuery } from '../hooks/useDexieQuery';
 
 const initialFormData: ProductFormData = {
   name: '',
   code: '',
-  category: '',
+  categoryId: '',
   salePrice: '0,00',
   currentQuantity: 0,
   minimumStock: 0,
@@ -20,6 +22,7 @@ export function ProductForm() {
   const isEditing = Boolean(productId);
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
   const [error, setError] = useState('');
+  const { data: categories } = useDexieQuery(() => categoryService.listActive(), []);
 
   useEffect(() => {
     if (!productId) {
@@ -31,7 +34,7 @@ export function ProductForm() {
         setFormData({
           name: product.name,
           code: product.code,
-          category: product.category,
+          categoryId: product.categoryId ?? '',
           salePrice: formatCentsForInput(product.salePriceInCents),
           currentQuantity: product.currentQuantity,
           minimumStock: product.minimumStock,
@@ -56,8 +59,8 @@ export function ProductForm() {
     event.preventDefault();
     setError('');
 
-    if (!formData.name.trim() || !formData.code.trim() || !formData.category.trim()) {
-      setError('Preencha nome, codigo e categoria.');
+    if (!formData.name.trim() || !formData.code.trim()) {
+      setError('Preencha nome e codigo.');
       return;
     }
 
@@ -83,7 +86,7 @@ export function ProductForm() {
     const productData = {
       name: formData.name,
       code: formData.code,
-      category: formData.category,
+      categoryId: formData.categoryId || undefined,
       salePriceInCents,
       currentQuantity: formData.currentQuantity,
       minimumStock: formData.minimumStock,
@@ -91,18 +94,24 @@ export function ProductForm() {
 
     const now = new Date().toISOString();
 
-    if (isEditing && productId) {
-      await productService.update(productId, productData);
-    } else {
-      await productService.create({
-        ...productData,
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: 'pending',
-      });
-    }
+    try {
+      if (isEditing && productId) {
+        await productService.update(productId, productData);
+      } else {
+        await productService.create({
+          ...productData,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'pending',
+        });
+      }
 
-    navigate('/produtos');
+      navigate('/produtos');
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : 'Nao foi possivel salvar o produto.',
+      );
+    }
   }
 
   return (
@@ -142,14 +151,20 @@ export function ProductForm() {
               required
             />
           </Field>
-          <Field label="Categoria" id="category">
-            <input
-              id="category"
-              value={formData.category}
-              onChange={(event) => updateField('category', event.target.value)}
+          <Field label="Categoria" id="categoryId">
+            <select
+              id="categoryId"
+              value={formData.categoryId}
+              onChange={(event) => updateField('categoryId', event.target.value)}
               className="input"
-              required
-            />
+            >
+              <option value="">Sem categoria</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Preco" id="salePrice">
             <input

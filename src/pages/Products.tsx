@@ -101,7 +101,7 @@ export function Products() {
                       {product.code} • Atualizado em {formatDate(product.updatedAt)}
                     </p>
                   </div>
-                  <p className="text-sm text-slate-700">{product.category}</p>
+                  <p className="text-sm text-slate-700">{product.categoryName}</p>
                   <p className="text-sm font-semibold text-slate-950">
                     {formatCentsToBRL(product.salePriceInCents)}
                   </p>

@@ -26,4 +26,9 @@ export const productRepository = {
   async findPending(): Promise<Product[]> {
     return localDb.products.where('syncStatus').equals('pending').toArray();
   },
+
+  async countActiveByCategoryId(categoryId: string): Promise<number> {
+    const products = await localDb.products.where('categoryId').equals(categoryId).toArray();
+    return products.filter((product) => !product.deletedAt).length;
+  },
 };

@@ -6,6 +6,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'D' },
   { to: '/produtos', label: 'Produtos', icon: 'P' },
+  { to: '/categorias', label: 'Categorias', icon: 'C' },
   { to: '/movimentacoes', label: 'Movimentos', icon: 'M' },
   { to: '/alertas', label: 'Alertas', icon: 'A' },
 ];
@@ -70,7 +71,7 @@ export function Layout() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white lg:hidden">
         {navItems.map((item) => (
           <NavLink
             key={item.to}

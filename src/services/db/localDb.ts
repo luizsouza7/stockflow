@@ -1,6 +1,8 @@
 import Dexie, { type Table } from 'dexie';
 import type { Movement } from '../../types/Movement';
 import type { Product } from '../../types/Product';
+import type { Category } from '../../types/Category';
+import { generateUuid } from '../../utils/id';
 
 interface LegacyProductWithDecimalPrice {
   price?: unknown;
@@ -13,9 +15,24 @@ interface MovementBeforeQuantitySnapshots {
   isLegacy?: unknown;
 }
 
+interface ProductBeforeCategories {
+  id?: number;
+  category?: unknown;
+  categoryId?: unknown;
+}
+
+function normalizeLegacyCategoryName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+}
+
+function sanitizeLegacyCategoryName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ');
+}
+
 export class StockFlowDatabase extends Dexie {
   products!: Table<Product, number>;
   movements!: Table<Movement, number>;
+  categories!: Table<Category, string>;
 
   constructor(databaseName = 'stockflow-local-db') {
     super(databaseName);
@@ -96,6 +113,69 @@ export class StockFlowDatabase extends Dexie {
             delete movement.resultingQuantity;
             movement.isLegacy = true;
           });
+      });
+
+    this.version(5)
+      .stores({
+        products:
+          '++id, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+        movements: '++id, productId, type, date, syncStatus',
+        categories: 'id, name, updatedAt, deletedAt, syncStatus',
+      })
+      .upgrade(async (transaction) => {
+        const products = await transaction
+          .table<ProductBeforeCategories, number>('products')
+          .toArray();
+        const categoryByNormalizedName = new Map<string, Category>();
+        const categoryIdByProductId = new Map<number, string | undefined>();
+        const migrationTimestamp = new Date().toISOString();
+
+        for (const product of products) {
+          const legacyName =
+            typeof product.category === 'string'
+              ? sanitizeLegacyCategoryName(product.category)
+              : '';
+
+          if (!legacyName) {
+            if (product.id !== undefined) {
+              categoryIdByProductId.set(product.id, undefined);
+            }
+            continue;
+          }
+
+          const normalizedName = normalizeLegacyCategoryName(legacyName);
+          let category = categoryByNormalizedName.get(normalizedName);
+
+          if (!category) {
+            category = {
+              id: generateUuid(),
+              name: legacyName,
+              createdAt: migrationTimestamp,
+              updatedAt: migrationTimestamp,
+              syncStatus: 'pending',
+            };
+            categoryByNormalizedName.set(normalizedName, category);
+          }
+
+          if (product.id !== undefined) {
+            categoryIdByProductId.set(product.id, category.id);
+          }
+        }
+
+        await transaction
+          .table<ProductBeforeCategories, number>('products')
+          .toCollection()
+          .modify((product) => {
+            product.categoryId =
+              product.id === undefined ? undefined : categoryIdByProductId.get(product.id);
+            delete product.category;
+          });
+
+        if (categoryByNormalizedName.size > 0) {
+          await transaction
+            .table<Category, string>('categories')
+            .bulkAdd([...categoryByNormalizedName.values()]);
+        }
       });
   }
 }

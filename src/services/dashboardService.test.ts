@@ -22,7 +22,6 @@ describe('dashboardService', () => {
     const outOfStockId = await productService.create({
       name: 'Cafe',
       code: 'CAFE',
-      category: 'Teste',
       salePriceInCents: 1000,
       currentQuantity: 0,
       minimumStock: 2,
@@ -33,7 +32,6 @@ describe('dashboardService', () => {
     const activeId = await productService.create({
       name: 'Arroz',
       code: 'ARROZ',
-      category: 'Teste',
       salePriceInCents: 2000,
       currentQuantity: 10,
       minimumStock: 2,

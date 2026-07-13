@@ -12,7 +12,6 @@ async function createTestProduct(quantity = 5) {
   return productService.create({
     name: 'Arroz',
     code: 'ARROZ-001',
-    category: 'Alimentos',
     salePriceInCents: 1990,
     currentQuantity: quantity,
     minimumStock: 2,

@@ -4,7 +4,7 @@ export interface Product {
   id?: number;
   name: string;
   code: string;
-  category: string;
+  categoryId?: string;
   salePriceInCents: number;
   currentQuantity: number;
   minimumStock: number;
@@ -15,6 +15,11 @@ export interface Product {
 }
 
 export interface ProductFormData
-  extends Pick<Product, 'name' | 'code' | 'category' | 'currentQuantity' | 'minimumStock'> {
+  extends Pick<Product, 'name' | 'code' | 'currentQuantity' | 'minimumStock'> {
+  categoryId: string;
   salePrice: string;
+}
+
+export interface ProductWithCategory extends Product {
+  categoryName: string;
 }

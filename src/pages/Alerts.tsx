@@ -50,7 +50,7 @@ export function Alerts() {
                 </div>
                 <div>
                   <dt className="text-slate-500">Categoria</dt>
-                  <dd className="font-semibold text-slate-950">{product.category}</dd>
+                  <dd className="font-semibold text-slate-950">{product.categoryName}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Preco</dt>
