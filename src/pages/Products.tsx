@@ -1,13 +1,17 @@
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { deleteProduct, localDb } from '../services/db/localDb';
+import { deleteProduct } from '../services/db/localDb';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { useMemo, useState } from 'react';
+import { getActiveProducts } from '../services/db/queries';
 
 export function Products() {
   const [search, setSearch] = useState('');
-  const { data: products } = useDexieQuery(() => localDb.products.orderBy('name').toArray(), []);
+  const { data: products } = useDexieQuery(async () => {
+    const activeProducts = await getActiveProducts();
+    return activeProducts.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, []);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -28,7 +32,9 @@ export function Products() {
       return;
     }
 
-    const confirmed = window.confirm('Excluir este produto e seu historico de movimentacoes?');
+    const confirmed = window.confirm(
+      'Excluir este produto? O historico de movimentacoes sera preservado.',
+    );
 
     if (confirmed) {
       await deleteProduct(id);

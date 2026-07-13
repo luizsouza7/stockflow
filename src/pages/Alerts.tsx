@@ -1,10 +1,10 @@
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { localDb } from '../services/db/localDb';
 import { formatCurrency } from '../utils/formatters';
+import { getActiveProducts } from '../services/db/queries';
 
 export function Alerts() {
-  const { data: products } = useDexieQuery(() => localDb.products.toArray(), []);
+  const { data: products } = useDexieQuery(() => getActiveProducts(), []);
   const lowStockProducts = products.filter(
     (product) => product.currentQuantity <= product.minimumStock,
   );

@@ -10,6 +10,7 @@ export interface Product {
   minimumStock: number;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
   syncStatus: SyncStatus;
 }
 

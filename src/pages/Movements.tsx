@@ -1,13 +1,17 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { localDb, registerMovement } from '../services/db/localDb';
+import { registerMovement } from '../services/db/localDb';
 import { getMovementsWithProducts } from '../services/db/queries';
 import type { MovementType } from '../types/Movement';
 import { formatDate } from '../utils/formatters';
+import { getActiveProducts } from '../services/db/queries';
 
 export function Movements() {
-  const { data: products } = useDexieQuery(() => localDb.products.orderBy('name').toArray(), []);
+  const { data: products } = useDexieQuery(async () => {
+    const activeProducts = await getActiveProducts();
+    return activeProducts.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, []);
   const { data: movements } = useDexieQuery(() => getMovementsWithProducts(), []);
   const [productId, setProductId] = useState('');
   const [type, setType] = useState<MovementType>('entrada');

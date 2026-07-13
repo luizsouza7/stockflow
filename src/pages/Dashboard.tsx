@@ -1,12 +1,11 @@
 import { EmptyState } from '../components/EmptyState';
 import { StatCard } from '../components/StatCard';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { localDb } from '../services/db/localDb';
-import { getMovementsWithProducts } from '../services/db/queries';
+import { getActiveProducts, getMovementsWithProducts } from '../services/db/queries';
 import { formatDate } from '../utils/formatters';
 
 export function Dashboard() {
-  const productsQuery = useDexieQuery(() => localDb.products.toArray(), []);
+  const productsQuery = useDexieQuery(() => getActiveProducts(), []);
   const movementsQuery = useDexieQuery(() => getMovementsWithProducts(), []);
   const products = productsQuery.data;
   const movements = movementsQuery.data;

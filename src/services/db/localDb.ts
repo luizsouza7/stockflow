@@ -13,6 +13,12 @@ class StockFlowDatabase extends Dexie {
       products: '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt',
       movements: '++id, productId, type, date, syncStatus',
     });
+
+    this.version(2).stores({
+      products:
+        '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+      movements: '++id, productId, type, date, syncStatus',
+    });
   }
 }
 
@@ -31,17 +37,30 @@ export async function updateProduct(id: number, data: Partial<Product>): Promise
 }
 
 export async function deleteProduct(id: number): Promise<void> {
-  await localDb.transaction('rw', localDb.products, localDb.movements, async () => {
-    await localDb.movements.where('productId').equals(id).delete();
-    await localDb.products.delete(id);
+  const changed = await localDb.products.update(id, {
+    deletedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    syncStatus: 'pending',
   });
+
+  if (!changed) {
+    throw new Error('Produto nao encontrado.');
+  }
 }
 
 export async function registerMovement(movement: Omit<Movement, 'id'>): Promise<void> {
+  if (!Number.isInteger(movement.quantity) || movement.quantity <= 0) {
+    throw new Error('A quantidade deve ser um numero inteiro maior que zero.');
+  }
+
+  if (movement.type !== 'entrada' && movement.type !== 'saida') {
+    throw new Error('Tipo de movimentacao invalido.');
+  }
+
   await localDb.transaction('rw', localDb.products, localDb.movements, async () => {
     const product = await localDb.products.get(movement.productId);
 
-    if (!product || !product.id) {
+    if (!product || !product.id || product.deletedAt) {
       throw new Error('Produto nao encontrado.');
     }
 

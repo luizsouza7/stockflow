@@ -28,7 +28,7 @@ Pequenos negocios podem perder vendas, comprar produtos em excesso ou deixar ite
 Esta versao implementa:
 
 - Cadastro de produtos
-- Edicao e exclusao de produtos
+- Edicao e exclusao logica de produtos, preservando o historico
 - Busca de produtos por nome ou codigo
 - Registro de entrada e saida de estoque
 - Validacao para impedir saida maior que a quantidade disponivel

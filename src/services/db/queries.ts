@@ -1,6 +1,11 @@
 import type { MovementWithProduct } from '../../types/Movement';
 import { localDb } from './localDb';
 
+export async function getActiveProducts() {
+  const products = await localDb.products.toArray();
+  return products.filter((product) => !product.deletedAt);
+}
+
 export async function getMovementsWithProducts(): Promise<MovementWithProduct[]> {
   const movements = await localDb.movements.orderBy('date').reverse().toArray();
   const products = await localDb.products.toArray();
