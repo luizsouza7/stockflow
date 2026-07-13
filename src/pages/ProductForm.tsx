@@ -2,12 +2,13 @@ import { FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createProduct, localDb, updateProduct } from '../services/db/localDb';
 import type { ProductFormData } from '../types/Product';
+import { formatCentsForInput, parseCurrencyToCents } from '../utils/formatters';
 
 const initialFormData: ProductFormData = {
   name: '',
   code: '',
   category: '',
-  price: 0,
+  salePrice: '0,00',
   currentQuantity: 0,
   minimumStock: 0,
 };
@@ -31,7 +32,7 @@ export function ProductForm() {
           name: product.name,
           code: product.code,
           category: product.category,
-          price: product.price,
+          salePrice: formatCentsForInput(product.salePriceInCents),
           currentQuantity: product.currentQuantity,
           minimumStock: product.minimumStock,
         });
@@ -41,7 +42,6 @@ export function ProductForm() {
 
   function updateField(field: keyof ProductFormData, value: string) {
     const numericFields: Array<keyof ProductFormData> = [
-      'price',
       'currentQuantity',
       'minimumStock',
     ];
@@ -61,27 +61,41 @@ export function ProductForm() {
       return;
     }
 
-    if (
-      !Number.isFinite(formData.price) ||
-      !Number.isInteger(formData.currentQuantity) ||
-      !Number.isInteger(formData.minimumStock)
-    ) {
+    if (!Number.isInteger(formData.currentQuantity) || !Number.isInteger(formData.minimumStock)) {
       setError('Informe valores numericos validos.');
       return;
     }
 
-    if (formData.price < 0 || formData.currentQuantity < 0 || formData.minimumStock < 0) {
+    if (formData.currentQuantity < 0 || formData.minimumStock < 0) {
       setError('Valores numericos nao podem ser negativos.');
       return;
     }
 
+    let salePriceInCents: number;
+
+    try {
+      salePriceInCents = parseCurrencyToCents(formData.salePrice);
+    } catch (priceError) {
+      setError(priceError instanceof Error ? priceError.message : 'Informe um preco valido.');
+      return;
+    }
+
+    const productData = {
+      name: formData.name,
+      code: formData.code,
+      category: formData.category,
+      salePriceInCents,
+      currentQuantity: formData.currentQuantity,
+      minimumStock: formData.minimumStock,
+    };
+
     const now = new Date().toISOString();
 
     if (isEditing && productId) {
-      await updateProduct(productId, formData);
+      await updateProduct(productId, productData);
     } else {
       await createProduct({
-        ...formData,
+        ...productData,
         createdAt: now,
         updatedAt: now,
         syncStatus: 'pending',
@@ -137,15 +151,15 @@ export function ProductForm() {
               required
             />
           </Field>
-          <Field label="Preco" id="price">
+          <Field label="Preco" id="salePrice">
             <input
-              id="price"
-              type="number"
-              min="0"
-              step="0.01"
-              value={formData.price}
-              onChange={(event) => updateField('price', event.target.value)}
+              id="salePrice"
+              type="text"
+              inputMode="decimal"
+              value={formData.salePrice}
+              onChange={(event) => updateField('salePrice', event.target.value)}
               className="input"
+              placeholder="0,00"
               required
             />
           </Field>

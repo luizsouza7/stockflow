@@ -2,12 +2,17 @@ import Dexie, { type Table } from 'dexie';
 import type { Movement } from '../../types/Movement';
 import type { Product } from '../../types/Product';
 
-class StockFlowDatabase extends Dexie {
+interface LegacyProductWithDecimalPrice {
+  price?: unknown;
+  salePriceInCents?: unknown;
+}
+
+export class StockFlowDatabase extends Dexie {
   products!: Table<Product, number>;
   movements!: Table<Movement, number>;
 
-  constructor() {
-    super('stockflow-local-db');
+  constructor(databaseName = 'stockflow-local-db') {
+    super(databaseName);
 
     this.version(1).stores({
       products: '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt',
@@ -19,21 +24,71 @@ class StockFlowDatabase extends Dexie {
         '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
       movements: '++id, productId, type, date, syncStatus',
     });
+
+    this.version(3)
+      .stores({
+        products:
+          '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+        movements: '++id, productId, type, date, syncStatus',
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table<LegacyProductWithDecimalPrice, number>('products')
+          .toCollection()
+          .modify((product) => {
+            if (
+              typeof product.salePriceInCents === 'number' &&
+              Number.isSafeInteger(product.salePriceInCents) &&
+              product.salePriceInCents >= 0
+            ) {
+              delete product.price;
+              return;
+            }
+
+            if (
+              typeof product.price !== 'number' ||
+              !Number.isFinite(product.price) ||
+              product.price < 0
+            ) {
+              throw new Error('Produto antigo possui preco invalido e nao pode ser migrado.');
+            }
+
+            const migratedPrice = Math.round(product.price * 100);
+
+            if (!Number.isSafeInteger(migratedPrice)) {
+              throw new Error('Produto antigo possui preco fora do intervalo seguro.');
+            }
+
+            product.salePriceInCents = migratedPrice;
+            delete product.price;
+          });
+      });
   }
 }
 
 export const localDb = new StockFlowDatabase();
 
 export async function createProduct(data: Omit<Product, 'id'>): Promise<number> {
+  validateSalePriceInCents(data.salePriceInCents);
   return localDb.products.add(data);
 }
 
 export async function updateProduct(id: number, data: Partial<Product>): Promise<number> {
+  if (data.salePriceInCents !== undefined) {
+    validateSalePriceInCents(data.salePriceInCents);
+  }
+
   return localDb.products.update(id, {
     ...data,
     updatedAt: new Date().toISOString(),
     syncStatus: 'pending',
   });
+}
+
+function validateSalePriceInCents(value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error('O preco deve ser armazenado em centavos inteiros e nao negativos.');
+  }
 }
 
 export async function deleteProduct(id: number): Promise<void> {

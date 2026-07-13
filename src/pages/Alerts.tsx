@@ -1,6 +1,6 @@
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { formatCurrency } from '../utils/formatters';
+import { formatCentsToBRL } from '../utils/formatters';
 import { getActiveProducts } from '../services/db/queries';
 
 export function Alerts() {
@@ -54,7 +54,9 @@ export function Alerts() {
                 </div>
                 <div>
                   <dt className="text-slate-500">Preco</dt>
-                  <dd className="font-semibold text-slate-950">{formatCurrency(product.price)}</dd>
+                  <dd className="font-semibold text-slate-950">
+                    {formatCentsToBRL(product.salePriceInCents)}
+                  </dd>
                 </div>
               </dl>
             </article>

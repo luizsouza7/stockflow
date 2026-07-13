@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { deleteProduct } from '../services/db/localDb';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCentsToBRL, formatDate } from '../utils/formatters';
 import { useMemo, useState } from 'react';
 import { getActiveProducts } from '../services/db/queries';
 
@@ -106,7 +106,7 @@ export function Products() {
                   </div>
                   <p className="text-sm text-slate-700">{product.category}</p>
                   <p className="text-sm font-semibold text-slate-950">
-                    {formatCurrency(product.price)}
+                    {formatCentsToBRL(product.salePriceInCents)}
                   </p>
                   <div>
                     <span

@@ -5,7 +5,7 @@ export interface Product {
   name: string;
   code: string;
   category: string;
-  price: number;
+  salePriceInCents: number;
   currentQuantity: number;
   minimumStock: number;
   createdAt: string;
@@ -14,7 +14,7 @@ export interface Product {
   syncStatus: SyncStatus;
 }
 
-export type ProductFormData = Pick<
-  Product,
-  'name' | 'code' | 'category' | 'price' | 'currentQuantity' | 'minimumStock'
->;
+export interface ProductFormData
+  extends Pick<Product, 'name' | 'code' | 'category' | 'currentQuantity' | 'minimumStock'> {
+  salePrice: string;
+}

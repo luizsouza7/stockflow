@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { MovementType } from '../../types/Movement';
-import { createProduct, deleteProduct, localDb, registerMovement } from './localDb';
+import { createProduct, deleteProduct, localDb, registerMovement, updateProduct } from './localDb';
+import { formatCentsForInput, parseCurrencyToCents } from '../../utils/formatters';
 
 async function createTestProduct(quantity = 5) {
   const now = new Date().toISOString();
@@ -10,7 +11,7 @@ async function createTestProduct(quantity = 5) {
     name: 'Arroz',
     code: 'ARROZ-001',
     category: 'Alimentos',
-    price: 19.9,
+    salePriceInCents: 1990,
     currentQuantity: quantity,
     minimumStock: 2,
     createdAt: now,
@@ -49,6 +50,33 @@ describe('regras locais de estoque', () => {
 
     expect((await localDb.products.get(productId))?.currentQuantity).toBe(8);
     expect(await localDb.movements.count()).toBe(1);
+  });
+
+  it('persiste um novo produto usando centavos inteiros', async () => {
+    const productId = await createTestProduct();
+
+    expect((await localDb.products.get(productId))?.salePriceInCents).toBe(1990);
+  });
+
+  it('edita e reabre o produto sem multiplicar o preco novamente', async () => {
+    const productId = await createTestProduct();
+    await updateProduct(productId, { salePriceInCents: 1990 });
+
+    localDb.close();
+    await localDb.open();
+    const savedProduct = await localDb.products.get(productId);
+    const inputValue = formatCentsForInput(savedProduct?.salePriceInCents ?? -1);
+
+    expect(inputValue).toBe('19,90');
+    expect(parseCurrencyToCents(inputValue)).toBe(1990);
+  });
+
+  it('recusa persistencia de preco que nao esteja em centavos validos', async () => {
+    const productId = await createTestProduct();
+
+    await expect(updateProduct(productId, { salePriceInCents: 19.9 })).rejects.toThrow(
+      'O preco deve ser armazenado em centavos inteiros e nao negativos.',
+    );
   });
 
   it('permite saida igual ao estoque disponivel', async () => {
