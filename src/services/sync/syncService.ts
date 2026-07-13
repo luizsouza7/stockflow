@@ -1,9 +1,10 @@
-import { localDb } from '../db/localDb';
+import { movementRepository } from '../../repositories/movementRepository';
+import { productRepository } from '../../repositories/productRepository';
 
 export async function syncPendingData() {
   const [products, movements] = await Promise.all([
-    localDb.products.where('syncStatus').equals('pending').toArray(),
-    localDb.movements.where('syncStatus').equals('pending').toArray(),
+    productRepository.findPending(),
+    movementRepository.findPending(),
   ]);
 
   // Etapa 1 / Projeto Integrador 2: simulacao da fila de sincronizacao.

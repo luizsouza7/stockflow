@@ -1,6 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import { calculateStockSnapshot } from '../../domain/stockMovement';
-import type { Movement, RegisterMovementInput } from '../../types/Movement';
+import type { Movement } from '../../types/Movement';
 import type { Product } from '../../types/Product';
 
 interface LegacyProductWithDecimalPrice {
@@ -102,66 +101,3 @@ export class StockFlowDatabase extends Dexie {
 }
 
 export const localDb = new StockFlowDatabase();
-
-export async function createProduct(data: Omit<Product, 'id'>): Promise<number> {
-  validateSalePriceInCents(data.salePriceInCents);
-  return localDb.products.add(data);
-}
-
-export async function updateProduct(id: number, data: Partial<Product>): Promise<number> {
-  if (data.salePriceInCents !== undefined) {
-    validateSalePriceInCents(data.salePriceInCents);
-  }
-
-  return localDb.products.update(id, {
-    ...data,
-    updatedAt: new Date().toISOString(),
-    syncStatus: 'pending',
-  });
-}
-
-function validateSalePriceInCents(value: number): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error('O preco deve ser armazenado em centavos inteiros e nao negativos.');
-  }
-}
-
-export async function deleteProduct(id: number): Promise<void> {
-  const changed = await localDb.products.update(id, {
-    deletedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    syncStatus: 'pending',
-  });
-
-  if (!changed) {
-    throw new Error('Produto nao encontrado.');
-  }
-}
-
-export async function registerMovement(movement: RegisterMovementInput): Promise<void> {
-  await localDb.transaction('rw', localDb.products, localDb.movements, async () => {
-    const product = await localDb.products.get(movement.productId);
-
-    if (!product || !product.id || product.deletedAt) {
-      throw new Error('Produto nao encontrado.');
-    }
-
-    const snapshot = calculateStockSnapshot(
-      product.currentQuantity,
-      movement.type,
-      movement.quantity,
-    );
-
-    await localDb.products.update(product.id, {
-      currentQuantity: snapshot.resultingQuantity,
-      updatedAt: new Date().toISOString(),
-      syncStatus: 'pending',
-    });
-
-    await localDb.movements.add({
-      ...movement,
-      ...snapshot,
-      isLegacy: false,
-    });
-  });
-}

@@ -1,17 +1,14 @@
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { deleteProduct } from '../services/db/localDb';
+import { productService } from '../services/productService';
 import { formatCentsToBRL, formatDate } from '../utils/formatters';
 import { useMemo, useState } from 'react';
-import { getActiveProducts } from '../services/db/queries';
+import { needsRestock } from '../domain/stockStatus';
 
 export function Products() {
   const [search, setSearch] = useState('');
-  const { data: products } = useDexieQuery(async () => {
-    const activeProducts = await getActiveProducts();
-    return activeProducts.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  }, []);
+  const { data: products } = useDexieQuery(() => productService.listActive(), []);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -37,7 +34,7 @@ export function Products() {
     );
 
     if (confirmed) {
-      await deleteProduct(id);
+      await productService.softDelete(id);
     }
   }
 
@@ -91,7 +88,7 @@ export function Products() {
           </div>
           <div className="divide-y divide-slate-100">
             {filteredProducts.map((product) => {
-              const isLowStock = product.currentQuantity <= product.minimumStock;
+              const isLowStock = needsRestock(product);
 
               return (
                 <article

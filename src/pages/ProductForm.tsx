@@ -1,6 +1,6 @@
 import { FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { createProduct, localDb, updateProduct } from '../services/db/localDb';
+import { productService } from '../services/productService';
 import type { ProductFormData } from '../types/Product';
 import { formatCentsForInput, parseCurrencyToCents } from '../utils/formatters';
 
@@ -26,7 +26,7 @@ export function ProductForm() {
       return;
     }
 
-    localDb.products.get(productId).then((product) => {
+    productService.getById(productId).then((product) => {
       if (product) {
         setFormData({
           name: product.name,
@@ -92,9 +92,9 @@ export function ProductForm() {
     const now = new Date().toISOString();
 
     if (isEditing && productId) {
-      await updateProduct(productId, productData);
+      await productService.update(productId, productData);
     } else {
-      await createProduct({
+      await productService.create({
         ...productData,
         createdAt: now,
         updatedAt: now,

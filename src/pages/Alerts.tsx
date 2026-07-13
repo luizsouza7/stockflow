@@ -1,12 +1,12 @@
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { formatCentsToBRL } from '../utils/formatters';
-import { getActiveProducts } from '../services/db/queries';
+import { productService } from '../services/productService';
 
 export function Alerts() {
-  const { data: products } = useDexieQuery(() => getActiveProducts(), []);
-  const lowStockProducts = products.filter(
-    (product) => product.currentQuantity <= product.minimumStock,
+  const { data: lowStockProducts } = useDexieQuery(
+    () => productService.listProductsNeedingRestock(),
+    [],
   );
 
   return (

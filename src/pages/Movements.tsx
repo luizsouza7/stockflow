@@ -1,19 +1,15 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { registerMovement } from '../services/db/localDb';
-import { getMovementsWithProducts } from '../services/db/queries';
+import { stockMovementService } from '../services/stockMovementService';
 import type { MovementType } from '../types/Movement';
 import { formatDate } from '../utils/formatters';
-import { getActiveProducts } from '../services/db/queries';
+import { productService } from '../services/productService';
 import { hasStockSnapshot } from '../domain/stockMovement';
 
 export function Movements() {
-  const { data: products } = useDexieQuery(async () => {
-    const activeProducts = await getActiveProducts();
-    return activeProducts.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  }, []);
-  const { data: movements } = useDexieQuery(() => getMovementsWithProducts(), []);
+  const { data: products } = useDexieQuery(() => productService.listActive(), []);
+  const { data: movements } = useDexieQuery(() => stockMovementService.listHistory(), []);
   const [productId, setProductId] = useState('');
   const [type, setType] = useState<MovementType>('entrada');
   const [quantity, setQuantity] = useState(1);
@@ -45,7 +41,7 @@ export function Movements() {
     }
 
     try {
-      await registerMovement({
+      await stockMovementService.register({
         productId: Number(productId),
         type,
         quantity,

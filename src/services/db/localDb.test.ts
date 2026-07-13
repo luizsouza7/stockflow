@@ -1,13 +1,15 @@
 import 'fake-indexeddb/auto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { MovementType } from '../../types/Movement';
-import { createProduct, deleteProduct, localDb, registerMovement, updateProduct } from './localDb';
+import { productService } from '../productService';
+import { stockMovementService } from '../stockMovementService';
+import { localDb } from './localDb';
 import { formatCentsForInput, parseCurrencyToCents } from '../../utils/formatters';
 
 async function createTestProduct(quantity = 5) {
   const now = new Date().toISOString();
 
-  return createProduct({
+  return productService.create({
     name: 'Arroz',
     code: 'ARROZ-001',
     category: 'Alimentos',
@@ -21,7 +23,7 @@ async function createTestProduct(quantity = 5) {
 }
 
 async function move(productId: number, type: MovementType, quantity: number) {
-  return registerMovement({
+  return stockMovementService.register({
     productId,
     type,
     quantity,
@@ -65,7 +67,7 @@ describe('regras locais de estoque', () => {
 
   it('edita e reabre o produto sem multiplicar o preco novamente', async () => {
     const productId = await createTestProduct();
-    await updateProduct(productId, { salePriceInCents: 1990 });
+    await productService.update(productId, { salePriceInCents: 1990 });
 
     localDb.close();
     await localDb.open();
@@ -79,7 +81,7 @@ describe('regras locais de estoque', () => {
   it('recusa persistencia de preco que nao esteja em centavos validos', async () => {
     const productId = await createTestProduct();
 
-    await expect(updateProduct(productId, { salePriceInCents: 19.9 })).rejects.toThrow(
+    await expect(productService.update(productId, { salePriceInCents: 19.9 })).rejects.toThrow(
       'O preco deve ser armazenado em centavos inteiros e nao negativos.',
     );
   });
@@ -147,7 +149,7 @@ describe('regras locais de estoque', () => {
     const productId = await createTestProduct();
     await move(productId, 'entrada', 1);
 
-    await deleteProduct(productId);
+    await productService.softDelete(productId);
 
     expect((await localDb.products.get(productId))?.deletedAt).toBeTruthy();
     expect(await localDb.movements.where('productId').equals(productId).count()).toBe(1);
