@@ -19,7 +19,17 @@ function createVersionTwoDatabase(name: string) {
   return database;
 }
 
-describe('migracao monetaria do schema v2 para v3', () => {
+function createVersionThreeDatabase(name: string) {
+  const database = new Dexie(name);
+  database.version(3).stores({
+    products:
+      '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+    movements: '++id, productId, type, date, syncStatus',
+  });
+  return database;
+}
+
+describe('migracoes do banco local', () => {
   afterEach(async () => {
     await Promise.all(databaseNames.splice(0).map((name) => Dexie.delete(name)));
   });
@@ -89,6 +99,7 @@ describe('migracao monetaria do schema v2 para v3', () => {
     const migratedDatabase = new StockFlowDatabase(databaseName);
     await migratedDatabase.open();
     const product = await migratedDatabase.products.get(productId);
+    const movement = await migratedDatabase.movements.where('productId').equals(productId).first();
 
     expect(product).toMatchObject({
       id: productId,
@@ -104,6 +115,68 @@ describe('migracao monetaria do schema v2 para v3', () => {
       syncStatus: 'pending',
     });
     expect(await migratedDatabase.movements.where('productId').equals(productId).count()).toBe(1);
+    expect(movement).toMatchObject({
+      productId,
+      quantity: 2,
+      syncStatus: 'pending',
+      isLegacy: true,
+    });
+    expect(movement).not.toHaveProperty('previousQuantity');
+    expect(movement).not.toHaveProperty('resultingQuantity');
+    expect(product?.salePriceInCents).toBe(1234);
+    expect(product?.deletedAt).toBe(deletedAt);
+    migratedDatabase.close();
+  });
+
+  it('migra diretamente uma movimentacao v3 como legado no schema v4', async () => {
+    const databaseName = `stockflow-movement-migration-${crypto.randomUUID()}`;
+    databaseNames.push(databaseName);
+    const versionThreeDatabase = createVersionThreeDatabase(databaseName);
+    const now = '2026-07-12T10:00:00.000Z';
+    const productId = await versionThreeDatabase
+      .table<Record<string, unknown>, number>('products')
+      .add({
+        name: 'Cafe',
+        code: 'CAFE-010',
+        category: 'Alimentos',
+        salePriceInCents: 1590,
+        currentQuantity: 4,
+        minimumStock: 2,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+        syncStatus: 'error',
+      });
+    await versionThreeDatabase.table('movements').add({
+      productId,
+      type: 'saida',
+      quantity: 1,
+      note: 'Registro anterior ao snapshot',
+      date: now,
+      syncStatus: 'error',
+    });
+    versionThreeDatabase.close();
+
+    const migratedDatabase = new StockFlowDatabase(databaseName);
+    await migratedDatabase.open();
+    const product = await migratedDatabase.products.get(productId);
+    const movement = await migratedDatabase.movements.toCollection().first();
+
+    expect(product).toMatchObject({
+      salePriceInCents: 1590,
+      currentQuantity: 4,
+      deletedAt: now,
+      syncStatus: 'error',
+    });
+    expect(movement).toMatchObject({
+      productId,
+      quantity: 1,
+      note: 'Registro anterior ao snapshot',
+      syncStatus: 'error',
+      isLegacy: true,
+    });
+    expect(movement).not.toHaveProperty('previousQuantity');
+    expect(movement).not.toHaveProperty('resultingQuantity');
     migratedDatabase.close();
   });
 });

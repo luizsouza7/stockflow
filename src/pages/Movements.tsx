@@ -6,6 +6,7 @@ import { getMovementsWithProducts } from '../services/db/queries';
 import type { MovementType } from '../types/Movement';
 import { formatDate } from '../utils/formatters';
 import { getActiveProducts } from '../services/db/queries';
+import { hasStockSnapshot } from '../domain/stockMovement';
 
 export function Movements() {
   const { data: products } = useDexieQuery(async () => {
@@ -184,6 +185,26 @@ export function Movements() {
                     </p>
                     {movement.note && (
                       <p className="mt-2 text-sm text-slate-600">{movement.note}</p>
+                    )}
+                    {hasStockSnapshot(movement) ? (
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:flex sm:gap-5">
+                        <div>
+                          <dt className="text-xs text-slate-500">Estoque anterior</dt>
+                          <dd className="font-semibold text-slate-900">
+                            {movement.previousQuantity} un.
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-slate-500">Estoque resultante</dt>
+                          <dd className="font-semibold text-slate-900">
+                            {movement.resultingQuantity} un.
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : (
+                      <p className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-600">
+                        Estoque anterior e resultante indisponiveis para movimentacao legada.
+                      </p>
                     )}
                   </div>
                   <span

@@ -49,7 +49,12 @@ describe('regras locais de estoque', () => {
     await move(productId, 'entrada', 3);
 
     expect((await localDb.products.get(productId))?.currentQuantity).toBe(8);
-    expect(await localDb.movements.count()).toBe(1);
+    expect(await localDb.movements.toCollection().first()).toMatchObject({
+      quantity: 3,
+      previousQuantity: 5,
+      resultingQuantity: 8,
+      isLegacy: false,
+    });
   });
 
   it('persiste um novo produto usando centavos inteiros', async () => {
@@ -85,6 +90,35 @@ describe('regras locais de estoque', () => {
     await move(productId, 'saida', 5);
 
     expect((await localDb.products.get(productId))?.currentQuantity).toBe(0);
+    expect(await localDb.movements.toCollection().first()).toMatchObject({
+      previousQuantity: 5,
+      resultingQuantity: 0,
+    });
+  });
+
+  it('registra saida com os estoques anterior e resultante corretos', async () => {
+    const productId = await createTestProduct(10);
+
+    await move(productId, 'saida', 4);
+
+    expect((await localDb.products.get(productId))?.currentQuantity).toBe(6);
+    expect(await localDb.movements.toCollection().first()).toMatchObject({
+      quantity: 4,
+      previousQuantity: 10,
+      resultingQuantity: 6,
+    });
+  });
+
+  it('encadeia snapshots de duas movimentacoes sequenciais', async () => {
+    const productId = await createTestProduct(10);
+
+    await move(productId, 'entrada', 5);
+    await move(productId, 'saida', 3);
+
+    const movements = await localDb.movements.orderBy('id').toArray();
+    expect(movements[0]).toMatchObject({ previousQuantity: 10, resultingQuantity: 15 });
+    expect(movements[1]).toMatchObject({ previousQuantity: 15, resultingQuantity: 12 });
+    expect((await localDb.products.get(productId))?.currentQuantity).toBe(12);
   });
 
   it('recusa saida maior que o estoque sem deixar alteracao parcial', async () => {

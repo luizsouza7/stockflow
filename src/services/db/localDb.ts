@@ -1,10 +1,17 @@
 import Dexie, { type Table } from 'dexie';
-import type { Movement } from '../../types/Movement';
+import { calculateStockSnapshot } from '../../domain/stockMovement';
+import type { Movement, RegisterMovementInput } from '../../types/Movement';
 import type { Product } from '../../types/Product';
 
 interface LegacyProductWithDecimalPrice {
   price?: unknown;
   salePriceInCents?: unknown;
+}
+
+interface MovementBeforeQuantitySnapshots {
+  previousQuantity?: unknown;
+  resultingQuantity?: unknown;
+  isLegacy?: unknown;
 }
 
 export class StockFlowDatabase extends Dexie {
@@ -63,6 +70,34 @@ export class StockFlowDatabase extends Dexie {
             delete product.price;
           });
       });
+
+    this.version(4)
+      .stores({
+        products:
+          '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+        movements: '++id, productId, type, date, syncStatus',
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table<MovementBeforeQuantitySnapshots, number>('movements')
+          .toCollection()
+          .modify((movement) => {
+            const hasValidSnapshot =
+              Number.isInteger(movement.previousQuantity) &&
+              Number.isInteger(movement.resultingQuantity) &&
+              Number(movement.previousQuantity) >= 0 &&
+              Number(movement.resultingQuantity) >= 0;
+
+            if (hasValidSnapshot) {
+              movement.isLegacy = false;
+              return;
+            }
+
+            delete movement.previousQuantity;
+            delete movement.resultingQuantity;
+            movement.isLegacy = true;
+          });
+      });
   }
 }
 
@@ -103,15 +138,7 @@ export async function deleteProduct(id: number): Promise<void> {
   }
 }
 
-export async function registerMovement(movement: Omit<Movement, 'id'>): Promise<void> {
-  if (!Number.isInteger(movement.quantity) || movement.quantity <= 0) {
-    throw new Error('A quantidade deve ser um numero inteiro maior que zero.');
-  }
-
-  if (movement.type !== 'entrada' && movement.type !== 'saida') {
-    throw new Error('Tipo de movimentacao invalido.');
-  }
-
+export async function registerMovement(movement: RegisterMovementInput): Promise<void> {
   await localDb.transaction('rw', localDb.products, localDb.movements, async () => {
     const product = await localDb.products.get(movement.productId);
 
@@ -119,21 +146,22 @@ export async function registerMovement(movement: Omit<Movement, 'id'>): Promise<
       throw new Error('Produto nao encontrado.');
     }
 
-    const nextQuantity =
-      movement.type === 'entrada'
-        ? product.currentQuantity + movement.quantity
-        : product.currentQuantity - movement.quantity;
-
-    if (nextQuantity < 0) {
-      throw new Error('A saida nao pode ser maior que a quantidade disponivel.');
-    }
+    const snapshot = calculateStockSnapshot(
+      product.currentQuantity,
+      movement.type,
+      movement.quantity,
+    );
 
     await localDb.products.update(product.id, {
-      currentQuantity: nextQuantity,
+      currentQuantity: snapshot.resultingQuantity,
       updatedAt: new Date().toISOString(),
       syncStatus: 'pending',
     });
 
-    await localDb.movements.add(movement);
+    await localDb.movements.add({
+      ...movement,
+      ...snapshot,
+      isLegacy: false,
+    });
   });
 }
