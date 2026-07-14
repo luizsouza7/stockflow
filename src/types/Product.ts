@@ -1,19 +1,27 @@
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface Product {
-  id?: number;
+  id: string;
   name: string;
   code: string;
-  category: string;
-  price: number;
+  categoryId?: string;
+  salePriceInCents: number;
   currentQuantity: number;
   minimumStock: number;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
   syncStatus: SyncStatus;
 }
 
-export type ProductFormData = Pick<
-  Product,
-  'name' | 'code' | 'category' | 'price' | 'currentQuantity' | 'minimumStock'
->;
+export type CreateProductInput = Omit<Product, 'id'>;
+
+export interface ProductFormData
+  extends Pick<Product, 'name' | 'code' | 'currentQuantity' | 'minimumStock'> {
+  categoryId: string;
+  salePrice: string;
+}
+
+export interface ProductWithCategory extends Product {
+  categoryName: string;
+}

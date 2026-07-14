@@ -1,12 +1,12 @@
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { localDb } from '../services/db/localDb';
-import { formatCurrency } from '../utils/formatters';
+import { formatCentsToBRL } from '../utils/formatters';
+import { productService } from '../services/productService';
 
 export function Alerts() {
-  const { data: products } = useDexieQuery(() => localDb.products.toArray(), []);
-  const lowStockProducts = products.filter(
-    (product) => product.currentQuantity <= product.minimumStock,
+  const { data: lowStockProducts } = useDexieQuery(
+    () => productService.listProductsNeedingRestock(),
+    [],
   );
 
   return (
@@ -50,11 +50,13 @@ export function Alerts() {
                 </div>
                 <div>
                   <dt className="text-slate-500">Categoria</dt>
-                  <dd className="font-semibold text-slate-950">{product.category}</dd>
+                  <dd className="font-semibold text-slate-950">{product.categoryName}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Preco</dt>
-                  <dd className="font-semibold text-slate-950">{formatCurrency(product.price)}</dd>
+                  <dd className="font-semibold text-slate-950">
+                    {formatCentsToBRL(product.salePriceInCents)}
+                  </dd>
                 </div>
               </dl>
             </article>

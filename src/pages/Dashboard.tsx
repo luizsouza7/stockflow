@@ -1,18 +1,17 @@
 import { EmptyState } from '../components/EmptyState';
 import { StatCard } from '../components/StatCard';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { localDb } from '../services/db/localDb';
-import { getMovementsWithProducts } from '../services/db/queries';
+import { getDashboardSummary, type DashboardSummary } from '../services/dashboardService';
 import { formatDate } from '../utils/formatters';
 
 export function Dashboard() {
-  const productsQuery = useDexieQuery(() => localDb.products.toArray(), []);
-  const movementsQuery = useDexieQuery(() => getMovementsWithProducts(), []);
-  const products = productsQuery.data;
-  const movements = movementsQuery.data;
-  const lowStockProducts = products.filter(
-    (product) => product.currentQuantity <= product.minimumStock,
-  );
+  const summary = useDexieQuery<DashboardSummary>(() => getDashboardSummary(), {
+    totalProducts: 0,
+    totalNeedingRestock: 0,
+    totalOutOfStock: 0,
+    totalMovements: 0,
+    recentMovements: [],
+  }).data;
 
   return (
     <div className="space-y-6">
@@ -24,20 +23,20 @@ export function Dashboard() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Produtos cadastrados" value={products.length} />
+        <StatCard label="Produtos cadastrados" value={summary.totalProducts} />
         <StatCard
           label="Estoque baixo"
-          value={lowStockProducts.length}
-          tone={lowStockProducts.length > 0 ? 'warning' : 'success'}
+          value={summary.totalNeedingRestock}
+          tone={summary.totalNeedingRestock > 0 ? 'warning' : 'success'}
         />
-        <StatCard label="Movimentacoes registradas" value={movements.length} />
+        <StatCard label="Movimentacoes registradas" value={summary.totalMovements} />
       </section>
 
-      {lowStockProducts.length > 0 && (
+      {summary.totalNeedingRestock > 0 && (
         <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
           <h2 className="font-semibold">Produtos abaixo do estoque minimo</h2>
           <p className="mt-1 text-sm">
-            {lowStockProducts.length} produto(s) precisam de reposicao.
+            {summary.totalNeedingRestock} produto(s) precisam de reposicao.
           </p>
         </section>
       )}
@@ -47,7 +46,7 @@ export function Dashboard() {
           <h2 className="font-semibold text-slate-950">Ultimas movimentacoes</h2>
         </div>
 
-        {movements.length === 0 ? (
+        {summary.recentMovements.length === 0 ? (
           <div className="p-4">
             <EmptyState
               title="Nenhuma movimentacao registrada"
@@ -56,7 +55,7 @@ export function Dashboard() {
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {movements.slice(0, 6).map((movement) => (
+            {summary.recentMovements.map((movement) => (
               <article key={movement.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium text-slate-950">{movement.productName}</p>

@@ -1,13 +1,16 @@
 import { FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { createProduct, localDb, updateProduct } from '../services/db/localDb';
+import { productService } from '../services/productService';
 import type { ProductFormData } from '../types/Product';
+import { formatCentsForInput, parseCurrencyToCents } from '../utils/formatters';
+import { categoryService } from '../services/categoryService';
+import { useDexieQuery } from '../hooks/useDexieQuery';
 
 const initialFormData: ProductFormData = {
   name: '',
   code: '',
-  category: '',
-  price: 0,
+  categoryId: '',
+  salePrice: '0,00',
   currentQuantity: 0,
   minimumStock: 0,
 };
@@ -15,23 +18,24 @@ const initialFormData: ProductFormData = {
 export function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const productId = id ? Number(id) : undefined;
+  const productId = id;
   const isEditing = Boolean(productId);
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
   const [error, setError] = useState('');
+  const { data: categories } = useDexieQuery(() => categoryService.listActive(), []);
 
   useEffect(() => {
     if (!productId) {
       return;
     }
 
-    localDb.products.get(productId).then((product) => {
+    productService.getById(productId).then((product) => {
       if (product) {
         setFormData({
           name: product.name,
           code: product.code,
-          category: product.category,
-          price: product.price,
+          categoryId: product.categoryId ?? '',
+          salePrice: formatCentsForInput(product.salePriceInCents),
           currentQuantity: product.currentQuantity,
           minimumStock: product.minimumStock,
         });
@@ -41,7 +45,6 @@ export function ProductForm() {
 
   function updateField(field: keyof ProductFormData, value: string) {
     const numericFields: Array<keyof ProductFormData> = [
-      'price',
       'currentQuantity',
       'minimumStock',
     ];
@@ -56,39 +59,59 @@ export function ProductForm() {
     event.preventDefault();
     setError('');
 
-    if (!formData.name.trim() || !formData.code.trim() || !formData.category.trim()) {
-      setError('Preencha nome, codigo e categoria.');
+    if (!formData.name.trim() || !formData.code.trim()) {
+      setError('Preencha nome e codigo.');
       return;
     }
 
-    if (
-      !Number.isFinite(formData.price) ||
-      !Number.isInteger(formData.currentQuantity) ||
-      !Number.isInteger(formData.minimumStock)
-    ) {
+    if (!Number.isInteger(formData.currentQuantity) || !Number.isInteger(formData.minimumStock)) {
       setError('Informe valores numericos validos.');
       return;
     }
 
-    if (formData.price < 0 || formData.currentQuantity < 0 || formData.minimumStock < 0) {
+    if (formData.currentQuantity < 0 || formData.minimumStock < 0) {
       setError('Valores numericos nao podem ser negativos.');
       return;
     }
 
-    const now = new Date().toISOString();
+    let salePriceInCents: number;
 
-    if (isEditing && productId) {
-      await updateProduct(productId, formData);
-    } else {
-      await createProduct({
-        ...formData,
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: 'pending',
-      });
+    try {
+      salePriceInCents = parseCurrencyToCents(formData.salePrice);
+    } catch (priceError) {
+      setError(priceError instanceof Error ? priceError.message : 'Informe um preco valido.');
+      return;
     }
 
-    navigate('/produtos');
+    const productData = {
+      name: formData.name,
+      code: formData.code,
+      categoryId: formData.categoryId || undefined,
+      salePriceInCents,
+      currentQuantity: formData.currentQuantity,
+      minimumStock: formData.minimumStock,
+    };
+
+    const now = new Date().toISOString();
+
+    try {
+      if (isEditing && productId) {
+        await productService.update(productId, productData);
+      } else {
+        await productService.create({
+          ...productData,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'pending',
+        });
+      }
+
+      navigate('/produtos');
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : 'Nao foi possivel salvar o produto.',
+      );
+    }
   }
 
   return (
@@ -128,24 +151,30 @@ export function ProductForm() {
               required
             />
           </Field>
-          <Field label="Categoria" id="category">
-            <input
-              id="category"
-              value={formData.category}
-              onChange={(event) => updateField('category', event.target.value)}
+          <Field label="Categoria" id="categoryId">
+            <select
+              id="categoryId"
+              value={formData.categoryId}
+              onChange={(event) => updateField('categoryId', event.target.value)}
               className="input"
-              required
-            />
+            >
+              <option value="">Sem categoria</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </Field>
-          <Field label="Preco" id="price">
+          <Field label="Preco" id="salePrice">
             <input
-              id="price"
-              type="number"
-              min="0"
-              step="0.01"
-              value={formData.price}
-              onChange={(event) => updateField('price', event.target.value)}
+              id="salePrice"
+              type="text"
+              inputMode="decimal"
+              value={formData.salePrice}
+              onChange={(event) => updateField('salePrice', event.target.value)}
               className="input"
+              placeholder="0,00"
               required
             />
           </Field>

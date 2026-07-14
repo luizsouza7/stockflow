@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { deleteProduct, localDb } from '../services/db/localDb';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { productService } from '../services/productService';
+import { formatCentsToBRL, formatDate } from '../utils/formatters';
 import { useMemo, useState } from 'react';
+import { needsRestock } from '../domain/stockStatus';
 
 export function Products() {
   const [search, setSearch] = useState('');
-  const { data: products } = useDexieQuery(() => localDb.products.orderBy('name').toArray(), []);
+  const { data: products } = useDexieQuery(() => productService.listActive(), []);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -23,15 +24,13 @@ export function Products() {
     );
   }, [products, search]);
 
-  async function handleDelete(id: number | undefined) {
-    if (!id) {
-      return;
-    }
-
-    const confirmed = window.confirm('Excluir este produto e seu historico de movimentacoes?');
+  async function handleDelete(id: string) {
+    const confirmed = window.confirm(
+      'Excluir este produto? O historico de movimentacoes sera preservado.',
+    );
 
     if (confirmed) {
-      await deleteProduct(id);
+      await productService.softDelete(id);
     }
   }
 
@@ -85,7 +84,7 @@ export function Products() {
           </div>
           <div className="divide-y divide-slate-100">
             {filteredProducts.map((product) => {
-              const isLowStock = product.currentQuantity <= product.minimumStock;
+              const isLowStock = needsRestock(product);
 
               return (
                 <article
@@ -98,9 +97,9 @@ export function Products() {
                       {product.code} • Atualizado em {formatDate(product.updatedAt)}
                     </p>
                   </div>
-                  <p className="text-sm text-slate-700">{product.category}</p>
+                  <p className="text-sm text-slate-700">{product.categoryName}</p>
                   <p className="text-sm font-semibold text-slate-950">
-                    {formatCurrency(product.price)}
+                    {formatCentsToBRL(product.salePriceInCents)}
                   </p>
                   <div>
                     <span

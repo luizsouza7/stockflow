@@ -1,14 +1,15 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { localDb, registerMovement } from '../services/db/localDb';
-import { getMovementsWithProducts } from '../services/db/queries';
+import { stockMovementService } from '../services/stockMovementService';
 import type { MovementType } from '../types/Movement';
 import { formatDate } from '../utils/formatters';
+import { productService } from '../services/productService';
+import { hasStockSnapshot } from '../domain/stockMovement';
 
 export function Movements() {
-  const { data: products } = useDexieQuery(() => localDb.products.orderBy('name').toArray(), []);
-  const { data: movements } = useDexieQuery(() => getMovementsWithProducts(), []);
+  const { data: products } = useDexieQuery(() => productService.listActive(), []);
+  const { data: movements } = useDexieQuery(() => stockMovementService.listHistory(), []);
   const [productId, setProductId] = useState('');
   const [type, setType] = useState<MovementType>('entrada');
   const [quantity, setQuantity] = useState(1);
@@ -16,7 +17,7 @@ export function Movements() {
   const [error, setError] = useState('');
 
   const selectedProduct = useMemo(
-    () => products.find((product) => product.id === Number(productId)),
+    () => products.find((product) => product.id === productId),
     [productId, products],
   );
 
@@ -40,8 +41,8 @@ export function Movements() {
     }
 
     try {
-      await registerMovement({
-        productId: Number(productId),
+      await stockMovementService.register({
+        productId,
         type,
         quantity,
         note,
@@ -180,6 +181,26 @@ export function Movements() {
                     </p>
                     {movement.note && (
                       <p className="mt-2 text-sm text-slate-600">{movement.note}</p>
+                    )}
+                    {hasStockSnapshot(movement) ? (
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:flex sm:gap-5">
+                        <div>
+                          <dt className="text-xs text-slate-500">Estoque anterior</dt>
+                          <dd className="font-semibold text-slate-900">
+                            {movement.previousQuantity} un.
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-slate-500">Estoque resultante</dt>
+                          <dd className="font-semibold text-slate-900">
+                            {movement.resultingQuantity} un.
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : (
+                      <p className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-600">
+                        Estoque anterior e resultante indisponiveis para movimentacao legada.
+                      </p>
                     )}
                   </div>
                   <span
