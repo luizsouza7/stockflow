@@ -1,0 +1,220 @@
+# Estado Atual do Projeto StockFlow
+
+> Atualizado em 14/07/2026. Este documento descreve o estado comprovado na branch `develop`, commit `928d124`, antes da criação desta documentação. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem.
+
+## Identificação e finalidade
+
+O StockFlow é um sistema web responsivo de controle de estoque para pequenos comércios. Seu objetivo principal é permitir o cadastro e a consulta de produtos, a organização por categorias, o registro de entradas e saídas, a preservação do histórico e a identificação de estoque baixo mesmo quando o dispositivo está sem conexão.
+
+O repositório é a continuidade de uma entrega intermediária de Projeto Integrador 2 e a base para um Trabalho de Conclusão de Curso. O título acadêmico provisório definido no Prompt Mestre é **“StockFlow: desenvolvimento de um sistema web responsivo para controle de estoque de pequenos comércios com funcionamento offline e sincronização em nuvem”**. A sincronização em nuvem pertence ao planejamento futuro; não está implementada.
+
+## Referência desta fotografia
+
+- Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
+- Branch verificada: `develop`.
+- Commit de referência anterior a estes documentos: `928d124` (`feat: robustecer consultas, formularios e rotas de produtos`).
+- Estado inicial do worktree nessa raiz: limpo e acompanhando `origin/develop`.
+- Versão do projeto em `package.json`: `0.1.0`.
+
+## Stack atual comprovada
+
+- React 18.3.1 e React DOM 18.3.1;
+- TypeScript 5.6.3 em modo estrito;
+- Vite 6.4.3 e `@vitejs/plugin-react` 4.7.0 instalados;
+- React Router DOM 6.30.4 instalado;
+- Tailwind CSS 3.4.19, PostCSS 8.5.16 e Autoprefixer 10.5.2 instalados;
+- Dexie 4.4.4 instalado sobre IndexedDB; `package.json` declara `dexie: ^4.0.11`;
+- Vitest 4.1.10, React Testing Library 16.3.2, jsdom 28.1.0 e fake-indexeddb 6.2.5;
+- ESLint 9.39.4 com plugins de React Hooks e React Refresh;
+- npm com `package-lock.json` no formato 3.
+
+Os números instalados acima foram confirmados com `npm ls --depth=0`. As faixas declaradas permanecem registradas em `package.json` e `package-lock.json`.
+
+## Arquitetura atual
+
+O fluxo predominante implementado é:
+
+```text
+Pages/UI → Services → Repositories → Dexie/IndexedDB
+               ↓
+            Domain
+```
+
+- `src/pages` e `src/components` renderizam e coletam interação do usuário;
+- `src/hooks` concentra consultas reativas ao Dexie e estado de conectividade;
+- `src/domain` contém regras puras de categorias, movimentações e classificação de estoque;
+- `src/services` valida e coordena casos de uso;
+- `src/repositories` realiza acesso direto às tabelas;
+- `src/services/db/localDb.ts` define banco, schemas, migrations e instância Dexie.
+
+O `stockMovementService` conhece deliberadamente a instância Dexie para delimitar uma transação atômica que atualiza o produto e cria a movimentação. Detalhes estão em `docs/ARQUITETURA-ATUAL.md` e no ADR de separação de responsabilidades.
+
+## Abordagem offline-first e PWA
+
+As leituras e mutações principais usam IndexedDB local como fonte de dados. As consultas da interface são reativas por `liveQuery`. Cadastro, edição, exclusão lógica, categorias e movimentações não dependem de um backend.
+
+Existe uma **PWA básica e parcial**:
+
+- manifesto web;
+- ícone SVG;
+- registro manual de service worker;
+- cache básico do app shell;
+- indicador baseado em `navigator.onLine` e eventos `online`/`offline`.
+
+Isso ainda não comprova uma PWA completa. Não há prompt de instalação ou atualização segura, solicitação de persistência, backup, teste automatizado offline, estratégia restrita de cache nem validação de disponibilidade de backend. O service worker atual armazena qualquer resposta GET que alcance a rede.
+
+## Banco local, entidades e identificadores
+
+### Dexie
+
+- Biblioteca instalada: Dexie 4.4.4.
+- Nome padrão do banco: `stockflow-local-db`.
+- **Versão real atual do schema local: 9**.
+- Tabelas finais: `products`, `movements` e `categories`.
+
+### Entidades existentes
+
+| Entidade | Tipo do ID atual | Relações e observações |
+| --- | --- | --- |
+| `Product` | `string`, UUID v4 gerado no cliente | Pode ter `categoryId?: string`; usa soft delete e preço em centavos. |
+| `Movement` | `string`, UUID v4 gerado no cliente | `productId: string`; pode ser rastreável com snapshots ou legada sem snapshots. |
+| `Category` | `string`, UUID v4 gerado no cliente | Soft delete; produtos sem categoria usam `categoryId` ausente. |
+
+Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. Não existem, no código atual, entidades implementadas para estabelecimento, perfil, associação de usuário, outbox, metadados de sincronização ou conflito.
+
+## Migrations existentes
+
+| Versão | Situação comprovada |
+| --- | --- |
+| 1 | Schema inicial de produtos e movimentações com chaves numéricas autoincrementais. |
+| 2 | Adição de `deletedAt` em produtos para soft delete. |
+| 3 | Conversão do antigo `price` decimal em `salePriceInCents`; valor inválido aborta a migration. |
+| 4 | Movimentações antigas sem snapshots passam a `isLegacy: true`; snapshots não são inventados. |
+| 5 | Criação de categorias como entidades e conversão de `category` textual em `categoryId`. |
+| 6 | Validação e cópia de produtos/movimentações para stores temporárias com UUID. |
+| 7 | Remoção das stores antigas com primary key autoincremental. |
+| 8 | Recriação de `products` e `movements` com primary key UUID e restauração dos dados. |
+| 9 | Remoção das stores temporárias; schema final contém somente as três tabelas públicas. |
+
+As versões 6 a 9 formam uma única sequência técnica de upgrade por limitação do IndexedDB/Dexie ao trocar a primary key. Os testes verificam preservação, reabertura, igualdade do schema final e rollback diante de referência órfã.
+
+## Regras de negócio consolidadas
+
+- Quantidades atuais, mínimas e movimentadas devem ser inteiras; estoque e mínimo não podem ser negativos nos formulários atuais.
+- Entrada soma ao estoque; saída subtrai.
+- Quantidade de movimentação deve ser inteira e maior que zero.
+- Saída maior que o estoque disponível é recusada.
+- Atualização de estoque e criação da movimentação ocorrem na mesma transação Dexie.
+- Nova movimentação registra `previousQuantity` e `resultingQuantity`.
+- Movimentações antigas sem informação suficiente permanecem legadas, sem snapshots fabricados.
+- Produto excluído logicamente deixa a listagem ativa, não aceita nova movimentação e mantém o histórico.
+- Estoque zero é `out-of-stock`; estoque positivo menor ou igual ao mínimo é `low-stock`; os dois precisam de reposição.
+- Preço de venda é persistido como inteiro não negativo em `salePriceInCents` e formatado em real brasileiro na UI.
+- Categoria tem nome sanitizado, obrigatório, com até 80 caracteres e unicidade lógica entre categorias ativas.
+- Categoria não pode ser excluída enquanto estiver associada a produto ativo.
+- Produto novo ou editado somente pode apontar para categoria ativa existente; produto sem categoria é permitido.
+- Novos produtos, categorias e movimentações recebem UUID no cliente.
+- Mutações locais marcam `syncStatus: "pending"`, mas esse status ainda não é consumido por uma sincronização real.
+
+## ADRs existentes
+
+Há 5 arquivos de ADR em `docs/arquitetura/adrs`:
+
+1. `ADR-001-valores-monetarios-em-centavos.md`;
+2. `ADR-002-snapshots-de-estoque-nas-movimentacoes.md`;
+3. `ADR-003-separacao-dominio-servicos-repositories.md`;
+4. `ADR-004-categorias-como-entidades.md`;
+5. `ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`.
+
+Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas seu título interno é “ADR-006”. Esta documentação apenas registra a divergência; não renomeia nem reescreve o ADR.
+
+## Testes comprovados
+
+- Arquivos de teste atuais: **11**.
+- Testes aprovados em 14/07/2026: **90 de 90**.
+- Comando: `npm run test`.
+- Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
+- Ainda não existem Playwright/E2E, teste automatizado de service worker/offline, coverage configurada ou CI.
+
+## Estado das funcionalidades
+
+### Concluído no escopo local comprovado
+
+- layout responsivo com navegação desktop e mobile;
+- rotas para dashboard, produtos, categorias, movimentações e alertas;
+- listagem, cadastro, edição, busca por nome/código e soft delete de produtos;
+- CRUD local de categorias com regras de nome e exclusão lógica;
+- associação opcional de produto a categoria ativa;
+- entradas e saídas atômicas com bloqueio de estoque negativo;
+- histórico local preservado, inclusive para produto excluído;
+- snapshots nas novas movimentações e tratamento explícito dos registros legados;
+- valores monetários em centavos;
+- UUIDs para as três entidades, incluindo migration de dados antigos;
+- classificação centralizada de estoque;
+- dashboard local básico e alertas de reposição;
+- estados reutilizáveis de loading, erro e vazio nas principais consultas;
+- feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
+- suíte atual de 90 testes aprovada.
+
+“Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
+
+### Parcial
+
+- **Projeto Integrador 2:** o núcleo local demonstrável existe, mas documentação acadêmica da entrega, release/tag, screenshots e checklist formal não foram encontrados.
+- **PWA/offline:** manifesto, service worker e indicador existem, porém faltam instalação/atualização segura, cache revisado, persistência, backup e testes offline.
+- **Produtos:** há busca, mas filtros por categoria/status, ordenação e validação comprovada de código único não existem.
+- **Movimentações:** entrada, saída e histórico existem; faltam filtros por período/tipo/produto e eventual movimento de ajuste.
+- **Dashboard:** usa dados reais e calcula `totalOutOfStock`, mas a UI não exibe esse indicador nem entradas/saídas por período.
+- **Feedback e erros:** melhorados nas páginas principais, mas não há Error Boundary nem uma taxonomia completa por origem.
+- **Testes:** há boa cobertura local e alguns testes de componente, porém faltam E2E, offline/PWA, coverage e CI.
+- **Preparação para sync:** entidades têm UUID e `syncStatus`, e `syncPendingData()` lista produtos e movimentações pendentes. Isso é somente um stub; categorias nem participam dessa consulta.
+- **Documentação:** Prompt Mestre, auditoria, ADRs e estes arquivos existem; a documentação acadêmica, requisitos, rastreabilidade, diagramas e resultados ainda não estão completos.
+
+### Pendente / não implementado
+
+- autenticação e gerenciamento de sessão;
+- Supabase e client remoto;
+- PostgreSQL e migrations remotas;
+- estabelecimento, perfis, memberships e isolamento multiusuário;
+- Row Level Security;
+- sincronização real, bidirecional, push e pull;
+- outbox persistente;
+- retry, confirmação de envio e cursor de pull;
+- detecção, persistência e resolução de conflitos;
+- central/status real de sincronização;
+- backup, importação e exportação CSV/JSON;
+- relatórios avançados;
+- testes E2E com Playwright;
+- GitHub Actions/CI;
+- pesquisa com público-alvo, testes de usabilidade e análise de resultados;
+- release identificável de PI2 e release final de TCC.
+
+## Limitações e dívidas técnicas conhecidas
+
+- O banner offline afirma que alterações serão sincronizadas quando a conexão voltar, mas não existe sincronização funcional.
+- `navigator.onLine` indica conectividade do navegador, não disponibilidade de backend.
+- O service worker usa cache dinâmico para qualquer GET e fallback de `index.html`; a estratégia precisa ser restringida e testada antes de dados remotos/sensíveis.
+- Não há fluxo seguro de atualização do service worker.
+- Alterar `currentQuantity` diretamente no formulário de produto pode mudar estoque sem gerar movimentação, reduzindo a auditabilidade.
+- Código de produto não tem unicidade comprovada nem regra de normalização centralizada.
+- Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
+- `syncPendingData()` ignora categorias e não envia, recebe ou confirma registros.
+- `syncStatus` sugere estados futuros sem outbox, retry ou semântica operacional completa.
+- O dashboard calcula `totalOutOfStock`, mas não apresenta o indicador.
+- Não há filtros e ordenações previstos no Prompt Mestre.
+- Não há Error Boundary, coverage, Prettier, E2E ou CI.
+- O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias e 90 testes.
+- `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
+- A numeração interna do primeiro ADR diverge do nome do arquivo.
+
+## Continuidade dentro das 15 partes
+
+O Prompt Mestre é o planejamento oficial, mas o arquivo atual não contém uma lista literalmente numerada de 1 a 15. Para viabilizar continuidade sem inventar um plano externo, `docs/ROADMAP-TCC.md` registra uma correspondência operacional de 15 partes ancorada nas fases, milestones, critérios e histórico comprovados.
+
+- Última etapa de código concluída: robustez de consultas, formulários e rotas de produtos, no commit `928d124`.
+- Última decisão estrutural concluída antes dela: UUID para produtos e movimentações, com schema Dexie v9, no commit `89c3e74`.
+- Parte principal atual: **Parte 8 — Estratégia formal de testes**, classificada como avançada, não concluída.
+- Partes transversais já utilizadas: **Parte 8** (testes desde as regras críticas), **Parte 10** (ADRs e documentação) e **Parte 13** (lint, typecheck e build como critérios de qualidade). PWA básica da Parte 9 também foi antecipada no MVP inicial.
+- Próximo passo recomendado: completar a Parte 8 formal com uma matriz de lacunas de testes, priorizando fluxos críticos de componentes e preparando E2E/offline sem alterar schema ou iniciar nuvem; depois seguir para o endurecimento da PWA/offline da Parte 9.
+
+Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.
