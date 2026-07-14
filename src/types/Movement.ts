@@ -3,8 +3,8 @@ import type { SyncStatus } from './Product';
 export type MovementType = 'entrada' | 'saida';
 
 interface MovementBase {
-  id?: number;
-  productId: number;
+  id: string;
+  productId: string;
   type: MovementType;
   quantity: number;
   note: string;

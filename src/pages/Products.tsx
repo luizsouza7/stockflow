@@ -24,11 +24,7 @@ export function Products() {
     );
   }, [products, search]);
 
-  async function handleDelete(id: number | undefined) {
-    if (!id) {
-      return;
-    }
-
+  async function handleDelete(id: string) {
     const confirmed = window.confirm(
       'Excluir este produto? O historico de movimentacoes sera preservado.',
     );

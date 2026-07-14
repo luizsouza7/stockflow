@@ -6,7 +6,7 @@ export const movementRepository = {
     return localDb.movements.orderBy('date').reverse().toArray();
   },
 
-  async create(movement: Movement): Promise<number> {
+  async create(movement: Movement): Promise<string> {
     return localDb.movements.add(movement);
   },
 

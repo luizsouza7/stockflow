@@ -5,6 +5,7 @@ import { productService } from '../productService';
 import { stockMovementService } from '../stockMovementService';
 import { localDb } from './localDb';
 import { formatCentsForInput, parseCurrencyToCents } from '../../utils/formatters';
+import { categoryService } from '../categoryService';
 
 async function createTestProduct(quantity = 5) {
   const now = new Date().toISOString();
@@ -21,13 +22,18 @@ async function createTestProduct(quantity = 5) {
   });
 }
 
-async function move(productId: number, type: MovementType, quantity: number) {
+async function move(
+  productId: string,
+  type: MovementType,
+  quantity: number,
+  date = new Date().toISOString(),
+) {
   return stockMovementService.register({
     productId,
     type,
     quantity,
     note: '',
-    date: new Date().toISOString(),
+    date,
     syncStatus: 'pending',
   });
 }
@@ -49,19 +55,90 @@ describe('regras locais de estoque', () => {
 
     await move(productId, 'entrada', 3);
 
+    const movement = await localDb.movements.toCollection().first();
+
     expect((await localDb.products.get(productId))?.currentQuantity).toBe(8);
-    expect(await localDb.movements.toCollection().first()).toMatchObject({
+    expect(movement).toMatchObject({
+      id: expect.any(String),
+      productId,
       quantity: 3,
       previousQuantity: 5,
       resultingQuantity: 8,
       isLegacy: false,
     });
+    expect(movement?.id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(movement?.id).not.toBe(productId);
   });
 
   it('persiste um novo produto usando centavos inteiros', async () => {
     const productId = await createTestProduct();
 
+    expect(typeof productId).toBe('string');
+    expect(productId).toMatch(/^[0-9a-f-]{36}$/i);
     expect((await localDb.products.get(productId))?.salePriceInCents).toBe(1990);
+  });
+
+  it('gera UUIDs distintos para novos produtos antes da persistencia', async () => {
+    const firstId = await createTestProduct();
+    const secondId = await createTestProduct();
+
+    expect(firstId).not.toBe(secondId);
+    expect((await localDb.products.get(firstId))?.id).toBe(firstId);
+    expect((await localDb.products.get(secondId))?.id).toBe(secondId);
+  });
+
+  it('usa primary keys UUID sem autoincremento para produtos e movimentacoes', () => {
+    expect(localDb.products.schema.primKey).toMatchObject({ keyPath: 'id', auto: false });
+    expect(localDb.movements.schema.primKey).toMatchObject({ keyPath: 'id', auto: false });
+  });
+
+  it('cria banco novo diretamente no schema final e persiste UUIDs apos reabertura', async () => {
+    expect(localDb.verno).toBe(9);
+    expect(localDb.tables.map((table) => table.name).sort()).toEqual([
+      'categories',
+      'movements',
+      'products',
+    ]);
+
+    const categoryId = await categoryService.create('Bebidas');
+    const now = '2026-07-13T12:00:00.000Z';
+    const productId = await productService.create({
+      name: 'Cafe',
+      code: 'CAFE-FRESH',
+      categoryId,
+      salePriceInCents: 1590,
+      currentQuantity: 10,
+      minimumStock: 2,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+    });
+    await move(productId, 'entrada', 5, '2026-07-13T12:01:00.000Z');
+    const movementBeforeReopen = await localDb.movements.toCollection().first();
+
+    expect(productId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(movementBeforeReopen).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      productId,
+      previousQuantity: 10,
+      resultingQuantity: 15,
+    });
+    expect((await localDb.products.get(productId))?.categoryId).toBe(categoryId);
+    expect((await localDb.categories.get(categoryId))?.id).toBe(categoryId);
+
+    const movementId = movementBeforeReopen?.id;
+    localDb.close();
+    await localDb.open();
+
+    expect(localDb.verno).toBe(9);
+    expect((await localDb.products.get(productId))?.id).toBe(productId);
+    expect((await localDb.categories.get(categoryId))?.id).toBe(categoryId);
+    expect(await localDb.movements.get(movementId ?? '')).toMatchObject({
+      id: movementId,
+      productId,
+      previousQuantity: 10,
+      resultingQuantity: 15,
+    });
   });
 
   it('edita e reabre o produto sem multiplicar o preco novamente', async () => {
@@ -113,12 +190,21 @@ describe('regras locais de estoque', () => {
   it('encadeia snapshots de duas movimentacoes sequenciais', async () => {
     const productId = await createTestProduct(10);
 
-    await move(productId, 'entrada', 5);
-    await move(productId, 'saida', 3);
+    await move(productId, 'entrada', 5, '2026-07-13T10:00:00.000Z');
+    await move(productId, 'saida', 3, '2026-07-13T10:01:00.000Z');
 
-    const movements = await localDb.movements.orderBy('id').toArray();
-    expect(movements[0]).toMatchObject({ previousQuantity: 10, resultingQuantity: 15 });
-    expect(movements[1]).toMatchObject({ previousQuantity: 15, resultingQuantity: 12 });
+    const movements = await localDb.movements.orderBy('date').toArray();
+    expect(movements[0]).toMatchObject({
+      productId,
+      previousQuantity: 10,
+      resultingQuantity: 15,
+    });
+    expect(movements[1]).toMatchObject({
+      productId,
+      previousQuantity: 15,
+      resultingQuantity: 12,
+    });
+    expect(movements[0]?.id).not.toBe(movements[1]?.id);
     expect((await localDb.products.get(productId))?.currentQuantity).toBe(12);
   });
 

@@ -1,5 +1,5 @@
 import { localDb } from '../services/db/localDb';
-import type { Product } from '../types/Product';
+import type { CreateProductInput, Product } from '../types/Product';
 
 export const productRepository = {
   async findAll(): Promise<Product[]> {
@@ -11,15 +11,15 @@ export const productRepository = {
     return products.filter((product) => !product.deletedAt);
   },
 
-  async findById(id: number): Promise<Product | undefined> {
+  async findById(id: string): Promise<Product | undefined> {
     return localDb.products.get(id);
   },
 
-  async create(product: Omit<Product, 'id'>): Promise<number> {
+  async create(product: Product): Promise<string> {
     return localDb.products.add(product);
   },
 
-  async update(id: number, changes: Partial<Product>): Promise<number> {
+  async update(id: string, changes: Partial<CreateProductInput>): Promise<number> {
     return localDb.products.update(id, changes);
   },
 

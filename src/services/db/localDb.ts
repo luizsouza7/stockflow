@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Movement } from '../../types/Movement';
+import type { LegacyMovement, Movement, TrackedMovement } from '../../types/Movement';
 import type { Product } from '../../types/Product';
 import type { Category } from '../../types/Category';
 import { generateUuid } from '../../utils/id';
@@ -21,6 +21,24 @@ interface ProductBeforeCategories {
   categoryId?: unknown;
 }
 
+type ProductV5 = Omit<Product, 'id'> & { id: number };
+type MovementV5 = (
+  | Omit<TrackedMovement, 'id' | 'productId'>
+  | Omit<LegacyMovement, 'id' | 'productId'>
+) & {
+  id: number;
+  productId: number;
+};
+
+const productSchemaV5 =
+  '++id, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt';
+const movementSchemaV5 = '++id, productId, type, date, syncStatus';
+const productSchemaWithUuid =
+  'id, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt';
+const movementSchemaWithUuid = 'id, productId, type, date, syncStatus';
+const productsMigrationTable = 'productsUuidMigration';
+const movementsMigrationTable = 'movementsUuidMigration';
+
 function normalizeLegacyCategoryName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
 }
@@ -30,8 +48,8 @@ function sanitizeLegacyCategoryName(name: string): string {
 }
 
 export class StockFlowDatabase extends Dexie {
-  products!: Table<Product, number>;
-  movements!: Table<Movement, number>;
+  products!: Table<Product, string>;
+  movements!: Table<Movement, string>;
   categories!: Table<Category, string>;
 
   constructor(databaseName = 'stockflow-local-db') {
@@ -177,6 +195,101 @@ export class StockFlowDatabase extends Dexie {
             .bulkAdd([...categoryByNormalizedName.values()]);
         }
       });
+
+    // IndexedDB nao permite alterar o keyPath de uma object store existente, e o
+    // Dexie rejeita diretamente essa mudanca. As versoes 6 a 9 formam uma unica
+    // migration atomica: copiam, removem, recriam e restauram as duas stores.
+    this.version(6)
+      .stores({
+        products: productSchemaV5,
+        movements: movementSchemaV5,
+        categories: 'id, name, updatedAt, deletedAt, syncStatus',
+        [productsMigrationTable]: productSchemaWithUuid,
+        [movementsMigrationTable]: movementSchemaWithUuid,
+      })
+      .upgrade(async (transaction) => {
+        const oldProducts = await transaction.table<ProductV5, number>('products').toArray();
+        const oldMovements = await transaction.table<MovementV5, number>('movements').toArray();
+        const productIdMap = new Map<number, string>();
+        const usedUuids = new Set<string>();
+
+        const migratedProducts = oldProducts.map((product): Product => {
+          if (!Number.isSafeInteger(product.id)) {
+            throw new Error('Produto antigo possui identificador numerico invalido.');
+          }
+
+          const newId = generateUuid();
+
+          if (usedUuids.has(newId)) {
+            throw new Error('Nao foi possivel gerar UUIDs unicos durante a migracao.');
+          }
+
+          usedUuids.add(newId);
+          productIdMap.set(product.id, newId);
+          return { ...product, id: newId };
+        });
+
+        const migratedMovements = oldMovements.map((movement): Movement => {
+          const newProductId = productIdMap.get(movement.productId);
+
+          if (!newProductId) {
+            throw new Error(
+              `Movimentacao antiga ${movement.id} referencia produto inexistente ${movement.productId}.`,
+            );
+          }
+
+          const newId = generateUuid();
+
+          if (usedUuids.has(newId)) {
+            throw new Error('Nao foi possivel gerar UUIDs unicos durante a migracao.');
+          }
+
+          usedUuids.add(newId);
+          return { ...movement, id: newId, productId: newProductId };
+        });
+
+        if (migratedProducts.length > 0) {
+          await transaction
+            .table<Product, string>(productsMigrationTable)
+            .bulkAdd(migratedProducts);
+        }
+
+        if (migratedMovements.length > 0) {
+          await transaction
+            .table<Movement, string>(movementsMigrationTable)
+            .bulkAdd(migratedMovements);
+        }
+      });
+
+    this.version(7).stores({
+      products: null,
+      movements: null,
+    });
+
+    this.version(8)
+      .stores({
+        products: productSchemaWithUuid,
+        movements: movementSchemaWithUuid,
+      })
+      .upgrade(async (transaction) => {
+        const [products, movements] = await Promise.all([
+          transaction.table<Product, string>(productsMigrationTable).toArray(),
+          transaction.table<Movement, string>(movementsMigrationTable).toArray(),
+        ]);
+
+        if (products.length > 0) {
+          await transaction.table<Product, string>('products').bulkAdd(products);
+        }
+
+        if (movements.length > 0) {
+          await transaction.table<Movement, string>('movements').bulkAdd(movements);
+        }
+      });
+
+    this.version(9).stores({
+      [productsMigrationTable]: null,
+      [movementsMigrationTable]: null,
+    });
   }
 }
 

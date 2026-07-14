@@ -18,7 +18,7 @@ const initialFormData: ProductFormData = {
 export function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const productId = id ? Number(id) : undefined;
+  const productId = id;
   const isEditing = Boolean(productId);
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
   const [error, setError] = useState('');

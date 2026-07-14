@@ -1,7 +1,7 @@
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface Product {
-  id?: number;
+  id: string;
   name: string;
   code: string;
   categoryId?: string;
@@ -13,6 +13,8 @@ export interface Product {
   deletedAt?: string;
   syncStatus: SyncStatus;
 }
+
+export type CreateProductInput = Omit<Product, 'id'>;
 
 export interface ProductFormData
   extends Pick<Product, 'name' | 'code' | 'currentQuantity' | 'minimumStock'> {

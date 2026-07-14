@@ -31,7 +31,8 @@ describe('regras de snapshot de estoque', () => {
 
   it('distingue movimentacao rastreavel de registro legado', () => {
     const base = {
-      productId: 1,
+      id: crypto.randomUUID(),
+      productId: crypto.randomUUID(),
       type: 'entrada' as const,
       quantity: 2,
       note: '',

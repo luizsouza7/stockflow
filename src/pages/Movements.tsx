@@ -17,7 +17,7 @@ export function Movements() {
   const [error, setError] = useState('');
 
   const selectedProduct = useMemo(
-    () => products.find((product) => product.id === Number(productId)),
+    () => products.find((product) => product.id === productId),
     [productId, products],
   );
 
@@ -42,7 +42,7 @@ export function Movements() {
 
     try {
       await stockMovementService.register({
-        productId: Number(productId),
+        productId,
         type,
         quantity,
         note,

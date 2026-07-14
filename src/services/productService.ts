@@ -1,8 +1,9 @@
 import { needsRestock } from '../domain/stockStatus';
 import { productRepository } from '../repositories/productRepository';
-import type { Product } from '../types/Product';
+import type { CreateProductInput, Product } from '../types/Product';
 import type { ProductWithCategory } from '../types/Product';
 import { categoryRepository } from '../repositories/categoryRepository';
+import { generateUuid } from '../utils/id';
 
 export const productService = {
   async listActive(): Promise<ProductWithCategory[]> {
@@ -25,17 +26,17 @@ export const productService = {
     return products.filter(needsRestock);
   },
 
-  async getById(id: number): Promise<Product | undefined> {
+  async getById(id: string): Promise<Product | undefined> {
     return productRepository.findById(id);
   },
 
-  async create(data: Omit<Product, 'id'>): Promise<number> {
+  async create(data: CreateProductInput): Promise<string> {
     validateSalePriceInCents(data.salePriceInCents);
     await validateCategoryAssociation(data.categoryId);
-    return productRepository.create(data);
+    return productRepository.create({ ...data, id: generateUuid() });
   },
 
-  async update(id: number, data: Partial<Product>): Promise<number> {
+  async update(id: string, data: Partial<CreateProductInput>): Promise<number> {
     if (data.salePriceInCents !== undefined) {
       validateSalePriceInCents(data.salePriceInCents);
     }
@@ -51,7 +52,7 @@ export const productService = {
     });
   },
 
-  async softDelete(id: number): Promise<void> {
+  async softDelete(id: string): Promise<void> {
     const changed = await productRepository.update(id, {
       deletedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

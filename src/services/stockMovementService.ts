@@ -3,13 +3,14 @@ import { movementRepository } from '../repositories/movementRepository';
 import { productRepository } from '../repositories/productRepository';
 import { localDb } from './db/localDb';
 import type { MovementWithProduct, RegisterMovementInput } from '../types/Movement';
+import { generateUuid } from '../utils/id';
 
 export const stockMovementService = {
   async register(movement: RegisterMovementInput): Promise<void> {
     await localDb.transaction('rw', localDb.products, localDb.movements, async () => {
       const product = await productRepository.findById(movement.productId);
 
-      if (!product || !product.id || product.deletedAt) {
+      if (!product || product.deletedAt) {
         throw new Error('Produto nao encontrado.');
       }
 
@@ -26,6 +27,7 @@ export const stockMovementService = {
       });
 
       await movementRepository.create({
+        id: generateUuid(),
         ...movement,
         ...snapshot,
         isLegacy: false,
