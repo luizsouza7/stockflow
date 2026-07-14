@@ -69,7 +69,7 @@ export function Dashboard() {
                 <div>
                   <p className="font-medium text-slate-950">{movement.productName}</p>
                   <p className="text-sm text-slate-500">
-                    Codigo {movement.productCode} • {formatDate(movement.date)}
+                    Codigo {movement.productCode || 'Sem codigo'} • {formatDate(movement.date)}
                   </p>
                 </div>
                 <span

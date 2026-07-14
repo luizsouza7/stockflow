@@ -76,17 +76,20 @@ export function ProductForm() {
 
     setError('');
 
-    if (!formData.name.trim() || !formData.code.trim()) {
-      setError('Preencha nome e codigo.');
+    if (!formData.name.trim()) {
+      setError('Preencha o nome do produto.');
       return;
     }
 
-    if (!Number.isInteger(formData.currentQuantity) || !Number.isInteger(formData.minimumStock)) {
+    if (
+      (!isEditing && !Number.isInteger(formData.currentQuantity)) ||
+      !Number.isInteger(formData.minimumStock)
+    ) {
       setError('Informe valores numericos validos.');
       return;
     }
 
-    if (formData.currentQuantity < 0 || formData.minimumStock < 0) {
+    if ((!isEditing && formData.currentQuantity < 0) || formData.minimumStock < 0) {
       setError('Valores numericos nao podem ser negativos.');
       return;
     }
@@ -100,12 +103,11 @@ export function ProductForm() {
       return;
     }
 
-    const productData = {
+    const editableProductData = {
       name: formData.name,
       code: formData.code,
       categoryId: formData.categoryId || undefined,
       salePriceInCents,
-      currentQuantity: formData.currentQuantity,
       minimumStock: formData.minimumStock,
     };
 
@@ -115,10 +117,11 @@ export function ProductForm() {
 
     try {
       if (isEditing && productId) {
-        await productService.update(productId, productData);
+        await productService.update(productId, editableProductData);
       } else {
         await productService.create({
-          ...productData,
+          ...editableProductData,
+          currentQuantity: formData.currentQuantity,
           createdAt: now,
           updatedAt: now,
           syncStatus: 'pending',
@@ -138,6 +141,8 @@ export function ProductForm() {
           'Produto nao encontrado.',
           'Selecione uma categoria ativa valida.',
           'O preco deve ser armazenado em centavos inteiros e nao negativos.',
+          'A quantidade inicial deve ser um numero inteiro nao negativo.',
+          'Ja existe um produto ativo com este codigo.',
         ]),
       );
     } finally {
@@ -210,13 +215,12 @@ export function ProductForm() {
               required
             />
           </Field>
-          <Field label="Codigo" id="code">
+          <Field label="Codigo interno (opcional)" id="code">
             <input
               id="code"
               value={formData.code}
               onChange={(event) => updateField('code', event.target.value)}
               className="input"
-              required
             />
           </Field>
           <Field label="Categoria" id="categoryId">
@@ -246,17 +250,28 @@ export function ProductForm() {
               required
             />
           </Field>
-          <Field label="Quantidade atual" id="currentQuantity">
-            <input
-              id="currentQuantity"
-              type="number"
-              min="0"
-              value={formData.currentQuantity}
-              onChange={(event) => updateField('currentQuantity', event.target.value)}
-              className="input"
-              required
-            />
-          </Field>
+          {isEditing ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 sm:col-span-2">
+              <p>
+                Estoque atual: <strong>{formData.currentQuantity} unidades</strong>
+              </p>
+              <p className="mt-1 text-slate-500">
+                Para alterar o estoque, registre uma entrada ou saida.
+              </p>
+            </div>
+          ) : (
+            <Field label="Quantidade inicial" id="currentQuantity">
+              <input
+                id="currentQuantity"
+                type="number"
+                min="0"
+                value={formData.currentQuantity}
+                onChange={(event) => updateField('currentQuantity', event.target.value)}
+                className="input"
+                required
+              />
+            </Field>
+          )}
           <Field label="Estoque minimo" id="minimumStock">
             <input
               id="minimumStock"

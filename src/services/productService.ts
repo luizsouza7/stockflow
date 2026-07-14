@@ -4,6 +4,11 @@ import type { CreateProductInput, Product } from '../types/Product';
 import type { ProductWithCategory } from '../types/Product';
 import { categoryRepository } from '../repositories/categoryRepository';
 import { generateUuid } from '../utils/id';
+import type { UpdateProductInput } from '../types/Product';
+import {
+  normalizeProductCodeForComparison,
+  sanitizeProductCode,
+} from '../domain/productCode';
 
 export type ProductEditingLookup =
   | { status: 'active'; product: Product }
@@ -51,11 +56,14 @@ export const productService = {
 
   async create(data: CreateProductInput): Promise<string> {
     validateSalePriceInCents(data.salePriceInCents);
+    validateInitialQuantity(data.currentQuantity);
     await validateCategoryAssociation(data.categoryId);
-    return productRepository.create({ ...data, id: generateUuid() });
+    const code = sanitizeProductCode(data.code);
+    await ensureUniqueActiveCode(code);
+    return productRepository.create({ ...data, code, id: generateUuid() });
   },
 
-  async update(id: string, data: Partial<CreateProductInput>): Promise<number> {
+  async update(id: string, data: UpdateProductInput): Promise<number> {
     const product = await productRepository.findById(id);
 
     if (!product || product.deletedAt) {
@@ -70,11 +78,24 @@ export const productService = {
       await validateCategoryAssociation(data.categoryId);
     }
 
-    return productRepository.update(id, {
-      ...data,
+    const changes: Partial<CreateProductInput> = {
       updatedAt: new Date().toISOString(),
       syncStatus: 'pending',
-    });
+    };
+
+    if (data.name !== undefined) changes.name = data.name;
+    if (data.categoryId !== undefined) changes.categoryId = data.categoryId;
+    if ('categoryId' in data && data.categoryId === undefined) changes.categoryId = undefined;
+    if (data.salePriceInCents !== undefined) changes.salePriceInCents = data.salePriceInCents;
+    if (data.minimumStock !== undefined) changes.minimumStock = data.minimumStock;
+
+    if (data.code !== undefined) {
+      const code = sanitizeProductCode(data.code);
+      await ensureUniqueActiveCode(code, product.code);
+      changes.code = code;
+    }
+
+    return productRepository.update(id, changes);
   },
 
   async softDelete(id: string): Promise<void> {
@@ -122,5 +143,32 @@ async function validateCategoryAssociation(categoryId: string | undefined): Prom
 function validateSalePriceInCents(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error('O preco deve ser armazenado em centavos inteiros e nao negativos.');
+  }
+}
+
+function validateInitialQuantity(value: number): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error('A quantidade inicial deve ser um numero inteiro nao negativo.');
+  }
+}
+
+async function ensureUniqueActiveCode(code: string, currentCode?: string): Promise<void> {
+  const normalizedCode = normalizeProductCodeForComparison(code);
+
+  if (
+    !normalizedCode ||
+    (currentCode !== undefined &&
+      normalizedCode === normalizeProductCodeForComparison(currentCode))
+  ) {
+    return;
+  }
+
+  const activeProducts = await productRepository.findAllActive();
+  const duplicate = activeProducts.some(
+    (product) => normalizeProductCodeForComparison(product.code) === normalizedCode,
+  );
+
+  if (duplicate) {
+    throw new Error('Ja existe um produto ativo com este codigo.');
   }
 }

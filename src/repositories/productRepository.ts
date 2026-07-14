@@ -1,6 +1,12 @@
 import { localDb } from '../services/db/localDb';
 import type { CreateProductInput, Product } from '../types/Product';
 
+type ProductDetailsChanges = Partial<Omit<CreateProductInput, 'currentQuantity'>>;
+type ProductStockChanges = Pick<
+  Product,
+  'currentQuantity' | 'updatedAt' | 'syncStatus'
+>;
+
 export const productRepository = {
   async findAll(): Promise<Product[]> {
     return localDb.products.toArray();
@@ -19,7 +25,11 @@ export const productRepository = {
     return localDb.products.add(product);
   },
 
-  async update(id: string, changes: Partial<CreateProductInput>): Promise<number> {
+  async update(id: string, changes: ProductDetailsChanges): Promise<number> {
+    return localDb.products.update(id, changes);
+  },
+
+  async updateStock(id: string, changes: ProductStockChanges): Promise<number> {
     return localDb.products.update(id, changes);
   },
 

@@ -39,7 +39,7 @@ export function Alerts() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-slate-950">{product.name}</h2>
-                  <p className="text-sm text-slate-500">{product.code}</p>
+                  <p className="text-sm text-slate-500">{product.code || 'Sem codigo'}</p>
                 </div>
                 <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
                   Repor

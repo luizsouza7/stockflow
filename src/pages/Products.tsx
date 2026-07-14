@@ -231,7 +231,7 @@ export function Products() {
                   <div>
                     <h2 className="font-semibold text-slate-950">{product.name}</h2>
                     <p className="text-sm text-slate-500">
-                      {product.code} • Atualizado em {formatDate(product.updatedAt)}
+                      {product.code || 'Sem codigo'} • Atualizado em {formatDate(product.updatedAt)}
                     </p>
                   </div>
                   <p className="text-sm text-slate-700">{product.categoryName}</p>

@@ -247,7 +247,7 @@ export function Movements() {
                 <option value="">Todos os produtos</option>
                 {historyProductOptions.map((product) => (
                   <option key={product.id} value={product.id}>
-                    {product.name} ({product.code})
+                    {product.name} ({product.code || 'Sem codigo'})
                   </option>
                 ))}
               </select>
@@ -357,7 +357,7 @@ export function Movements() {
                   <div>
                     <h3 className="font-semibold text-slate-950">{movement.productName}</h3>
                     <p className="text-sm text-slate-500">
-                      {movement.productCode} • {formatDate(movement.date)}
+                      {movement.productCode || 'Sem codigo'} • {formatDate(movement.date)}
                     </p>
                     {movement.note && (
                       <p className="mt-2 text-sm text-slate-600">{movement.note}</p>

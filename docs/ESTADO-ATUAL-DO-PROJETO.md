@@ -1,6 +1,6 @@
 # Estado Atual do Projeto StockFlow
 
-> Atualizado em 14/07/2026. Este documento descreve o estado comprovado na branch `develop`, commit `928d124`, antes da criação desta documentação. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem.
+> Atualizado em 14/07/2026. Este documento descreve o estado comprovado na branch `develop`, tendo `db1cbeb` como commit anterior à etapa atual ainda não commitada. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem.
 
 ## Identificação e finalidade
 
@@ -12,7 +12,7 @@ O repositório é a continuidade de uma entrega intermediária de Projeto Integr
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Commit de referência anterior a estes documentos: `928d124` (`feat: robustecer consultas, formularios e rotas de produtos`).
+- Commit de referência anterior à etapa atual: `db1cbeb` (`feat: adiciona filtros e ordenacao de produtos e movimentacoes`).
 - Estado inicial do worktree nessa raiz: limpo e acompanhando `origin/develop`.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -130,8 +130,8 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **11**.
-- Testes aprovados em 14/07/2026: **90 de 90**.
+- Arquivos de teste atuais: **17**.
+- Testes aprovados em 14/07/2026: **141 de 141**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Ainda não existem Playwright/E2E, teste automatizado de service worker/offline, coverage configurada ou CI.
@@ -145,6 +145,8 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 - listagem, cadastro, edição, busca por nome/código, filtros por categoria e estoque, ordenação e soft delete de produtos;
 - CRUD local de categorias com regras de nome e exclusão lógica;
 - associação opcional de produto a categoria ativa;
+- saldo inicial definido somente na criação e alterações posteriores de estoque restritas a movimentações;
+- código interno opcional, com trim e unicidade lógica entre produtos ativos;
 - entradas e saídas atômicas com bloqueio de estoque negativo;
 - histórico local preservado, inclusive para produto excluído;
 - filtros combináveis do histórico por produto, tipo e período, com ordenação cronológica;
@@ -155,7 +157,7 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 - dashboard local básico e alertas de reposição;
 - estados reutilizáveis de loading, erro e vazio nas principais consultas;
 - feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
-- suíte atual de 123 testes em 15 arquivos aprovada.
+- suíte atual de 141 testes em 17 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -163,7 +165,7 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 
 - **Projeto Integrador 2:** o núcleo local demonstrável existe, mas documentação acadêmica da entrega, release/tag, screenshots e checklist formal não foram encontrados.
 - **PWA/offline:** manifesto, service worker e indicador existem, porém faltam instalação/atualização segura, cache revisado, persistência, backup e testes offline.
-- **Produtos:** busca, filtros combináveis, ordenação e estados vazios distintos estão implementados; ainda falta validação comprovada de código único.
+- **Produtos:** busca, filtros combináveis, ordenação, estados vazios, código interno único entre ativos e proteção contra edição direta de estoque estão implementados.
 - **Movimentações:** entrada, saída, histórico e filtros combináveis por produto/tipo/período estão implementados; eventual movimento de ajuste permanece futuro.
 - **Dashboard:** usa dados reais e calcula `totalOutOfStock`, mas a UI não exibe esse indicador nem entradas/saídas por período.
 - **Feedback e erros:** melhorados nas páginas principais, mas não há Error Boundary nem uma taxonomia completa por origem.
@@ -196,14 +198,14 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 - `navigator.onLine` indica conectividade do navegador, não disponibilidade de backend.
 - O service worker usa cache dinâmico para qualquer GET e fallback de `index.html`; a estratégia precisa ser restringida e testada antes de dados remotos/sensíveis.
 - Não há fluxo seguro de atualização do service worker.
-- Alterar `currentQuantity` diretamente no formulário de produto pode mudar estoque sem gerar movimentação, reduzindo a auditabilidade.
-- Código de produto não tem unicidade comprovada nem regra de normalização centralizada.
+- Duplicidades legadas de código são preservadas; a regra impede novas duplicidades ativas, mas não corrige dados históricos automaticamente.
+- A unicidade local por código é validada no service e não cobre concorrência futura com nuvem ou múltiplos dispositivos.
 - Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
 - `syncPendingData()` ignora categorias e não envia, recebe ou confirma registros.
 - `syncStatus` sugere estados futuros sem outbox, retry ou semântica operacional completa.
 - O dashboard calcula `totalOutOfStock`, mas não apresenta o indicador.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
-- O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias, filtros e 123 testes.
+- O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias, filtros, regras de estoque/código e 141 testes.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
 - A numeração interna do primeiro ADR diverge do nome do arquivo.
 
@@ -211,10 +213,10 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 
 O Prompt Mestre é o planejamento oficial, mas o arquivo atual não contém uma lista literalmente numerada de 1 a 15. Para viabilizar continuidade sem inventar um plano externo, `docs/ROADMAP-TCC.md` registra uma correspondência operacional de 15 partes ancorada nas fases, milestones, critérios e histórico comprovados.
 
-- Última etapa de código concluída no worktree: busca, filtros e ordenação de produtos e movimentações, ainda sem commit conforme solicitado.
+- Última etapa de código concluída no worktree: auditabilidade das alterações de estoque e semântica/unicidade do código interno, ainda sem commit conforme solicitado.
 - Última decisão estrutural concluída antes dela: UUID para produtos e movimentações, com schema Dexie v9, no commit `89c3e74`.
-- Parte principal atual, conforme o contexto oficial de continuidade: **final da Parte 3**, praticamente concluída após esta evolução do núcleo local.
+- Parte principal atual, conforme o contexto oficial de continuidade: **Parte 3 concluída** após encerrar as regras de consulta, auditabilidade de estoque e código interno.
 - Partes transversais já utilizadas: **Parte 8** (testes desde as regras críticas), **Parte 10** (ADRs e documentação) e **Parte 13** (lint, typecheck e build como critérios de qualidade). PWA básica da Parte 9 também foi antecipada no MVP inicial.
-- Próximo passo recomendado: encerrar formalmente a Parte 3 com a revisão das duas lacunas locais já conhecidas — unicidade do código de produto e alteração direta de quantidade sem movimentação — sem iniciar nuvem, sincronização ou outra grande etapa.
+- Próximo passo recomendado: revisar os critérios da Parte 4 do Prompt Mestre contra o que já foi antecipado no código, especialmente snapshots e legado, antes de iniciar qualquer nova implementação.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

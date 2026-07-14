@@ -14,7 +14,7 @@ Não são usados percentuais artificiais.
 
 ## Sequência principal e trabalho transversal
 
-A sequência principal continua ordenada. Conforme o contexto oficial de continuidade fornecido pelo desenvolvedor, a **Parte principal atual está no final da Parte 3**. Testes, documentação e qualidade continuam sendo usados transversalmente sem deslocar a parte principal:
+A sequência principal continua ordenada. Conforme o contexto oficial de continuidade fornecido pelo desenvolvedor, a **Parte 3 foi concluída**. Testes, documentação e qualidade continuam sendo usados transversalmente sem deslocar a parte principal:
 
 - testes foram escritos desde as primeiras regras críticas, antes da Parte 8 formal;
 - ADRs foram criados junto das migrations e decisões, antes da Parte 10 formal;
@@ -62,7 +62,7 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 
 **Objetivo:** consolidar o núcleo local do TCC, incluindo integridade monetária e uma experiência de consulta útil para produtos e movimentações.
 
-**Status:** praticamente concluída.
+**Status:** concluída.
 
 **Já implementado/comprovado:**
 
@@ -77,12 +77,17 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 - ordenação cronológica, validação de intervalo e preservação de legado, snapshots e histórico de produtos excluídos;
 - estados vazios reais distintos de consultas sem correspondência;
 - layout de filtros validado sem overflow em 375 px e 1440 px.
+- saldo inicial permitido somente na criação e validado como inteiro não negativo;
+- edição comum sem campo mutável de estoque e DTO de update sem `currentQuantity`;
+- alterações posteriores de estoque restritas ao fluxo transacional de movimentações;
+- código definido como referência interna opcional, persistida como string vazia quando ausente;
+- trim na persistência e comparação lógica case-insensitive entre produtos ativos;
+- reutilização do código após soft delete e preservação não destrutiva de duplicidades legadas.
 
 **Restante:**
 
-- custo de produto e outras grandezas monetárias não fazem parte do escopo atual;
-- corrigir em momento documental apropriado a numeração divergente do ADR correspondente.
-- revisar a unicidade do código de produto e a alteração direta de quantidade antes do encerramento formal da parte.
+- custo de produto, código de barras e outras grandezas monetárias não fazem parte do escopo delimitado desta parte;
+- a numeração divergente do ADR monetário é uma correção documental futura e não impede o encerramento funcional.
 
 ## Parte 4 — Snapshots e rastreabilidade das movimentações
 
@@ -138,7 +143,7 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 
 **Restante:**
 
-- filtros de produtos por categoria estão programados para estabilização do escopo PI2.
+- nenhum item funcional restante no recorte de categorias desta parte operacional.
 
 ## Parte 7 — UUIDs e robustez dos fluxos locais
 
@@ -155,11 +160,10 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 - tratamento de produto inexistente ou excluído em edição;
 - feedback de sucesso/erro;
 - proteção de duplo envio e exclusão;
-- último commit anterior à etapa atual: `928d124`; a evolução atual permanece sem commit conforme solicitado.
+- último commit anterior à etapa atual: `db1cbeb`; a evolução atual permanece sem commit conforme solicitado.
 
 **Restante:**
 
-- revisar regras de código de produto e alteração direta de quantidade;
 - aplicar acessibilidade e tratamento de erro restantes sem ampliar escopo;
 - considerar esta parte encerrada somente após a revisão do desenvolvedor.
 
@@ -172,7 +176,7 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 **Já implementado/comprovado:**
 
 - Vitest, fake-indexeddb, jsdom e React Testing Library;
-- 15 arquivos e 123 testes aprovados;
+- 17 arquivos e 141 testes aprovados;
 - regras de estoque, categorias, moeda e status;
 - transações, rollback, soft delete e migrations;
 - repository/service/dashboard;
@@ -335,11 +339,11 @@ Esses itens são preparação, não sincronização.
 
 # Próximas etapas planejadas
 
-1. Encerrar formalmente a **Parte 3**, avaliando unicidade do código de produto e auditabilidade da alteração direta de estoque, sem misturar outra grande etapa.
+1. Revisar os critérios da **Parte 4** do Prompt Mestre contra snapshots e legado já implementados, evitando refazer trabalho concluído.
 2. Retomar a **Parte 8** transversal com uma análise de lacunas de testes baseada nos fluxos reais e preparar E2E/offline sem testar funcionalidades inexistentes.
 3. Avançar a **Parte 9**: restringir e testar a PWA/offline, corrigindo mensagens que hoje prometem sincronização.
 4. Completar progressivamente a **Parte 10** para a entrega PI2: requisitos, rastreabilidade, diagramas e checklist, sem substituir o Prompt Mestre.
 5. Somente depois da base local/PI2 estabilizada, iniciar **Parte 11**; Supabase/Auth/RLS devem preceder sincronização real.
 6. Seguir então por **Parte 12**, **Parte 13**, **Parte 14** e **Parte 15**, respeitando dependências e critérios de pronto.
 
-O próximo passo recomendado não é Supabase nem sincronização: é concluir a revisão final da Parte 3 sem ampliar o escopo.
+O próximo passo recomendado não é Supabase nem sincronização: é verificar formalmente o estado da Parte 4 antes de escolher uma nova evolução.

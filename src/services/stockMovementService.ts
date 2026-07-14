@@ -20,7 +20,7 @@ export const stockMovementService = {
         movement.quantity,
       );
 
-      await productRepository.update(product.id, {
+      await productRepository.updateStock(product.id, {
         currentQuantity: snapshot.resultingQuantity,
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending',

@@ -16,12 +16,12 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Commit de código de referência: `928d124`.
+- Commit de código de referência anterior à etapa atual: `db1cbeb`.
 - Schema Dexie atual: versão 9.
-- Estado de testes comprovado: 11 arquivos, 90 testes aprovados em 14/07/2026.
-- Última etapa de código: robustez de consultas, formulários e rotas de produtos.
-- Parte principal atual: **final da Parte 3**, praticamente concluída após busca, filtros e ordenação do núcleo local.
-- Próximo passo recomendado: mapear lacunas e ampliar testes do núcleo local; em seguida endurecer PWA/offline. Não antecipar Supabase ou sincronização.
+- Estado de testes comprovado: 17 arquivos, 141 testes aprovados em 14/07/2026.
+- Última etapa de código: auditabilidade do estoque e semântica/unicidade do código interno do produto.
+- Parte principal atual: **Parte 3 concluída**.
+- Próximo passo recomendado: revisar os critérios da Parte 4 contra snapshots e legado já antecipados. Não antecipar Supabase ou sincronização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -101,7 +101,16 @@ A versão atual é 9. Uma mudança futura de schema deve começar em versão sup
 - Quantidade deve ser inteira e positiva.
 - Produto excluído não recebe nova movimentação.
 - Correção de estoque deve preferir uma nova movimentação de ajuste quando esse requisito for formalmente introduzido.
-- Evite alterar `currentQuantity` por caminhos que não preservem auditabilidade; o formulário atual permite isso e a questão deve ser tratada em etapa própria.
+- Saldo inicial é permitido somente na criação; edição comum não altera `currentQuantity`.
+- Alterações posteriores passam pelo `stockMovementService` e pela operação explícita `productRepository.updateStock()` dentro da transação.
+
+## Regras específicas para código do produto
+
+- `code` é referência interna opcional, não código de barras;
+- ausência é persistida como string vazia;
+- o valor salvo recebe trim externo sem conversão obrigatória para maiúsculas;
+- códigos não vazios são logicamente únicos entre produtos ativos, com comparação case-insensitive;
+- produto excluído não bloqueia reutilização e duplicidades legadas não são reescritas automaticamente.
 
 ## Regras específicas para sync e nuvem futura
 
@@ -179,4 +188,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. Considere o Prompt Mestre como planejamento oficial e os documentos de continuidade como fotografia verificável do StockFlow. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirme raiz, branch e mudanças locais. Continue exatamente da próxima etapa indicada — atualmente o encerramento da Parte 3 — sem recriar o projeto, desfazer decisões consolidadas ou antecipar Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. Considere o Prompt Mestre como planejamento oficial e os documentos de continuidade como fotografia verificável do StockFlow. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirme raiz, branch e mudanças locais. A Parte 3 está concluída; antes de implementar algo novo, revise os critérios da Parte 4 contra snapshots e legado já existentes. Não recrie o projeto, desfaça decisões consolidadas ou antecipe Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.

@@ -1,6 +1,6 @@
 # Arquitetura Atual do StockFlow
 
-> Estado comprovado em 14/07/2026 na branch `develop`, tendo `928d124` como commit de código de referência. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro.
+> Estado comprovado em 14/07/2026 na branch `develop`, tendo `db1cbeb` como commit anterior à etapa atual ainda não commitada. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro.
 
 ## Visão geral atual
 
@@ -27,8 +27,8 @@ O desenho é deliberadamente simples: não há controllers, interfaces genérica
 `src/pages` contém as telas e coordena interação, estados de formulário e navegação:
 
 - `Dashboard.tsx`: indicadores e movimentações recentes;
-- `Products.tsx`: busca, listagem, feedback e exclusão lógica;
-- `ProductForm.tsx`: cadastro e edição;
+- `Products.tsx`: busca, filtros, ordenação, listagem, feedback e exclusão lógica;
+- `ProductForm.tsx`: cadastro com saldo inicial e edição sem alteração direta de estoque;
 - `Categories.tsx`: cadastro, edição, listagem e exclusão lógica;
 - `Movements.tsx`: entrada, saída e histórico;
 - `Alerts.tsx`: produtos que precisam de reposição.
@@ -49,7 +49,9 @@ O primeiro mantém as telas reativas às alterações locais. O segundo é apena
 - sanitização, normalização e validação do nome de categoria;
 - cálculo de snapshots de entrada/saída e validação de quantidade;
 - distinção entre movimentação rastreável e legada;
-- classificação `normal`, `low-stock` e `out-of-stock`.
+- classificação `normal`, `low-stock` e `out-of-stock`;
+- sanitização e normalização lógica do código interno do produto;
+- composição pura dos filtros e ordenações de produtos e movimentações.
 
 Essas funções são testáveis isoladamente e evitam duplicar decisões importantes nas telas.
 
@@ -57,7 +59,7 @@ Essas funções são testáveis isoladamente e evitam duplicar decisões importa
 
 Os services representam os casos de uso e coordenam repositories:
 
-- `productService`: listagem enriquecida com categoria, validação de associação, criação, edição e soft delete;
+- `productService`: listagem enriquecida com categoria, saldo inicial, unicidade de código, edição sem estoque e soft delete;
 - `categoryService`: regras de nome, unicidade lógica e exclusão condicionada a produtos ativos;
 - `stockMovementService`: transação atômica de estoque e montagem do histórico;
 - `dashboardService`: cálculo dos indicadores reais;
@@ -71,7 +73,7 @@ O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa gar
 
 - leitura ativa ou completa;
 - busca por ID;
-- criação e atualização;
+- criação, atualização de dados e atualização explícita de estoque;
 - consultas por `syncStatus`;
 - contagem de produtos ativos por categoria;
 - histórico de movimentações ordenado por data.
@@ -105,7 +107,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 11 arquivos e 90 testes aprovados:
+A arquitetura é verificada por 17 arquivos e 141 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -187,6 +189,12 @@ Categoria possui identidade, timestamps, soft delete e `syncStatus`. Produto gua
 - `currentQuantity > minimumStock`: normal.
 
 `needsRestock` inclui sem estoque e estoque baixo. A regra é centralizada em `src/domain/stockStatus.ts`.
+
+### Auditabilidade do estoque e código interno
+
+`currentQuantity` pode receber um saldo inicial somente na criação. Depois da persistência, a edição comum não aceita esse campo; entradas e saídas passam pelo `stockMovementService`, que calcula snapshots e usa a operação explícita `productRepository.updateStock()` dentro da mesma transação da movimentação.
+
+`code` é uma referência interna opcional, não código de barras. A ausência é persistida como string vazia. O valor salvo recebe apenas trim externo e preserva caixa e caracteres internos; para unicidade entre produtos ativos, a comparação aplica trim e caixa insensível. Produtos excluídos não bloqueiam reutilização, e duplicidades legadas não são alteradas automaticamente porque histórico e identidade usam UUID.
 
 ## Offline-first atual
 

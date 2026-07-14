@@ -7,12 +7,12 @@ import { localDb } from './localDb';
 import { formatCentsForInput, parseCurrencyToCents } from '../../utils/formatters';
 import { categoryService } from '../categoryService';
 
-async function createTestProduct(quantity = 5) {
+async function createTestProduct(quantity = 5, code = crypto.randomUUID()) {
   const now = new Date().toISOString();
 
   return productService.create({
     name: 'Arroz',
-    code: 'ARROZ-001',
+    code,
     salePriceInCents: 1990,
     currentQuantity: quantity,
     minimumStock: 2,
