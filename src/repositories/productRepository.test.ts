@@ -59,4 +59,32 @@ describe('productRepository', () => {
     expect(activeProducts).toHaveLength(1);
     expect(activeProducts[0]?.id).toBe(activeId);
   });
+
+  it('classifica produto ativo como editavel', async () => {
+    const productId = await createProduct('Leite');
+
+    await expect(productService.getForEditing(productId)).resolves.toMatchObject({
+      status: 'active',
+      product: { id: productId, name: 'Leite' },
+    });
+  });
+
+  it('distingue produto inexistente durante edicao', async () => {
+    await expect(productService.getForEditing(crypto.randomUUID())).resolves.toEqual({
+      status: 'not-found',
+    });
+  });
+
+  it('nao retorna produto excluido como editavel nem permite sua atualizacao', async () => {
+    const productId = await createProduct('Farinha');
+    await productService.softDelete(productId);
+
+    await expect(productService.getForEditing(productId)).resolves.toEqual({
+      status: 'deleted',
+    });
+    await expect(productService.update(productId, { name: 'Outro nome' })).rejects.toThrow(
+      'Produto nao encontrado.',
+    );
+    expect((await productRepository.findById(productId))?.name).toBe('Farinha');
+  });
 });

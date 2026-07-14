@@ -1,23 +1,37 @@
 import { liveQuery } from 'dexie';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useDexieQuery<T>(query: () => Promise<T>, initialValue: T) {
   const [data, setData] = useState<T>(initialValue);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error>();
+  const [queryVersion, setQueryVersion] = useState(0);
+  const queryRef = useRef(query);
+  queryRef.current = query;
+
+  const refetch = useCallback(() => setQueryVersion((version) => version + 1), []);
 
   useEffect(() => {
-    const subscription = liveQuery(query).subscribe({
+    setIsLoading(true);
+    setError(undefined);
+
+    const subscription = liveQuery(() => queryRef.current()).subscribe({
       next: (value) => {
         setData(value);
         setIsLoading(false);
       },
-      error: () => setIsLoading(false),
+      error: (queryError) => {
+        setError(
+          queryError instanceof Error
+            ? queryError
+            : new Error('Falha desconhecida ao consultar o banco local.'),
+        );
+        setIsLoading(false);
+      },
     });
 
     return () => subscription.unsubscribe();
-    // A consulta do Dexie fica reativa por liveQuery; as telas passam funcoes estaveis no ciclo de vida.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [queryVersion]);
 
-  return { data, isLoading };
+  return { data, isLoading, error, refetch };
 }

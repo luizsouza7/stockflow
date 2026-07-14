@@ -3,15 +3,17 @@ import { StatCard } from '../components/StatCard';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { getDashboardSummary, type DashboardSummary } from '../services/dashboardService';
 import { formatDate } from '../utils/formatters';
+import { LoadingState } from '../components/LoadingState';
+import { ErrorState } from '../components/ErrorState';
 
 export function Dashboard() {
-  const summary = useDexieQuery<DashboardSummary>(() => getDashboardSummary(), {
+  const { data: summary, isLoading, error, refetch } = useDexieQuery<DashboardSummary>(() => getDashboardSummary(), {
     totalProducts: 0,
     totalNeedingRestock: 0,
     totalOutOfStock: 0,
     totalMovements: 0,
     recentMovements: [],
-  }).data;
+  });
 
   return (
     <div className="space-y-6">
@@ -21,6 +23,13 @@ export function Dashboard() {
           Visao geral do estoque local salvo neste dispositivo.
         </p>
       </section>
+
+      {isLoading ? (
+        <LoadingState message="Carregando resumo do estoque..." />
+      ) : error ? (
+        <ErrorState message="Nao foi possivel carregar o dashboard." onRetry={refetch} />
+      ) : (
+        <>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Produtos cadastrados" value={summary.totalProducts} />
@@ -78,6 +87,8 @@ export function Dashboard() {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

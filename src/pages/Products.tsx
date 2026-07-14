@@ -1,14 +1,32 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { productService } from '../services/productService';
 import { formatCentsToBRL, formatDate } from '../utils/formatters';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { needsRestock } from '../domain/stockStatus';
+import { LoadingState } from '../components/LoadingState';
+import { ErrorState } from '../components/ErrorState';
+import { getUserFacingError } from '../utils/errors';
 
 export function Products() {
   const [search, setSearch] = useState('');
-  const { data: products } = useDexieQuery(() => productService.listActive(), []);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [operationError, setOperationError] = useState('');
+  const [success, setSuccess] = useState(() => readSuccessMessage(location.state));
+  const [deletingId, setDeletingId] = useState<string>();
+  const deletionInProgress = useRef(false);
+  const { data: products, isLoading, error, refetch } = useDexieQuery(
+    () => productService.listActive(),
+    [],
+  );
+
+  useEffect(() => {
+    if (readSuccessMessage(location.state)) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -25,12 +43,33 @@ export function Products() {
   }, [products, search]);
 
   async function handleDelete(id: string) {
+    if (deletionInProgress.current) {
+      return;
+    }
+
     const confirmed = window.confirm(
       'Excluir este produto? O historico de movimentacoes sera preservado.',
     );
 
     if (confirmed) {
-      await productService.softDelete(id);
+      deletionInProgress.current = true;
+      setDeletingId(id);
+      setOperationError('');
+      setSuccess('');
+
+      try {
+        await productService.softDelete(id);
+        setSuccess('Produto excluido com sucesso.');
+      } catch (deleteError) {
+        setOperationError(
+          getUserFacingError(deleteError, 'Nao foi possivel excluir o produto.', [
+            'Produto nao encontrado.',
+          ]),
+        );
+      } finally {
+        deletionInProgress.current = false;
+        setDeletingId(undefined);
+      }
     }
   }
 
@@ -51,6 +90,17 @@ export function Products() {
         </Link>
       </section>
 
+      {operationError && (
+        <p role="alert" className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {operationError}
+        </p>
+      )}
+      {success && (
+        <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          {success}
+        </p>
+      )}
+
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <label className="text-sm font-medium text-slate-700" htmlFor="product-search">
           Buscar por nome ou codigo
@@ -64,7 +114,11 @@ export function Products() {
         />
       </div>
 
-      {filteredProducts.length === 0 ? (
+      {isLoading ? (
+        <LoadingState message="Carregando produtos..." />
+      ) : error ? (
+        <ErrorState message="Nao foi possivel carregar os produtos." onRetry={refetch} />
+      ) : filteredProducts.length === 0 ? (
         <EmptyState
           title={products.length === 0 ? 'Nenhum produto cadastrado' : 'Nenhum produto encontrado'}
           description={
@@ -123,9 +177,10 @@ export function Products() {
                     <button
                       type="button"
                       onClick={() => handleDelete(product.id)}
+                      disabled={deletingId !== undefined}
                       className="inline-flex min-h-10 items-center rounded-md border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                     >
-                      Excluir
+                      {deletingId === product.id ? 'Excluindo...' : 'Excluir'}
                     </button>
                   </div>
                 </article>
@@ -136,4 +191,12 @@ export function Products() {
       )}
     </div>
   );
+}
+
+function readSuccessMessage(state: unknown): string {
+  if (typeof state !== 'object' || state === null || !('successMessage' in state)) {
+    return '';
+  }
+
+  return typeof state.successMessage === 'string' ? state.successMessage : '';
 }

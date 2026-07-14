@@ -2,9 +2,11 @@ import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { formatCentsToBRL } from '../utils/formatters';
 import { productService } from '../services/productService';
+import { LoadingState } from '../components/LoadingState';
+import { ErrorState } from '../components/ErrorState';
 
 export function Alerts() {
-  const { data: lowStockProducts } = useDexieQuery(
+  const { data: lowStockProducts, isLoading, error, refetch } = useDexieQuery(
     () => productService.listProductsNeedingRestock(),
     [],
   );
@@ -18,7 +20,11 @@ export function Alerts() {
         </p>
       </section>
 
-      {lowStockProducts.length === 0 ? (
+      {isLoading ? (
+        <LoadingState message="Carregando alertas..." />
+      ) : error ? (
+        <ErrorState message="Nao foi possivel carregar os alertas." onRetry={refetch} />
+      ) : lowStockProducts.length === 0 ? (
         <EmptyState
           title="Nenhum alerta no momento"
           description="Todos os produtos estao acima do estoque minimo configurado."
