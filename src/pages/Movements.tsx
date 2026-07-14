@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { stockMovementService } from '../services/stockMovementService';
@@ -6,15 +6,23 @@ import type { MovementType } from '../types/Movement';
 import { formatDate } from '../utils/formatters';
 import { productService } from '../services/productService';
 import { hasStockSnapshot } from '../domain/stockMovement';
+import { LoadingState } from '../components/LoadingState';
+import { ErrorState } from '../components/ErrorState';
+import { getUserFacingError } from '../utils/errors';
 
 export function Movements() {
-  const { data: products } = useDexieQuery(() => productService.listActive(), []);
-  const { data: movements } = useDexieQuery(() => stockMovementService.listHistory(), []);
+  const productsQuery = useDexieQuery(() => productService.listActive(), []);
+  const movementsQuery = useDexieQuery(() => stockMovementService.listHistory(), []);
+  const products = productsQuery.data;
+  const movements = movementsQuery.data;
   const [productId, setProductId] = useState('');
   const [type, setType] = useState<MovementType>('entrada');
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInProgress = useRef(false);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === productId),
@@ -23,7 +31,13 @@ export function Movements() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (submissionInProgress.current) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
 
     if (!productId) {
       setError('Selecione um produto.');
@@ -40,6 +54,9 @@ export function Movements() {
       return;
     }
 
+    submissionInProgress.current = true;
+    setIsSubmitting(true);
+
     try {
       await stockMovementService.register({
         productId,
@@ -52,12 +69,20 @@ export function Movements() {
 
       setQuantity(1);
       setNote('');
+      setSuccess('Movimentacao registrada com sucesso.');
     } catch (movementError) {
       setError(
-        movementError instanceof Error
-          ? movementError.message
-          : 'Nao foi possivel registrar a movimentacao.',
+        getUserFacingError(movementError, 'Nao foi possivel registrar a movimentacao.', [
+          'Produto nao encontrado.',
+          'A quantidade deve ser um numero inteiro maior que zero.',
+          'A saida nao pode ser maior que a quantidade disponivel.',
+          'O estoque atual do produto e invalido.',
+          'Tipo de movimentacao invalido.',
+        ]),
       );
+    } finally {
+      submissionInProgress.current = false;
+      setIsSubmitting(false);
     }
   }
 
@@ -71,10 +96,23 @@ export function Movements() {
           </p>
         </div>
 
+        {productsQuery.isLoading ? (
+          <LoadingState message="Carregando produtos..." />
+        ) : productsQuery.error ? (
+          <ErrorState
+            message="Nao foi possivel carregar os produtos para movimentacao."
+            onRetry={productsQuery.refetch}
+          />
+        ) : (
         <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           {error && (
-            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+            <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
               {error}
+            </div>
+          )}
+          {success && (
+            <div role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+              {success}
             </div>
           )}
 
@@ -85,6 +123,7 @@ export function Movements() {
                 id="product"
                 value={productId}
                 onChange={(event) => setProductId(event.target.value)}
+                disabled={isSubmitting}
                 className="input mt-2"
                 required
               >
@@ -105,6 +144,7 @@ export function Movements() {
                     key={movementType}
                     type="button"
                     onClick={() => setType(movementType)}
+                    disabled={isSubmitting}
                     className={`min-h-10 rounded px-3 text-sm font-semibold capitalize transition ${
                       type === movementType
                         ? 'bg-white text-brand-700 shadow-sm'
@@ -125,6 +165,7 @@ export function Movements() {
                 min="1"
                 value={quantity}
                 onChange={(event) => setQuantity(Number(event.target.value))}
+                disabled={isSubmitting}
                 className="input mt-2"
                 required
               />
@@ -142,6 +183,7 @@ export function Movements() {
                 id="note"
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
+                disabled={isSubmitting}
                 className="input mt-2 min-h-24 resize-y"
                 placeholder="Ex.: compra de fornecedor, venda no caixa..."
               />
@@ -150,11 +192,13 @@ export function Movements() {
 
           <button
             type="submit"
+            disabled={isSubmitting || products.length === 0}
             className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-900"
           >
-            Registrar movimentacao
+            {isSubmitting ? 'Registrando...' : 'Registrar movimentacao'}
           </button>
         </form>
+        )}
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -162,7 +206,18 @@ export function Movements() {
           <h2 className="font-semibold text-slate-950">Historico</h2>
         </div>
 
-        {movements.length === 0 ? (
+        {movementsQuery.isLoading ? (
+          <div className="p-4">
+            <LoadingState message="Carregando movimentacoes..." />
+          </div>
+        ) : movementsQuery.error ? (
+          <div className="p-4">
+            <ErrorState
+              message="Nao foi possivel carregar as movimentacoes."
+              onRetry={movementsQuery.refetch}
+            />
+          </div>
+        ) : movements.length === 0 ? (
           <div className="p-4">
             <EmptyState
               title="Historico vazio"

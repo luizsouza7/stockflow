@@ -1,19 +1,34 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { categoryService } from '../services/categoryService';
+import { LoadingState } from '../components/LoadingState';
+import { ErrorState } from '../components/ErrorState';
+import { getUserFacingError } from '../utils/errors';
 
 export function Categories() {
-  const { data: categories } = useDexieQuery(() => categoryService.listActive(), []);
+  const categoriesQuery = useDexieQuery(() => categoryService.listActive(), []);
+  const categories = categoriesQuery.data;
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState<string>();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string>();
+  const submissionInProgress = useRef(false);
+  const deletionInProgress = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (submissionInProgress.current) {
+      return;
+    }
+
     setError('');
     setSuccess('');
+    submissionInProgress.current = true;
+    setIsSubmitting(true);
 
     try {
       if (editingId) {
@@ -28,10 +43,16 @@ export function Categories() {
       setEditingId(undefined);
     } catch (categoryError) {
       setError(
-        categoryError instanceof Error
-          ? categoryError.message
-          : 'Nao foi possivel salvar a categoria.',
+        getUserFacingError(categoryError, 'Nao foi possivel salvar a categoria.', [
+          'Informe o nome da categoria.',
+          'O nome da categoria deve ter no maximo',
+          'Ja existe uma categoria ativa com este nome.',
+          'Categoria nao encontrada.',
+        ]),
       );
+    } finally {
+      submissionInProgress.current = false;
+      setIsSubmitting(false);
     }
   }
 
@@ -49,6 +70,10 @@ export function Categories() {
   }
 
   async function handleDelete(id: string, categoryName: string) {
+    if (deletionInProgress.current) {
+      return;
+    }
+
     const confirmed = window.confirm(`Excluir a categoria "${categoryName}"?`);
 
     if (!confirmed) {
@@ -57,16 +82,22 @@ export function Categories() {
 
     setError('');
     setSuccess('');
+    deletionInProgress.current = true;
+    setDeletingId(id);
 
     try {
       await categoryService.softDelete(id);
       setSuccess('Categoria excluida com sucesso.');
     } catch (categoryError) {
       setError(
-        categoryError instanceof Error
-          ? categoryError.message
-          : 'Nao foi possivel excluir a categoria.',
+        getUserFacingError(categoryError, 'Nao foi possivel excluir a categoria.', [
+          'Categoria nao encontrada.',
+          'Nao e possivel excluir esta categoria porque ela esta sendo utilizada por',
+        ]),
       );
+    } finally {
+      deletionInProgress.current = false;
+      setDeletingId(undefined);
     }
   }
 
@@ -105,6 +136,7 @@ export function Categories() {
               id="category-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
+              disabled={isSubmitting}
               className="input mt-2"
               maxLength={80}
               required
@@ -114,14 +146,22 @@ export function Categories() {
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <button
               type="submit"
+              disabled={isSubmitting}
               className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-900"
             >
-              {editingId ? 'Salvar alteracoes' : 'Cadastrar categoria'}
+              {isSubmitting
+                ? editingId
+                  ? 'Salvando...'
+                  : 'Cadastrando...'
+                : editingId
+                  ? 'Salvar alteracoes'
+                  : 'Cadastrar categoria'}
             </button>
             {editingId && (
               <button
                 type="button"
                 onClick={cancelEditing}
+                disabled={isSubmitting}
                 className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Cancelar
@@ -135,7 +175,18 @@ export function Categories() {
         <div className="border-b border-slate-200 px-4 py-3">
           <h2 className="font-semibold text-slate-950">Categorias ativas</h2>
         </div>
-        {categories.length === 0 ? (
+        {categoriesQuery.isLoading ? (
+          <div className="p-4">
+            <LoadingState message="Carregando categorias..." />
+          </div>
+        ) : categoriesQuery.error ? (
+          <div className="p-4">
+            <ErrorState
+              message="Nao foi possivel carregar as categorias."
+              onRetry={categoriesQuery.refetch}
+            />
+          </div>
+        ) : categories.length === 0 ? (
           <div className="p-4">
             <EmptyState
               title="Nenhuma categoria cadastrada"
@@ -154,6 +205,7 @@ export function Categories() {
                   <button
                     type="button"
                     onClick={() => startEditing(category.id, category.name)}
+                    disabled={isSubmitting || deletingId !== undefined}
                     className="min-h-10 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
                   >
                     Editar
@@ -161,9 +213,10 @@ export function Categories() {
                   <button
                     type="button"
                     onClick={() => handleDelete(category.id, category.name)}
+                    disabled={isSubmitting || deletingId !== undefined}
                     className="min-h-10 rounded-md border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
                   >
-                    Excluir
+                    {deletingId === category.id ? 'Excluindo...' : 'Excluir'}
                   </button>
                 </div>
               </article>

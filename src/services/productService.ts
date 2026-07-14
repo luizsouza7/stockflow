@@ -5,6 +5,11 @@ import type { ProductWithCategory } from '../types/Product';
 import { categoryRepository } from '../repositories/categoryRepository';
 import { generateUuid } from '../utils/id';
 
+export type ProductEditingLookup =
+  | { status: 'active'; product: Product }
+  | { status: 'deleted' }
+  | { status: 'not-found' };
+
 export const productService = {
   async listActive(): Promise<ProductWithCategory[]> {
     const [products, categories] = await Promise.all([
@@ -30,6 +35,20 @@ export const productService = {
     return productRepository.findById(id);
   },
 
+  async getForEditing(id: string): Promise<ProductEditingLookup> {
+    const product = await productRepository.findById(id);
+
+    if (!product) {
+      return { status: 'not-found' };
+    }
+
+    if (product.deletedAt) {
+      return { status: 'deleted' };
+    }
+
+    return { status: 'active', product };
+  },
+
   async create(data: CreateProductInput): Promise<string> {
     validateSalePriceInCents(data.salePriceInCents);
     await validateCategoryAssociation(data.categoryId);
@@ -37,6 +56,12 @@ export const productService = {
   },
 
   async update(id: string, data: Partial<CreateProductInput>): Promise<number> {
+    const product = await productRepository.findById(id);
+
+    if (!product || product.deletedAt) {
+      throw new Error('Produto nao encontrado.');
+    }
+
     if (data.salePriceInCents !== undefined) {
       validateSalePriceInCents(data.salePriceInCents);
     }
