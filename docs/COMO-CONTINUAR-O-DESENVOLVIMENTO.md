@@ -20,7 +20,7 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 - Schema Dexie atual: versão 9.
 - Estado de testes comprovado: 11 arquivos, 90 testes aprovados em 14/07/2026.
 - Última etapa de código: robustez de consultas, formulários e rotas de produtos.
-- Parte principal atual: **Parte 8 — Estratégia formal de testes**, avançada e ainda não concluída.
+- Parte principal atual: **final da Parte 3**, praticamente concluída após busca, filtros e ordenação do núcleo local.
 - Próximo passo recomendado: mapear lacunas e ampliar testes do núcleo local; em seguida endurecer PWA/offline. Não antecipar Supabase ou sincronização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
@@ -179,4 +179,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. Considere o Prompt Mestre como planejamento oficial e os documentos de continuidade como fotografia verificável do StockFlow. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirme raiz, branch e mudanças locais. Continue exatamente da próxima etapa indicada — atualmente a Parte 8, estratégia formal de testes — sem recriar o projeto, desfazer decisões consolidadas ou antecipar Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. Considere o Prompt Mestre como planejamento oficial e os documentos de continuidade como fotografia verificável do StockFlow. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirme raiz, branch e mudanças locais. Continue exatamente da próxima etapa indicada — atualmente o encerramento da Parte 3 — sem recriar o projeto, desfazer decisões consolidadas ou antecipar Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.

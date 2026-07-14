@@ -14,7 +14,7 @@ Não são usados percentuais artificiais.
 
 ## Sequência principal e trabalho transversal
 
-A sequência principal continua ordenada. A **Parte principal atual é a Parte 8 — Estratégia formal de testes**. Partes posteriores podem fornecer práticas transversais sem serem consideradas concluídas:
+A sequência principal continua ordenada. Conforme o contexto oficial de continuidade fornecido pelo desenvolvedor, a **Parte principal atual está no final da Parte 3**. Testes, documentação e qualidade continuam sendo usados transversalmente sem deslocar a parte principal:
 
 - testes foram escritos desde as primeiras regras críticas, antes da Parte 8 formal;
 - ADRs foram criados junto das migrations e decisões, antes da Parte 10 formal;
@@ -58,11 +58,11 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 
 - melhorias futuras de auditabilidade, como impedir alteração direta de estoque sem movimentação, pertencem à estabilização do domínio e não invalidam o núcleo concluído desta parte.
 
-## Parte 3 — Valores monetários em centavos
+## Parte 3 — Consolidação funcional do núcleo local
 
-**Objetivo:** eliminar ponto flutuante da persistência de preço de venda e migrar dados existentes com segurança.
+**Objetivo:** consolidar o núcleo local do TCC, incluindo integridade monetária e uma experiência de consulta útil para produtos e movimentações.
 
-**Status:** concluída.
+**Status:** praticamente concluída.
 
 **Já implementado/comprovado:**
 
@@ -70,11 +70,19 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 - parse e formatação centralizados;
 - migration Dexie v3;
 - testes de conversão, rejeição de entradas inválidas e reedição sem multiplicação.
+- busca de produtos por nome e código, sem distinção de caixa e com espaços externos ignorados;
+- filtros combináveis de produtos por categoria e situação centralizada de estoque;
+- ordenação de produtos por nome, estoque, preço e atualização;
+- filtros combináveis de movimentações por produto, tipo e período local inclusivo;
+- ordenação cronológica, validação de intervalo e preservação de legado, snapshots e histórico de produtos excluídos;
+- estados vazios reais distintos de consultas sem correspondência;
+- layout de filtros validado sem overflow em 375 px e 1440 px.
 
 **Restante:**
 
 - custo de produto e outras grandezas monetárias não fazem parte do escopo atual;
 - corrigir em momento documental apropriado a numeração divergente do ADR correspondente.
+- revisar a unicidade do código de produto e a alteração direta de quantidade antes do encerramento formal da parte.
 
 ## Parte 4 — Snapshots e rastreabilidade das movimentações
 
@@ -147,7 +155,7 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 - tratamento de produto inexistente ou excluído em edição;
 - feedback de sucesso/erro;
 - proteção de duplo envio e exclusão;
-- commit mais recente de código: `928d124`.
+- último commit anterior à etapa atual: `928d124`; a evolução atual permanece sem commit conforme solicitado.
 
 **Restante:**
 
@@ -164,7 +172,7 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 **Já implementado/comprovado:**
 
 - Vitest, fake-indexeddb, jsdom e React Testing Library;
-- 11 arquivos e 90 testes aprovados;
+- 15 arquivos e 123 testes aprovados;
 - regras de estoque, categorias, moeda e status;
 - transações, rollback, soft delete e migrations;
 - repository/service/dashboard;
@@ -173,7 +181,7 @@ Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não signif
 **Restante:**
 
 - mapear lacunas por requisito e risco;
-- ampliar testes de componentes para dashboard, alertas, buscas e falhas;
+- ampliar testes de componentes para dashboard, alertas e falhas ainda não cobertas;
 - adicionar E2E com Playwright para produto, estoque, alertas e offline quando a etapa autorizar dependências;
 - testar service worker/PWA em ambiente de build;
 - decidir coverage realista e documentar resultados;
@@ -327,11 +335,11 @@ Esses itens são preparação, não sincronização.
 
 # Próximas etapas planejadas
 
-1. Concluir a **Parte 8** com uma análise de lacunas de testes baseada nos fluxos reais, ampliando primeiro componentes e preparando E2E/offline; não iniciar testes de funcionalidades futuras inexistentes.
-2. Revisar o encerramento da **Parte 7**, especialmente código de produto, alteração direta de estoque e tratamento de falhas restantes.
+1. Encerrar formalmente a **Parte 3**, avaliando unicidade do código de produto e auditabilidade da alteração direta de estoque, sem misturar outra grande etapa.
+2. Retomar a **Parte 8** transversal com uma análise de lacunas de testes baseada nos fluxos reais e preparar E2E/offline sem testar funcionalidades inexistentes.
 3. Avançar a **Parte 9**: restringir e testar a PWA/offline, corrigindo mensagens que hoje prometem sincronização.
 4. Completar progressivamente a **Parte 10** para a entrega PI2: requisitos, rastreabilidade, diagramas e checklist, sem substituir o Prompt Mestre.
 5. Somente depois da base local/PI2 estabilizada, iniciar **Parte 11**; Supabase/Auth/RLS devem preceder sincronização real.
 6. Seguir então por **Parte 12**, **Parte 13**, **Parte 14** e **Parte 15**, respeitando dependências e critérios de pronto.
 
-O próximo passo recomendado não é Supabase nem sincronização: é fechar a estratégia formal de testes do núcleo local e preparar o endurecimento offline/PWA.
+O próximo passo recomendado não é Supabase nem sincronização: é concluir a revisão final da Parte 3 sem ampliar o escopo.

@@ -142,11 +142,12 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 
 - layout responsivo com navegação desktop e mobile;
 - rotas para dashboard, produtos, categorias, movimentações e alertas;
-- listagem, cadastro, edição, busca por nome/código e soft delete de produtos;
+- listagem, cadastro, edição, busca por nome/código, filtros por categoria e estoque, ordenação e soft delete de produtos;
 - CRUD local de categorias com regras de nome e exclusão lógica;
 - associação opcional de produto a categoria ativa;
 - entradas e saídas atômicas com bloqueio de estoque negativo;
 - histórico local preservado, inclusive para produto excluído;
+- filtros combináveis do histórico por produto, tipo e período, com ordenação cronológica;
 - snapshots nas novas movimentações e tratamento explícito dos registros legados;
 - valores monetários em centavos;
 - UUIDs para as três entidades, incluindo migration de dados antigos;
@@ -154,7 +155,7 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 - dashboard local básico e alertas de reposição;
 - estados reutilizáveis de loading, erro e vazio nas principais consultas;
 - feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
-- suíte atual de 90 testes aprovada.
+- suíte atual de 123 testes em 15 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -162,8 +163,8 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 
 - **Projeto Integrador 2:** o núcleo local demonstrável existe, mas documentação acadêmica da entrega, release/tag, screenshots e checklist formal não foram encontrados.
 - **PWA/offline:** manifesto, service worker e indicador existem, porém faltam instalação/atualização segura, cache revisado, persistência, backup e testes offline.
-- **Produtos:** há busca, mas filtros por categoria/status, ordenação e validação comprovada de código único não existem.
-- **Movimentações:** entrada, saída e histórico existem; faltam filtros por período/tipo/produto e eventual movimento de ajuste.
+- **Produtos:** busca, filtros combináveis, ordenação e estados vazios distintos estão implementados; ainda falta validação comprovada de código único.
+- **Movimentações:** entrada, saída, histórico e filtros combináveis por produto/tipo/período estão implementados; eventual movimento de ajuste permanece futuro.
 - **Dashboard:** usa dados reais e calcula `totalOutOfStock`, mas a UI não exibe esse indicador nem entradas/saídas por período.
 - **Feedback e erros:** melhorados nas páginas principais, mas não há Error Boundary nem uma taxonomia completa por origem.
 - **Testes:** há boa cobertura local e alguns testes de componente, porém faltam E2E, offline/PWA, coverage e CI.
@@ -201,9 +202,8 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 - `syncPendingData()` ignora categorias e não envia, recebe ou confirma registros.
 - `syncStatus` sugere estados futuros sem outbox, retry ou semântica operacional completa.
 - O dashboard calcula `totalOutOfStock`, mas não apresenta o indicador.
-- Não há filtros e ordenações previstos no Prompt Mestre.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
-- O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias e 90 testes.
+- O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias, filtros e 123 testes.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
 - A numeração interna do primeiro ADR diverge do nome do arquivo.
 
@@ -211,10 +211,10 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 
 O Prompt Mestre é o planejamento oficial, mas o arquivo atual não contém uma lista literalmente numerada de 1 a 15. Para viabilizar continuidade sem inventar um plano externo, `docs/ROADMAP-TCC.md` registra uma correspondência operacional de 15 partes ancorada nas fases, milestones, critérios e histórico comprovados.
 
-- Última etapa de código concluída: robustez de consultas, formulários e rotas de produtos, no commit `928d124`.
+- Última etapa de código concluída no worktree: busca, filtros e ordenação de produtos e movimentações, ainda sem commit conforme solicitado.
 - Última decisão estrutural concluída antes dela: UUID para produtos e movimentações, com schema Dexie v9, no commit `89c3e74`.
-- Parte principal atual: **Parte 8 — Estratégia formal de testes**, classificada como avançada, não concluída.
+- Parte principal atual, conforme o contexto oficial de continuidade: **final da Parte 3**, praticamente concluída após esta evolução do núcleo local.
 - Partes transversais já utilizadas: **Parte 8** (testes desde as regras críticas), **Parte 10** (ADRs e documentação) e **Parte 13** (lint, typecheck e build como critérios de qualidade). PWA básica da Parte 9 também foi antecipada no MVP inicial.
-- Próximo passo recomendado: completar a Parte 8 formal com uma matriz de lacunas de testes, priorizando fluxos críticos de componentes e preparando E2E/offline sem alterar schema ou iniciar nuvem; depois seguir para o endurecimento da PWA/offline da Parte 9.
+- Próximo passo recomendado: encerrar formalmente a Parte 3 com a revisão das duas lacunas locais já conhecidas — unicidade do código de produto e alteração direta de quantidade sem movimentação — sem iniciar nuvem, sincronização ou outra grande etapa.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.
