@@ -37,6 +37,7 @@ export function ProductForm() {
         ? productService.getForEditing(productId)
         : Promise.resolve({ status: 'not-found' }),
     { status: 'not-found' },
+    [productId],
   );
 
   useEffect(() => {
@@ -142,6 +143,8 @@ export function ProductForm() {
           'Selecione uma categoria ativa valida.',
           'O preco deve ser armazenado em centavos inteiros e nao negativos.',
           'A quantidade inicial deve ser um numero inteiro nao negativo.',
+          'O estoque minimo deve ser um numero inteiro nao negativo.',
+          'Informe o nome do produto.',
           'Ja existe um produto ativo com este codigo.',
         ]),
       );

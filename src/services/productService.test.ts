@@ -26,6 +26,33 @@ describe('productService', () => {
     });
   });
 
+  it.each(['', '   '])('rejeita criacao com nome invalido: %j', async (name) => {
+    await expect(createProduct({ name })).rejects.toThrow('Informe o nome do produto.');
+    expect(await localDb.products.count()).toBe(0);
+  });
+
+  it('remove espacos externos do nome antes de persistir', async () => {
+    const productId = await createProduct({ name: '  Produto A  ' });
+
+    expect((await productRepository.findById(productId))?.name).toBe('Produto A');
+  });
+
+  it.each([-1, -5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'rejeita estoque minimo invalido na criacao: %s',
+    async (minimumStock) => {
+      await expect(createProduct({ minimumStock })).rejects.toThrow(
+        'O estoque minimo deve ser um numero inteiro nao negativo.',
+      );
+      expect(await localDb.products.count()).toBe(0);
+    },
+  );
+
+  it('permite estoque minimo zero na criacao', async () => {
+    const productId = await createProduct({ minimumStock: 0 });
+
+    expect((await productRepository.findById(productId))?.minimumStock).toBe(0);
+  });
+
   it.each([-1, 1.5])('rejeita quantidade inicial invalida: %s', async (currentQuantity) => {
     await expect(createProduct({ currentQuantity })).rejects.toThrow(
       'A quantidade inicial deve ser um numero inteiro nao negativo.',
@@ -90,6 +117,38 @@ describe('productService', () => {
     expect((await productRepository.findById(editableId))?.code).toBe('LIVRE');
   });
 
+  it.each(['', '   '])('rejeita update com nome invalido: %j', async (name) => {
+    const productId = await createProduct();
+
+    await expect(productService.update(productId, { name })).rejects.toThrow(
+      'Informe o nome do produto.',
+    );
+    expect((await productRepository.findById(productId))?.name).toBe('Produto teste');
+  });
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'rejeita estoque minimo invalido no update: %s',
+    async (minimumStock) => {
+      const productId = await createProduct();
+
+      await expect(productService.update(productId, { minimumStock })).rejects.toThrow(
+        'O estoque minimo deve ser um numero inteiro nao negativo.',
+      );
+      expect((await productRepository.findById(productId))?.minimumStock).toBe(2);
+    },
+  );
+
+  it('sanitiza nome e permite estoque minimo zero em update legitimo', async () => {
+    const productId = await createProduct();
+
+    await productService.update(productId, { name: '  Produto revisado  ', minimumStock: 0 });
+
+    expect(await productRepository.findById(productId)).toMatchObject({
+      name: 'Produto revisado',
+      minimumStock: 0,
+    });
+  });
+
   it('update comum preserva estoque mesmo quando recebe propriedade extra em runtime', async () => {
     const productId = await createProduct({ currentQuantity: 7 });
     const attemptedUpdate = { name: 'Nome atualizado', currentQuantity: 99 };
@@ -139,7 +198,7 @@ describe('productService', () => {
 });
 
 async function createProduct(
-  changes: Partial<Pick<Product, 'name' | 'code' | 'currentQuantity'>> = {},
+  changes: Partial<Pick<Product, 'name' | 'code' | 'currentQuantity' | 'minimumStock'>> = {},
 ) {
   const now = '2026-07-14T10:00:00.000Z';
   return productService.create({
@@ -147,7 +206,7 @@ async function createProduct(
     code: changes.code ?? 'COD-1',
     salePriceInCents: 1000,
     currentQuantity: changes.currentQuantity ?? 5,
-    minimumStock: 2,
+    minimumStock: changes.minimumStock ?? 2,
     createdAt: now,
     updatedAt: now,
     syncStatus: 'pending',

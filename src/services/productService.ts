@@ -55,12 +55,14 @@ export const productService = {
   },
 
   async create(data: CreateProductInput): Promise<string> {
+    const name = sanitizeProductName(data.name);
+    validateMinimumStock(data.minimumStock);
     validateSalePriceInCents(data.salePriceInCents);
     validateInitialQuantity(data.currentQuantity);
     await validateCategoryAssociation(data.categoryId);
     const code = sanitizeProductCode(data.code);
     await ensureUniqueActiveCode(code);
-    return productRepository.create({ ...data, code, id: generateUuid() });
+    return productRepository.create({ ...data, name, code, id: generateUuid() });
   },
 
   async update(id: string, data: UpdateProductInput): Promise<number> {
@@ -74,6 +76,10 @@ export const productService = {
       validateSalePriceInCents(data.salePriceInCents);
     }
 
+    if (data.minimumStock !== undefined) {
+      validateMinimumStock(data.minimumStock);
+    }
+
     if ('categoryId' in data) {
       await validateCategoryAssociation(data.categoryId);
     }
@@ -83,7 +89,7 @@ export const productService = {
       syncStatus: 'pending',
     };
 
-    if (data.name !== undefined) changes.name = data.name;
+    if (data.name !== undefined) changes.name = sanitizeProductName(data.name);
     if (data.categoryId !== undefined) changes.categoryId = data.categoryId;
     if ('categoryId' in data && data.categoryId === undefined) changes.categoryId = undefined;
     if (data.salePriceInCents !== undefined) changes.salePriceInCents = data.salePriceInCents;
@@ -143,6 +149,22 @@ async function validateCategoryAssociation(categoryId: string | undefined): Prom
 function validateSalePriceInCents(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error('O preco deve ser armazenado em centavos inteiros e nao negativos.');
+  }
+}
+
+function sanitizeProductName(value: string): string {
+  const name = value.trim();
+
+  if (!name) {
+    throw new Error('Informe o nome do produto.');
+  }
+
+  return name;
+}
+
+function validateMinimumStock(value: number): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error('O estoque minimo deve ser um numero inteiro nao negativo.');
   }
 }
 
