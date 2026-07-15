@@ -1,42 +1,72 @@
-const CACHE_NAME = 'stockflow-cache-v1';
-const CORE_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/pwa-icon.svg'];
+import {
+  BUILD_ID,
+  CACHE_NAME,
+  getObsoleteStockFlowCaches,
+  isAppNavigation,
+  isStaticAssetRequest,
+} from './sw-policy.js';
+import {
+  handleNavigation,
+  handleStaticAsset,
+  precacheAppShell,
+} from './sw-cache.js';
+
+const SERVICE_WORKER_BUILD_ID = '__STOCKFLOW_BUILD_ID__';
+
+if (SERVICE_WORKER_BUILD_ID !== BUILD_ID) {
+  throw new Error('Identificadores de build inconsistentes no service worker.');
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)),
+    precacheAppShell({
+      appOrigin: self.location.origin,
+      cacheStorage: caches,
+      fetchImpl: fetch,
+    }),
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
+    caches.keys().then((keys) =>
+      Promise.all(
+        getObsoleteStockFlowCaches(keys, CACHE_NAME).map((key) => caches.delete(key)),
       ),
+    ),
   );
-  self.clients.claim();
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') {
+  const { request } = event;
+
+  if (isAppNavigation(request, self.location.origin)) {
+    event.respondWith(
+      handleNavigation({
+        appOrigin: self.location.origin,
+        cacheStorage: caches,
+        fetchImpl: fetch,
+        request,
+      }),
+    );
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetch(event.request)
-        .then((networkResponse) => {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return networkResponse;
-        })
-        .catch(() => caches.match('/index.html'));
-    }),
-  );
+  if (isStaticAssetRequest(request, self.location.origin)) {
+    event.respondWith(
+      handleStaticAsset({
+        appOrigin: self.location.origin,
+        cacheStorage: caches,
+        fetchImpl: fetch,
+        request,
+      }),
+    );
+  }
 });

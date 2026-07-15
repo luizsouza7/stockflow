@@ -9,7 +9,7 @@ export function OfflineBanner({ isOnline }: OfflineBannerProps) {
 
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-      Modo offline ativado. Suas alterações serão sincronizadas quando a conexão voltar.
+      Sem conexão. O StockFlow continua funcionando com os dados armazenados neste dispositivo.
     </div>
   );
 }

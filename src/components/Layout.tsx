@@ -1,7 +1,9 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { OfflineBanner } from './OfflineBanner';
+import { PwaUpdateBanner } from './PwaUpdateBanner';
 import { StatusBadge } from './StatusBadge';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { usePwaUpdate } from '../hooks/usePwaUpdate';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'D' },
@@ -21,6 +23,7 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function Layout() {
   const isOnline = useOnlineStatus();
+  const { isUpdateAvailable, updateNow } = usePwaUpdate();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -63,6 +66,7 @@ export function Layout() {
               <StatusBadge isOnline={isOnline} />
             </div>
             <OfflineBanner isOnline={isOnline} />
+            <PwaUpdateBanner isVisible={isUpdateAvailable} onUpdate={updateNow} />
           </header>
 
           <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">

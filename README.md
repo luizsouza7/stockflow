@@ -7,10 +7,10 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 ## Estado atual
 
 - Parte 3 do Prompt Mestre concluída.
-- Parte 4 (regras 30–35) ainda não iniciada como implementação principal.
+- Parte 4 (regras 30–35) iniciada; regras 30–33 implementadas nesta etapa.
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 9**.
-- Suíte atual: **166 testes em 18 arquivos**.
+- Suíte atual: **199 testes em 23 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -52,9 +52,9 @@ Detalhes estão em [Arquitetura Atual](docs/ARQUITETURA-ATUAL.md) e nos ADRs de 
 
 ## Offline-first e PWA
 
-Produtos, categorias e movimentações são lidos e gravados localmente, sem depender de backend. Existe uma PWA básica e parcial com manifesto, ícone, registro manual de service worker, cache do app shell e indicador de conectividade baseado em `navigator.onLine`.
+Produtos, categorias e movimentações são lidos e gravados localmente, sem depender de backend. A PWA registra o service worker somente em produção, prepara o app shell e oferece atualização consciente quando uma nova versão fica aguardando. O build gera um identificador determinístico a partir dos artefatos produzidos, injeta-o no worker e isola cada versão em `stockflow-static-<build-id>`. Somente caminhos conhecidos (`/assets/...`, manifest e ícone) entram no cache estático; futuras APIs, rotas privadas, recursos externos e métodos mutáveis ficam fora.
 
-Isso ainda não representa a conclusão da Parte 4. Faltam, entre outros pontos, estratégia segura de atualização, revisão e testes do cache, persistência do armazenamento, backup e exportação. O indicador do navegador também não comprova disponibilidade de um backend.
+O indicador usa `navigator.onLine` e eventos nativos `online`/`offline`; ele informa a conectividade percebida pelo navegador, não comprova acesso completo à internet nem disponibilidade de servidor. Sem conexão, a interface comunica somente que os dados continuam armazenados no dispositivo, sem prometer sincronização. A Parte 4 permanece incompleta: persistência avançada do IndexedDB e backup/exportação (regras 34 e 35) ainda não foram iniciados.
 
 ## Limitações atuais
 
@@ -62,7 +62,7 @@ Isso ainda não representa a conclusão da Parte 4. Faltam, entre outros pontos,
 - não há sincronização real, outbox, retry, pull ou resolução de conflitos;
 - `syncPendingData()` é somente um ponto de preparação local e não envia dados;
 - não há backup, importação ou exportação;
-- não há testes E2E, automação de PWA/offline, coverage configurada ou CI;
+- não há testes E2E nem automação de navegador para instalação/offline da PWA, coverage configurada ou CI;
 - os dados permanecem no navegador e no dispositivo utilizados.
 
 Supabase, autenticação e sincronização pertencem ao planejamento futuro e não devem ser apresentados como funcionalidades prontas.
@@ -79,7 +79,7 @@ src/
   services/      casos de uso, banco e preparação de sync
   types/         entidades e DTOs
 docs/            estado, arquitetura, roadmap, Prompt Mestre e ADRs
-public/          manifesto, ícone e service worker básico
+public/          manifesto, ícone, service worker e política de cache
 ```
 
 ## Instalação e execução
@@ -109,7 +109,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs e upgrades do banco, incluindo o caminho histórico completo v1 → v9.
 
-Estado validado nesta consolidação: **166 testes aprovados em 18 arquivos**.
+Estado validado nesta etapa: **199 testes aprovados em 23 arquivos**.
 
 ## Banco local e migrations
 
@@ -158,7 +158,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 está concluída. A próxima etapa principal é a Parte 4, regras 30–35, mas ela somente deve começar em etapa própria e explicitamente autorizada. Funcionalidades antecipadas da PWA e elementos transversais de testes/documentação não alteram esse status.
+A Parte 3 está concluída. A Parte 4 foi iniciada com as regras 30–33; as regras 34 e 35 permanecem pendentes e devem ser executadas em etapas próprias, sem antecipar sincronização ou nuvem.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

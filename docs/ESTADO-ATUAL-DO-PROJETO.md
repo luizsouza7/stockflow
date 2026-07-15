@@ -53,15 +53,18 @@ O `stockMovementService` conhece deliberadamente a instância Dexie para delimit
 
 As leituras e mutações principais usam IndexedDB local como fonte de dados. As consultas da interface são reativas por `liveQuery`. Cadastro, edição, exclusão lógica, categorias e movimentações não dependem de um backend.
 
-Existe uma **PWA básica e parcial**:
+Existe uma **PWA parcial com cache e atualização controlados**:
 
 - manifesto web;
 - ícone SVG;
-- registro manual de service worker;
-- cache básico do app shell;
-- indicador baseado em `navigator.onLine` e eventos `online`/`offline`.
+- registro do service worker somente no build de produção;
+- app shell preparado com HTML, JavaScript e CSS essenciais aguardados durante a instalação e chaves absolutas canônicas no cache;
+- cache restrito a navegações e caminhos estáticos conhecidos da própria aplicação;
+- identificador determinístico derivado dos artefatos do build e caches isolados por versão;
+- aviso de nova versão e atualização consciente via worker em `waiting`;
+- indicador baseado em `navigator.onLine` e eventos `online`/`offline`, com cleanup testado.
 
-Isso ainda não comprova uma PWA completa. Não há prompt de instalação ou atualização segura, solicitação de persistência, backup, teste automatizado offline, estratégia restrita de cache nem validação de disponibilidade de backend. O service worker atual armazena qualquer resposta GET que alcance a rede.
+`navigator.onLine` indica somente a conectividade percebida pelo navegador; não comprova acesso completo à internet nem disponibilidade de backend. Futuras APIs, respostas privadas/autenticadas, recursos externos e métodos mutáveis não são cacheados pela estratégia atual. Ainda não há solicitação de persistência, backup/exportação, teste E2E offline ou validação manual registrada do build implantado.
 
 ## Banco local, entidades e identificadores
 
@@ -130,11 +133,11 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **18**.
-- Testes aprovados em 15/07/2026: **166 de 166**.
+- Arquivos de teste atuais: **23**.
+- Testes aprovados em 15/07/2026: **199 de 199**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
-- Ainda não existem Playwright/E2E, teste automatizado de service worker/offline, coverage configurada ou CI.
+- Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade e dos banners. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
 
 ## Estado das funcionalidades
 
@@ -157,14 +160,14 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - dashboard local básico e alertas de reposição;
 - estados reutilizáveis de loading, erro e vazio nas principais consultas;
 - feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
-- suíte atual de 166 testes em 18 arquivos aprovada.
+- suíte atual de 199 testes em 23 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
 ### Parcial
 
 - **TCC:** o núcleo local demonstrável existe, mas a PWA/offline ainda é parcial e as camadas remota, acadêmica e de validação permanecem incompletas.
-- **PWA/offline:** manifesto, service worker e indicador existem, porém faltam instalação/atualização segura, cache revisado, persistência, backup e testes offline.
+- **PWA/offline:** manifesto, cache restrito, indicador testado e atualização controlada existem; persistência avançada, backup/exportação e validação E2E/manual do build permanecem pendentes.
 - **Produtos:** busca, filtros combináveis, ordenação, estados vazios, código interno único entre ativos e proteção contra edição direta de estoque estão implementados.
 - **Movimentações:** entrada, saída, histórico e filtros combináveis por produto/tipo/período estão implementados; eventual movimento de ajuste permanece futuro.
 - **Dashboard:** usa dados reais e exibe separadamente produtos com estoque baixo e sem estoque; entradas/saídas por período permanecem futuras.
@@ -194,10 +197,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Limitações e dívidas técnicas conhecidas
 
-- O banner offline afirma que alterações serão sincronizadas quando a conexão voltar, mas não existe sincronização funcional.
 - `navigator.onLine` indica conectividade do navegador, não disponibilidade de backend.
-- O service worker usa cache dinâmico para qualquer GET e fallback de `index.html`; a estratégia precisa ser restringida e testada antes de dados remotos/sensíveis.
-- Não há fluxo seguro de atualização do service worker.
+- A instalação, o app shell offline e a atualização do service worker ainda precisam de validação manual em build servido por ambiente compatível.
 - Duplicidades legadas de código são preservadas; a regra impede novas duplicidades ativas, mas não corrige dados históricos automaticamente.
 - A unicidade local por código é validada no service e não cobre concorrência futura com nuvem ou múltiplos dispositivos.
 - Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
@@ -215,8 +216,8 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Última etapa funcional consolidada: distinção textual e visual entre estoque normal, baixo e zerado no dashboard, produtos e alertas, após as validações defensivas de produto e a troca reativa de consulta.
 - Parte principal atual: **Parte 3 concluída**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13. A PWA básica é funcionalidade antecipada e não caracteriza o início formal da Parte 4.
-- Parte 4: **não iniciada como implementação principal**; é a próxima parte da sequência, condicionada a autorização explícita para nova etapa.
-- Próximo passo recomendado: revisar e commitar esta consolidação final; somente em etapa posterior explicitamente autorizada planejar a Parte 4. Snapshots não são Parte 4.
+- Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
+- Parte 4: **iniciada e em andamento**; regras 30–33 implementadas, regras 34 e 35 pendentes.
+- Próximo passo recomendado: revisar e commitar esta etapa; somente depois, e com autorização explícita, tratar a regra 34 sem antecipar backup/exportação ou partes posteriores.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

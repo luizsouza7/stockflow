@@ -38,7 +38,8 @@ O desenho é deliberadamente simples: não há controllers, interfaces genérica
 ### Hooks
 
 - `useDexieQuery`: encapsula `liveQuery`, assinatura/limpeza, `data`, `isLoading`, `error` e `refetch`.
-- `useOnlineStatus`: observa `navigator.onLine` e eventos `online`/`offline`.
+- `useOnlineStatus`: inicializa por `navigator.onLine`, observa eventos `online`/`offline` e remove os listeners no cleanup. O valor representa conectividade percebida pelo navegador, não disponibilidade comprovada da internet ou de backend.
+- `usePwaUpdate`: registra o service worker somente em produção e expõe uma atualização pronta para a UI sem aplicá-la automaticamente.
 
 O primeiro mantém as telas reativas às alterações locais. O segundo é apenas sinal de conectividade do navegador; não prova que um backend está acessível.
 
@@ -109,14 +110,14 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 18 arquivos e 166 testes aprovados:
+A arquitetura é verificada por 23 arquivos e 199 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
 - Dexie/fake-indexeddb: transações, rollback, reabertura e migrations;
 - React Testing Library/jsdom: consultas reativas, formulários e rotas.
 
-Não há testes E2E, offline/service worker, coverage ou CI.
+Há testes unitários da conectividade, da política do service worker e da coordenação de atualização. Não há testes E2E/Playwright, automação de navegador offline, coverage ou CI.
 
 ## Fluxos atuais
 
@@ -202,7 +203,7 @@ Categoria possui identidade, timestamps, soft delete e `syncStatus`. Produto gua
 
 O IndexedDB é a fonte de verdade operacional. O usuário consegue trabalhar com dados locais sem aguardar rede. As entidades novas recebem `syncStatus: "pending"`, mas não existe outbox nem envio.
 
-Há uma limitação de comunicação: `OfflineBanner` diz que alterações serão sincronizadas quando a conexão voltar. Como isso ainda não acontece, o texto deve ser corrigido em uma etapa de código futura, não nesta etapa documental.
+O `OfflineBanner` comunica que a aplicação continua usando os dados armazenados no dispositivo. Ele não promete sincronização, nuvem ou compartilhamento entre dispositivos.
 
 ## PWA no estado real
 
@@ -212,19 +213,24 @@ Implementado:
 - `public/pwa-icon.svg`;
 - `public/sw.js`;
 - link do manifest em `index.html`;
-- registro do service worker em `src/main.tsx`;
-- cache inicial de `/`, `/index.html`, manifest e ícone;
-- cache dinâmico e fallback para `index.html`.
+- registro do service worker de módulo por `usePwaUpdate`, somente em produção;
+- precache do `index.html`, com JavaScript e CSS descobertos no HTML tratados como essenciais para concluir o `install`; manifest e ícone permanecem opcionais;
+- chaves de cache canônicas em URL absoluta, iguais na gravação do precache e na leitura de uma `Request` interceptada, sem `ignoreSearch`;
+- fallback de `index.html` exclusivo para requisições de navegação da mesma origem;
+- cache-first somente para caminhos estáticos conhecidos: `/assets/...`, manifest, ícone e o módulo de política do worker; `request.destination` não autoriza rotas arbitrárias;
+- exclusão por padrão de `/api`, recursos externos, respostas privadas/não OK e métodos não GET;
+- identificador de build determinístico calculado pelo Vite a partir dos arquivos efetivamente gerados e injetado em `sw.js` e `sw-policy.js`;
+- cache isolado por versão no formato `stockflow-static-<build-id>`; um worker em instalação não escreve no cache do worker ativo;
+- limpeza dos caches anteriores do prefixo `stockflow-` somente na ativação, preservando caches alheios;
+- nova versão mantida em `waiting` até a ação “Atualizar agora”, que envia `{ type: 'SKIP_WAITING' }`;
+- `controllerchange` recarrega uma única vez somente depois da solicitação do usuário.
 
 Pendente:
 
 - prompt/UX de instalação;
-- atualização segura e aviso de nova versão;
-- cache limitado por origem/tipo/status;
-- política para dados privados futuros;
 - persistência via StorageManager;
 - backup/exportação;
-- teste offline automatizado e validação do build implantado.
+- teste E2E offline e validação manual do build implantado.
 
 Portanto, PWA é **parcial**, não concluída.
 
@@ -268,7 +274,7 @@ O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays loca
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A Parte 3 está concluída; testes, documentação/ADRs e critérios de qualidade são transversais. A próxima parte principal será a Parte 4 (regras 30–35): offline-first, conectividade, PWA, atualização da PWA, persistência do IndexedDB e backup/exportação. Ela ainda não foi iniciada como implementação principal e depende de uma etapa futura explicitamente autorizada. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A Parte 3 está concluída; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 4 (regras 30–35) foi iniciada: offline-first, conectividade, PWA e atualização controlada (regras 30–33) foram implementados nesta etapa. Persistência avançada do IndexedDB e backup/exportação (regras 34 e 35) permanecem pendentes. Snapshots não são Parte 4.
 
 ## Referências arquiteturais
 
