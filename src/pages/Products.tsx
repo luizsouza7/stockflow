@@ -4,7 +4,7 @@ import { useDexieQuery } from '../hooks/useDexieQuery';
 import { productService } from '../services/productService';
 import { formatCentsToBRL, formatDate } from '../utils/formatters';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { needsRestock } from '../domain/stockStatus';
+import { getStockStatus, type StockStatus } from '../domain/stockStatus';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { getUserFacingError } from '../utils/errors';
@@ -221,7 +221,8 @@ export function Products() {
           </div>
           <div className="divide-y divide-slate-100">
             {filteredProducts.map((product) => {
-              const isLowStock = needsRestock(product);
+              const stockStatus = getStockStatus(product);
+              const statusPresentation = STOCK_STATUS_PRESENTATION[stockStatus];
 
               return (
                 <article
@@ -241,12 +242,10 @@ export function Products() {
                   <div>
                     <span
                       className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                        isLowStock
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-emerald-100 text-emerald-700'
+                        statusPresentation.className
                       }`}
                     >
-                      {product.currentQuantity} un.
+                      {product.currentQuantity} un. · {statusPresentation.label}
                     </span>
                     <p className="mt-1 text-xs text-slate-500">Min. {product.minimumStock}</p>
                   </div>
@@ -275,6 +274,15 @@ export function Products() {
     </div>
   );
 }
+
+const STOCK_STATUS_PRESENTATION: Record<
+  StockStatus,
+  { label: string; className: string }
+> = {
+  normal: { label: 'Normal', className: 'bg-emerald-100 text-emerald-700' },
+  'low-stock': { label: 'Estoque baixo', className: 'bg-amber-100 text-amber-800' },
+  'out-of-stock': { label: 'Sem estoque', className: 'bg-rose-100 text-rose-700' },
+};
 
 function readSuccessMessage(state: unknown): string {
   if (typeof state !== 'object' || state === null || !('successMessage' in state)) {

@@ -9,6 +9,7 @@ import { ErrorState } from '../components/ErrorState';
 export function Dashboard() {
   const { data: summary, isLoading, error, refetch } = useDexieQuery<DashboardSummary>(() => getDashboardSummary(), {
     totalProducts: 0,
+    totalLowStock: 0,
     totalNeedingRestock: 0,
     totalOutOfStock: 0,
     totalMovements: 0,
@@ -31,19 +32,24 @@ export function Dashboard() {
       ) : (
         <>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Produtos cadastrados" value={summary.totalProducts} />
         <StatCard
           label="Estoque baixo"
-          value={summary.totalNeedingRestock}
-          tone={summary.totalNeedingRestock > 0 ? 'warning' : 'success'}
+          value={summary.totalLowStock}
+          tone={summary.totalLowStock > 0 ? 'warning' : 'success'}
+        />
+        <StatCard
+          label="Sem estoque"
+          value={summary.totalOutOfStock}
+          tone={summary.totalOutOfStock > 0 ? 'warning' : 'success'}
         />
         <StatCard label="Movimentacoes registradas" value={summary.totalMovements} />
       </section>
 
       {summary.totalNeedingRestock > 0 && (
         <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
-          <h2 className="font-semibold">Produtos abaixo do estoque minimo</h2>
+          <h2 className="font-semibold">Produtos precisam de reposicao</h2>
           <p className="mt-1 text-sm">
             {summary.totalNeedingRestock} produto(s) precisam de reposicao.
           </p>

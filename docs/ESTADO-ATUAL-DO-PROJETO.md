@@ -130,8 +130,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **17**.
-- Testes aprovados em 15/07/2026: **162 de 162**.
+- Arquivos de teste atuais: **18**.
+- Testes aprovados em 15/07/2026: **165 de 165**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Ainda não existem Playwright/E2E, teste automatizado de service worker/offline, coverage configurada ou CI.
@@ -157,7 +157,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - dashboard local básico e alertas de reposição;
 - estados reutilizáveis de loading, erro e vazio nas principais consultas;
 - feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
-- suíte atual de 162 testes em 17 arquivos aprovada.
+- suíte atual de 165 testes em 18 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -167,7 +167,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - **PWA/offline:** manifesto, service worker e indicador existem, porém faltam instalação/atualização segura, cache revisado, persistência, backup e testes offline.
 - **Produtos:** busca, filtros combináveis, ordenação, estados vazios, código interno único entre ativos e proteção contra edição direta de estoque estão implementados.
 - **Movimentações:** entrada, saída, histórico e filtros combináveis por produto/tipo/período estão implementados; eventual movimento de ajuste permanece futuro.
-- **Dashboard:** usa dados reais e calcula `totalOutOfStock`, mas a UI não exibe esse indicador nem entradas/saídas por período.
+- **Dashboard:** usa dados reais e exibe separadamente produtos com estoque baixo e sem estoque; entradas/saídas por período permanecem futuras.
 - **Feedback e erros:** melhorados nas páginas principais, mas não há Error Boundary nem uma taxonomia completa por origem.
 - **Testes:** há boa cobertura local e alguns testes de componente, porém faltam E2E, offline/PWA, coverage e CI.
 - **Preparação para sync:** entidades têm UUID e `syncStatus`, e `syncPendingData()` lista produtos e movimentações pendentes. Isso é somente um stub; categorias nem participam dessa consulta.
@@ -203,8 +203,6 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
 - `syncPendingData()` ignora categorias e não envia, recebe ou confirma registros.
 - `syncStatus` sugere estados futuros sem outbox, retry ou semântica operacional completa.
-- O dashboard calcula `totalOutOfStock`, mas não apresenta o indicador.
-- A interface ainda não distingue completamente, além da cor, estoque baixo de produto sem estoque.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
 - O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias, filtros, regras de estoque/código e a suíte atual.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
@@ -214,11 +212,11 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalos de regras: Parte 1 (1–11), Parte 2 (12–18), Parte 3 (19–29), Parte 4 (30–35), Parte 5 (36–42), Parte 6 (43–54), Parte 7 (55–69), Parte 8 (70–79), Parte 9 (80–86), Parte 10 (87–98), Parte 11 (99–106), Parte 12 (107–118), Parte 13 (119–128), Parte 14 (129–138) e Parte 15 (139–143).
 
-- Última etapa funcional consolidada: validações defensivas de produto e troca reativa de consulta por dependências explícitas, preservando auditabilidade de estoque, código interno e UUIDs.
-- Parte principal atual: **Parte 3 praticamente concluída**.
-- Pendência para encerrá-la: distinção visual completa entre estoque baixo e sem estoque.
+- Última etapa funcional consolidada: distinção textual e visual entre estoque normal, baixo e zerado no dashboard, produtos e alertas, após as validações defensivas de produto e a troca reativa de consulta.
+- Parte principal atual: **Parte 3 concluída**.
+- Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13. A PWA básica é funcionalidade antecipada e não caracteriza o início formal da Parte 4.
-- Parte 4: **não iniciada como implementação principal**; será a próxima parte da sequência após o encerramento da Parte 3.
-- Próximo passo recomendado: corrigir e validar a distinção visual restante da Parte 3 em etapa técnica específica. Snapshots não são Parte 4.
+- Parte 4: **não iniciada como implementação principal**; é a próxima parte da sequência, condicionada a autorização explícita para nova etapa.
+- Próximo passo recomendado: revisar e commitar o encerramento da Parte 3; somente depois planejar a Parte 4. Snapshots não são Parte 4.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.
