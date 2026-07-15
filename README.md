@@ -7,10 +7,10 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 ## Estado atual
 
 - Parte 3 do Prompt Mestre concluída.
-- Parte 4 (regras 30–35) iniciada; regras 30–33 implementadas nesta etapa.
+- Parte 4 (regras 30–35) em andamento; regras 30–34 implementadas.
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 9**.
-- Suíte atual: **199 testes em 23 arquivos**.
+- Suíte atual: **224 testes em 26 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -29,6 +29,7 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - alertas e estados textuais distintos para estoque normal, baixo e zerado;
 - estados de carregamento, erro, vazio e sucesso nas consultas principais;
 - funcionamento local com IndexedDB, consultas reativas e interface responsiva.
+- lifecycle do IndexedDB com fechamento em `versionchange`, aviso de upgrade bloqueado e coordenação básica entre abas.
 
 ## Arquitetura
 
@@ -54,7 +55,7 @@ Detalhes estão em [Arquitetura Atual](docs/ARQUITETURA-ATUAL.md) e nos ADRs de 
 
 Produtos, categorias e movimentações são lidos e gravados localmente, sem depender de backend. A PWA registra o service worker somente em produção, prepara o app shell e oferece atualização consciente quando uma nova versão fica aguardando. O build gera um identificador determinístico a partir dos artefatos produzidos, injeta-o no worker e isola cada versão em `stockflow-static-<build-id>`. Somente caminhos conhecidos (`/assets/...`, manifest e ícone) entram no cache estático; futuras APIs, rotas privadas, recursos externos e métodos mutáveis ficam fora.
 
-O indicador usa `navigator.onLine` e eventos nativos `online`/`offline`; ele informa a conectividade percebida pelo navegador, não comprova acesso completo à internet nem disponibilidade de servidor. Sem conexão, a interface comunica somente que os dados continuam armazenados no dispositivo, sem prometer sincronização. A Parte 4 permanece incompleta: persistência avançada do IndexedDB e backup/exportação (regras 34 e 35) ainda não foram iniciados.
+O indicador usa `navigator.onLine` e eventos nativos `online`/`offline`; ele informa a conectividade percebida pelo navegador, não comprova acesso completo à internet nem disponibilidade de servidor. Sem conexão, a interface comunica somente que os dados continuam armazenados no dispositivo, sem prometer sincronização. O lifecycle do banco fecha conexões antigas diante de `versionchange`, apresenta mensagens compreensíveis e usa `BroadcastChannel` apenas para eventos de upgrade bloqueado, sem transmitir dados de negócio. Em `pagehide`, listeners, canal e conexão são encerrados; um retorno legítimo pelo BFCache reinstala um único monitor e reabre explicitamente o Dexie. Cada abertura assíncrona pertence a uma geração: `pagehide`, `dispose` ou estado terminal tornam a tentativa obsoleta, e uma abertura obsoleta que conclua é fechada novamente. Estados `reload-required` são terminais e nunca mantêm a conexão reaberta. A Parte 4 permanece incompleta porque backup/exportação (regra 35) ainda não foi iniciado.
 
 ## Limitações atuais
 
@@ -107,9 +108,9 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 ## Testes
 
-A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs e upgrades do banco, incluindo o caminho histórico completo v1 → v9.
+A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v9.
 
-Estado validado nesta etapa: **199 testes aprovados em 23 arquivos**.
+Estado validado nesta etapa: **224 testes aprovados em 26 arquivos**.
 
 ## Banco local e migrations
 
@@ -158,7 +159,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 está concluída. A Parte 4 foi iniciada com as regras 30–33; as regras 34 e 35 permanecem pendentes e devem ser executadas em etapas próprias, sem antecipar sincronização ou nuvem.
+A Parte 3 está concluída. A Parte 4 permanece em andamento com as regras 30–34 implementadas; a regra 35 permanece não iniciada e deve ser executada em etapa própria, sem antecipar sincronização ou nuvem.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

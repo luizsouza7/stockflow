@@ -1,9 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { OfflineBanner } from './OfflineBanner';
 import { PwaUpdateBanner } from './PwaUpdateBanner';
+import { DatabaseLifecycleBanner } from './DatabaseLifecycleBanner';
 import { StatusBadge } from './StatusBadge';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePwaUpdate } from '../hooks/usePwaUpdate';
+import { useDatabaseLifecycle } from '../hooks/useDatabaseLifecycle';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'D' },
@@ -24,6 +26,7 @@ function navClass({ isActive }: { isActive: boolean }) {
 export function Layout() {
   const isOnline = useOnlineStatus();
   const { isUpdateAvailable, updateNow } = usePwaUpdate();
+  const { state: databaseLifecycleState, reloadNow } = useDatabaseLifecycle();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -67,6 +70,7 @@ export function Layout() {
             </div>
             <OfflineBanner isOnline={isOnline} />
             <PwaUpdateBanner isVisible={isUpdateAvailable} onUpdate={updateNow} />
+            <DatabaseLifecycleBanner state={databaseLifecycleState} onReload={reloadNow} />
           </header>
 
           <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">

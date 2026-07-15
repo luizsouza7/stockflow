@@ -96,6 +96,10 @@ Os repositories atuais são módulos concretos. Existe apenas a persistência lo
 
 O schema atual é a versão 9 e contém `products`, `movements` e `categories`. A biblioteca Dexie instalada é 4.4.4.
 
+`src/services/db/databaseLifecycle.ts` observa a instância central antes do primeiro render. Em `versionchange`, a conexão antiga é fechada e a UI exige uma decisão explícita de reload. Em `blocked`, a aba que tenta o upgrade mostra orientação clara e envia somente `{ type: 'DATABASE_UPGRADE_BLOCKED' }` pelo canal `stockflow-database-lifecycle`; abas que reconhecem essa mensagem fecham suas conexões. Mensagens desconhecidas são ignoradas e o canal é opcional. As subscriptions da UI recebem estado, mas não controlam a instalação dos listeners Dexie.
+
+`src/services/db/databaseLifecyclePageRuntime.ts` controla o lifecycle da página. Em qualquer `pagehide`, remove realmente os listeners Dexie, fecha o canal ativo e fecha a conexão. Se `persisted` for verdadeiro, registra um único `pageshow`; no retorno, reinstala um monitor e chama `open()` explicitamente. Cada restauração recebe uma geração e é serializada em relação à anterior. `pagehide` e `dispose` invalidam a geração corrente; o término de `open()` revalida geração, monitor e estado. Sucesso obsoleto fecha novamente o banco, enquanto rejeição obsoleta é ignorada. Falha da tentativa válida produz `reload-required`. Se a conexão tiver sido fechada deliberadamente por `versionchange` ou `DATABASE_UPGRADE_BLOCKED`, `reload-required` é terminal: os listeners Dexie e o canal são encerrados imediatamente, e o runtime não os reinstala nem mantém o banco reaberto. Não há sincronização de entidades por esse canal.
+
 ### Migrations
 
 Mudanças de dados persistidos são versionadas. As migrations atuais cobrem:
@@ -110,11 +114,11 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 23 arquivos e 199 testes aprovados:
+A arquitetura é verificada por 26 arquivos e 224 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
-- Dexie/fake-indexeddb: transações, rollback, reabertura e migrations;
+- Dexie/fake-indexeddb: transações, rollback, reabertura, migrations, `versionchange` e bloqueio entre conexões;
 - React Testing Library/jsdom: consultas reativas, formulários e rotas.
 
 Há testes unitários da conectividade, da política do service worker e da coordenação de atualização. Não há testes E2E/Playwright, automação de navegador offline, coverage ou CI.
@@ -205,6 +209,8 @@ O IndexedDB é a fonte de verdade operacional. O usuário consegue trabalhar com
 
 O `OfflineBanner` comunica que a aplicação continua usando os dados armazenados no dispositivo. Ele não promete sincronização, nuvem ou compartilhamento entre dispositivos.
 
+O `DatabaseLifecycleBanner` distingue atualização necessária de upgrade bloqueado. A primeira condição oferece “Recarregar agora”; a segunda orienta fechar ou recarregar outras abas. Não existe reload automático: o gerenciador aceita a ação no máximo uma vez durante a vida da página.
+
 ## PWA no estado real
 
 Implementado:
@@ -230,7 +236,7 @@ Pendente:
 - prompt/UX de instalação;
 - persistência via StorageManager;
 - backup/exportação;
-- teste E2E offline e validação manual do build implantado.
+- teste E2E offline automatizado.
 
 Portanto, PWA é **parcial**, não concluída.
 
@@ -274,7 +280,7 @@ O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays loca
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A Parte 3 está concluída; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 4 (regras 30–35) foi iniciada: offline-first, conectividade, PWA e atualização controlada (regras 30–33) foram implementados nesta etapa. Persistência avançada do IndexedDB e backup/exportação (regras 34 e 35) permanecem pendentes. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A Parte 3 está concluída; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 4 (regras 30–35) permanece em andamento: offline-first, conectividade, PWA, atualização controlada e lifecycle robusto do IndexedDB (regras 30–34) foram implementados. Backup/exportação (regra 35) permanece não iniciado. Snapshots não são Parte 4.
 
 ## Referências arquiteturais
 
