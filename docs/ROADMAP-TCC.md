@@ -94,7 +94,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 18 arquivos com 165 testes aprovados na validação de 15/07/2026.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 18 arquivos com 166 testes aprovados na validação de 15/07/2026, incluindo o caminho de migration v1 → v9.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -104,9 +104,9 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** iniciada.
 
-**Progresso comprovado:** branch `develop`, scripts de qualidade, roadmap oficial consolidado e README inicial.
+**Progresso comprovado:** branch `develop`, scripts de qualidade, roadmap oficial consolidado e README alinhado ao estado funcional, à arquitetura, às migrations, às limitações e às 15 partes.
 
-**Pendente:** GitHub Actions, templates, documentação formal do fluxo, releases baseadas em critérios reais e atualização ampla do README. O roadmap de milestones citado dentro do Prompt Mestre não substitui as 15 partes oficiais.
+**Pendente:** GitHub Actions, templates, documentação formal do fluxo e releases baseadas em critérios reais. O roadmap de milestones citado dentro do Prompt Mestre não substitui as 15 partes oficiais.
 
 ## Parte 10 — regras 87–98
 
@@ -170,4 +170,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Revisar e consolidar o encerramento da Parte 3. Depois de commit e autorização explícita para uma nova etapa, planejar o início da Parte 4 pelas regras 30–35. Esta atualização documental não inicia a Parte 4.
+Revisar e consolidar esta etapa de fechamento pós-auditoria. Depois de commit e autorização explícita para uma nova etapa, planejar o início da Parte 4 pelas regras 30–35. Esta atualização documental não inicia a Parte 4.

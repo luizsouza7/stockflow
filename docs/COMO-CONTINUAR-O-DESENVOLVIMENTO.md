@@ -20,11 +20,11 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 - Branch de trabalho nesta fotografia: `develop`.
 - Última etapa funcional consolidada: núcleo local com auditabilidade de estoque, código interno e UUIDs.
 - Schema Dexie atual: versão 9.
-- Estado de testes comprovado: 17 arquivos, 141 testes aprovados em 14/07/2026.
-- Última etapa de código: auditabilidade do estoque e semântica/unicidade do código interno do produto.
-- Parte principal atual: **Parte 3 praticamente concluída**.
-- Pendências atuais: validações defensivas no `productService`, troca de consulta no `useDexieQuery` e distinção visual completa entre estoque baixo e sem estoque.
-- Próximo passo recomendado: consolidar essas três correções em etapa técnica específica. Depois disso, reavaliar o encerramento da Parte 3; não iniciar a Parte 4 antes dessa decisão e não antecipar Supabase ou sincronização.
+- Estado de testes comprovado: 18 arquivos, 166 testes aprovados em 15/07/2026.
+- Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
+- Parte principal atual: **Parte 3 concluída**.
+- Pendências conhecidas das regras 19–29: nenhuma.
+- Próximo passo recomendado: revisar e commitar a consolidação final pós-auditoria; somente depois, e com autorização explícita, planejar a Parte 4 sem antecipar Supabase ou sincronização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -184,11 +184,11 @@ O relatório de entrega deve informar:
 
 - `docs/auditoria-fase-0.md` contém uma raiz anterior e retrata lacunas de 12/07/2026, algumas já resolvidas.
 - O ADR-001 teve sua numeração interna corrigida na consolidação documental de 15/07/2026.
-- O README ainda representa principalmente a Etapa 1 inicial e não detalha schema v9, UUIDs, migrations e a suíte atual.
+- O README representa o estado funcional, schema v9, migrations, arquitetura, limitações, suíte e roadmap atuais.
 - O banner offline promete sincronização ao reconectar, embora a sincronização não exista.
 
 Essas divergências devem ser consideradas ao retomar. Não corrija todas automaticamente em uma tarefa de escopo diferente.
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. A Parte 3 está praticamente concluída; consolide primeiro as validações defensivas do `productService`, a troca de consulta no `useDexieQuery` e a distinção visual entre estoque baixo e sem estoque. Só então reavalie seu encerramento. A Parte 4 é o bloco das regras 30–35; snapshots não pertencem a ela. Não recrie o projeto, desfaça decisões consolidadas ou antecipe Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. A Parte 3 está concluída e não possui pendência conhecida nas regras 19–29. A Parte 4 é o bloco das regras 30–35, ainda não iniciado como implementação principal; snapshots não pertencem a ela. Só planeje seu início em etapa futura explicitamente autorizada. Não recrie o projeto, desfaça decisões consolidadas ou antecipe Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.

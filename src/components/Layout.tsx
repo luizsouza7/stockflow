@@ -34,7 +34,7 @@ export function Layout() {
               Controle de estoque
             </h1>
             <p className="mt-2 text-sm font-medium text-slate-500">
-              Etapa 1 - Projeto Integrador 2
+              TCC — Sistema de controle de estoque
             </p>
           </div>
           <nav className="space-y-1">
@@ -54,7 +54,7 @@ export function Layout() {
             <div className="flex min-h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-700 lg:hidden">
-                  StockFlow - PI2
+                  StockFlow — TCC
                 </p>
                 <h2 className="text-lg font-semibold text-slate-950 sm:text-xl">
                   Painel de estoque

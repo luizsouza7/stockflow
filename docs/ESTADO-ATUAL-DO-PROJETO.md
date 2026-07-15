@@ -96,7 +96,7 @@ Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. N
 | 8 | Recriação de `products` e `movements` com primary key UUID e restauração dos dados. |
 | 9 | Remoção das stores temporárias; schema final contém somente as três tabelas públicas. |
 
-As versões 6 a 9 formam uma única sequência técnica de upgrade por limitação do IndexedDB/Dexie ao trocar a primary key. Os testes verificam preservação, reabertura, igualdade do schema final e rollback diante de referência órfã.
+As versões 6 a 9 formam uma única sequência técnica de upgrade por limitação do IndexedDB/Dexie ao trocar a primary key. Os testes verificam preservação, reabertura, igualdade do schema final e rollback diante de referência órfã. Há também um teste permanente do caminho completo v1 → v9, com produto, preço histórico, quantidade, categoria, movimentação e relação entre IDs preservados.
 
 ## Regras de negócio consolidadas
 
@@ -131,7 +131,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 ## Testes comprovados
 
 - Arquivos de teste atuais: **18**.
-- Testes aprovados em 15/07/2026: **165 de 165**.
+- Testes aprovados em 15/07/2026: **166 de 166**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Ainda não existem Playwright/E2E, teste automatizado de service worker/offline, coverage configurada ou CI.
@@ -157,7 +157,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - dashboard local básico e alertas de reposição;
 - estados reutilizáveis de loading, erro e vazio nas principais consultas;
 - feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
-- suíte atual de 165 testes em 18 arquivos aprovada.
+- suíte atual de 166 testes em 18 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -204,7 +204,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - `syncPendingData()` ignora categorias e não envia, recebe ou confirma registros.
 - `syncStatus` sugere estados futuros sem outbox, retry ou semântica operacional completa.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
-- O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias, filtros, regras de estoque/código e a suíte atual.
+- O README foi atualizado para representar o núcleo local, a arquitetura, as migrations, a suíte atual, as limitações e o roadmap oficial.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
 - A numeração interna do ADR-001 foi corrigida nesta consolidação documental, sem alteração técnica da decisão.
 
@@ -217,6 +217,6 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13. A PWA básica é funcionalidade antecipada e não caracteriza o início formal da Parte 4.
 - Parte 4: **não iniciada como implementação principal**; é a próxima parte da sequência, condicionada a autorização explícita para nova etapa.
-- Próximo passo recomendado: revisar e commitar o encerramento da Parte 3; somente depois planejar a Parte 4. Snapshots não são Parte 4.
+- Próximo passo recomendado: revisar e commitar esta consolidação final; somente em etapa posterior explicitamente autorizada planejar a Parte 4. Snapshots não são Parte 4.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

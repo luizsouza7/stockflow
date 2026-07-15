@@ -7,7 +7,7 @@ export async function syncPendingData() {
     movementRepository.findPending(),
   ]);
 
-  // Etapa 1 / Projeto Integrador 2: simulacao da fila de sincronizacao.
+  // Preparacao local para uma futura fila de sincronizacao; nao realiza sincronizacao remota.
   // No TCC, este ponto deve conectar ao Supabase, enviar dados pendentes,
   // tratar conflitos e atualizar syncStatus para "synced" ou "error".
   return {

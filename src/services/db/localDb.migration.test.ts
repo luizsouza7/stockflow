@@ -5,6 +5,15 @@ import { StockFlowDatabase } from './localDb';
 
 const databaseNames: string[] = [];
 
+function createVersionOneDatabase(name: string) {
+  const database = new Dexie(name);
+  database.version(1).stores({
+    products: '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt',
+    movements: '++id, productId, type, date, syncStatus',
+  });
+  return database;
+}
+
 function createVersionTwoDatabase(name: string) {
   const database = new Dexie(name);
   database.version(1).stores({
@@ -63,6 +72,86 @@ function schemaSignature(database: Dexie) {
 describe('migracoes do banco local', () => {
   afterEach(async () => {
     await Promise.all(databaseNames.splice(0).map((name) => Dexie.delete(name)));
+  });
+
+  it('migra dados historicos diretamente da versao 1 ate o schema atual v9', async () => {
+    const databaseName = `stockflow-v1-to-v9-${crypto.randomUUID()}`;
+    databaseNames.push(databaseName);
+    const legacyDatabase = createVersionOneDatabase(databaseName);
+    const createdAt = '2025-01-10T09:00:00.000Z';
+    const updatedAt = '2025-01-11T10:30:00.000Z';
+
+    await legacyDatabase.open();
+    expect(legacyDatabase.verno).toBe(1);
+
+    const legacyProductId = await legacyDatabase
+      .table<Record<string, unknown>, number>('products')
+      .add({
+        name: 'Cafe historico',
+        code: 'CAFE-V1',
+        category: 'Bebidas',
+        price: 19.9,
+        currentQuantity: 7,
+        minimumStock: 2,
+        createdAt,
+        updatedAt,
+        syncStatus: 'pending',
+      });
+    await legacyDatabase.table('movements').add({
+      productId: legacyProductId,
+      type: 'entrada',
+      quantity: 2,
+      note: 'Carga historica',
+      date: updatedAt,
+      syncStatus: 'pending',
+    });
+    legacyDatabase.close();
+
+    const migratedDatabase = new StockFlowDatabase(databaseName);
+    await migratedDatabase.open();
+
+    const products = await migratedDatabase.products.toArray();
+    const movements = await migratedDatabase.movements.toArray();
+    const categories = await migratedDatabase.categories.toArray();
+    const product = products[0];
+    const movement = movements[0];
+
+    expect(migratedDatabase.verno).toBe(9);
+    expect(migratedDatabase.tables.map((table) => table.name).sort()).toEqual([
+      'categories',
+      'movements',
+      'products',
+    ]);
+    expect(products).toHaveLength(1);
+    expect(movements).toHaveLength(1);
+    expect(categories).toHaveLength(1);
+    expect(product).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+      name: 'Cafe historico',
+      code: 'CAFE-V1',
+      salePriceInCents: 1990,
+      currentQuantity: 7,
+      minimumStock: 2,
+      createdAt,
+      updatedAt,
+      syncStatus: 'pending',
+    });
+    expect(product).not.toHaveProperty('price');
+    expect(categories[0]).toMatchObject({ id: product?.categoryId, name: 'Bebidas' });
+    expect(movement).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+      productId: product?.id,
+      type: 'entrada',
+      quantity: 2,
+      note: 'Carga historica',
+      date: updatedAt,
+      syncStatus: 'pending',
+      isLegacy: true,
+    });
+    expect(movement).not.toHaveProperty('previousQuantity');
+    expect(movement).not.toHaveProperty('resultingQuantity');
+
+    migratedDatabase.close();
   });
 
   it.each([

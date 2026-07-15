@@ -67,7 +67,7 @@ Os services representam os casos de uso e coordenam repositories:
 
 O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa garantir atomicidade entre atualização do produto e criação da movimentação.
 
-Pendências técnicas conhecidas da Parte 3 não alteram a arquitetura descrita: faltam validações defensivas no `productService`, reação correta do `useDexieQuery` quando a consulta muda e distinção visual completa entre estoque baixo e sem estoque.
+A Parte 3 foi concluída sem alterar essa arquitetura: o `productService` aplica validações defensivas, o `useDexieQuery` reage a dependências explícitas e a UI distingue estoque baixo de estoque zerado.
 
 ### Repositories
 
@@ -109,7 +109,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 17 arquivos e 141 testes aprovados:
+A arquitetura é verificada por 18 arquivos e 166 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -268,7 +268,7 @@ O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays loca
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A sequência principal está na Parte 3, praticamente concluída; testes, documentação/ADRs e critérios de qualidade são transversais. Após consolidar as três pendências técnicas conhecidas, a próxima parte principal será a Parte 4 (regras 30–35): offline-first, conectividade, PWA, atualização da PWA, persistência do IndexedDB e backup/exportação. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A Parte 3 está concluída; testes, documentação/ADRs e critérios de qualidade são transversais. A próxima parte principal será a Parte 4 (regras 30–35): offline-first, conectividade, PWA, atualização da PWA, persistência do IndexedDB e backup/exportação. Ela ainda não foi iniciada como implementação principal e depende de uma etapa futura explicitamente autorizada. Snapshots não são Parte 4.
 
 ## Referências arquiteturais
 
