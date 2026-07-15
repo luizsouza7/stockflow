@@ -1,4 +1,4 @@
-# ADR-006 — Valores monetários em centavos
+# ADR-001 — Valores monetários em centavos
 
 - Status: aceita
 - Data: 12/07/2026

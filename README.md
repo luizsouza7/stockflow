@@ -2,14 +2,14 @@
 
 StockFlow e um sistema web responsivo para controle de estoque de pequenos comercios.
 
-Este repositorio representa a **Etapa 1 do projeto**, desenvolvida para a disciplina **Projeto Integrador 2**. A proposta desta fase e entregar um MVP academico local/offline, bem organizado e preparado para evoluir futuramente para o TCC.
+Este repositorio contem o **TCC real StockFlow**, desenvolvido de forma incremental a partir de um nucleo local/offline. Por decisao atual do responsavel, o projeto nao deve ser tratado ou planejado como Projeto Integrador.
 
 ## Contexto academico
 
 - Projeto: StockFlow
-- Disciplina: Projeto Integrador 2
-- Etapa: MVP local/offline
-- Evolucao planejada: Trabalho de Conclusao de Curso (TCC)
+- Contexto: Trabalho de Conclusao de Curso (TCC)
+- Estado funcional: nucleo local/offline em evolucao
+- Planejamento oficial: `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`
 
 ## Objetivo do sistema
 
@@ -23,7 +23,7 @@ O sistema e voltado para pequenos comercios que precisam controlar produtos, ent
 
 Pequenos negocios podem perder vendas, comprar produtos em excesso ou deixar itens acabarem por falta de um controle de estoque simples e acessivel. O StockFlow busca reduzir esse problema oferecendo um controle local, rapido e responsivo, com historico de movimentacoes e alertas de reposicao.
 
-## Escopo da Etapa 1
+## Escopo funcional documentado
 
 Esta versao implementa:
 
@@ -41,7 +41,7 @@ Esta versao implementa:
 - Interface responsiva para desktop e celular
 - PWA basica com service worker
 
-## Funcionalidades implementadas nesta etapa
+## Funcionalidades implementadas
 
 - Dashboard com total de produtos, produtos com estoque baixo, total de movimentacoes e ultimas movimentacoes
 - CRUD de produtos com campos de nome, codigo, categoria, preco, quantidade atual e estoque minimo
@@ -90,9 +90,9 @@ Os dados sao armazenados no navegador usando IndexedDB. Depois do primeiro carre
 
 ## Sincronizacao futura
 
-A pasta `src/services/sync` contem a funcao `syncPendingData()`. Nesta etapa, ela e apenas uma preparacao: busca registros com `syncStatus: "pending"` no IndexedDB e simula o ponto de entrada da sincronizacao. Nao existe conexao real com Supabase, backend ou servico em nuvem nesta versao.
+A pasta `src/services/sync` contem a funcao `syncPendingData()`. Ela e apenas uma preparacao: busca registros com `syncStatus: "pending"` no IndexedDB e simula o ponto de entrada da sincronizacao. Nao existe conexao real com Supabase, backend ou servico em nuvem nesta versao.
 
-## Evolucao futura para o TCC
+## Evolucao planejada do TCC
 
 - Login e autenticacao
 - Integracao com Supabase
@@ -103,7 +103,7 @@ A pasta `src/services/sync` contem a funcao `syncPendingData()`. Nesta etapa, el
 - Avaliacao de usabilidade
 - PWA mais completa, com estrategias avancadas de cache e instalacao
 
-## Fora do escopo nesta etapa
+## Fora do escopo atual
 
 - Backend
 - Login
@@ -117,4 +117,4 @@ A pasta `src/services/sync` contem a funcao `syncPendingData()`. Nesta etapa, el
 
 - Os dados ficam salvos no navegador/dispositivo usado.
 - Para testar offline em desenvolvimento, carregue o app uma vez e depois use as ferramentas do navegador para simular offline.
-- Esta documentacao identifica o projeto como **Etapa 1 / Projeto Integrador 2**, mantendo a evolucao para o TCC planejada, mas ainda nao implementada.
+- Este README recebeu apenas a correcao obrigatoria de contexto academico. Uma etapa documental posterior deve atualiza-lo integralmente conforme o estado real do TCC.

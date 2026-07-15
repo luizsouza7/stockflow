@@ -1,19 +1,19 @@
 # Estado Atual do Projeto StockFlow
 
-> Atualizado em 14/07/2026. Este documento descreve o estado comprovado na branch `develop`, tendo `db1cbeb` como commit anterior à etapa atual ainda não commitada. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem.
+> Consolidado em 15/07/2026. Este documento descreve o estado funcional atual na branch `develop`. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem; hashes e histórico de commits devem ser consultados no Git.
 
 ## Identificação e finalidade
 
 O StockFlow é um sistema web responsivo de controle de estoque para pequenos comércios. Seu objetivo principal é permitir o cadastro e a consulta de produtos, a organização por categorias, o registro de entradas e saídas, a preservação do histórico e a identificação de estoque baixo mesmo quando o dispositivo está sem conexão.
 
-O repositório é a continuidade de uma entrega intermediária de Projeto Integrador 2 e a base para um Trabalho de Conclusão de Curso. O título acadêmico provisório definido no Prompt Mestre é **“StockFlow: desenvolvimento de um sistema web responsivo para controle de estoque de pequenos comércios com funcionamento offline e sincronização em nuvem”**. A sincronização em nuvem pertence ao planejamento futuro; não está implementada.
+O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do responsável, não deve ser tratado, planejado ou apresentado como Projeto Integrador. O título acadêmico provisório definido no Prompt Mestre é **“StockFlow: desenvolvimento de um sistema web responsivo para controle de estoque de pequenos comércios com funcionamento offline e sincronização em nuvem”**. A sincronização em nuvem pertence ao planejamento futuro; não está implementada.
 
 ## Referência desta fotografia
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Commit de referência anterior à etapa atual: `db1cbeb` (`feat: adiciona filtros e ordenacao de produtos e movimentacoes`).
-- Estado inicial do worktree nessa raiz: limpo e acompanhando `origin/develop`.
+- Última etapa funcional consolidada: núcleo local com produtos, categorias, movimentações, consultas, auditabilidade de estoque, código interno e UUIDs.
+- O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
 ## Stack atual comprovada
@@ -126,7 +126,7 @@ Há 5 arquivos de ADR em `docs/arquitetura/adrs`:
 4. `ADR-004-categorias-como-entidades.md`;
 5. `ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`.
 
-Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas seu título interno é “ADR-006”. Esta documentação apenas registra a divergência; não renomeia nem reescreve o ADR.
+O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-001`.
 
 ## Testes comprovados
 
@@ -163,7 +163,7 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 
 ### Parcial
 
-- **Projeto Integrador 2:** o núcleo local demonstrável existe, mas documentação acadêmica da entrega, release/tag, screenshots e checklist formal não foram encontrados.
+- **TCC:** o núcleo local demonstrável existe, mas a PWA/offline ainda é parcial e as camadas remota, acadêmica e de validação permanecem incompletas.
 - **PWA/offline:** manifesto, service worker e indicador existem, porém faltam instalação/atualização segura, cache revisado, persistência, backup e testes offline.
 - **Produtos:** busca, filtros combináveis, ordenação, estados vazios, código interno único entre ativos e proteção contra edição direta de estoque estão implementados.
 - **Movimentações:** entrada, saída, histórico e filtros combináveis por produto/tipo/período estão implementados; eventual movimento de ajuste permanece futuro.
@@ -190,7 +190,7 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 - testes E2E com Playwright;
 - GitHub Actions/CI;
 - pesquisa com público-alvo, testes de usabilidade e análise de resultados;
-- release identificável de PI2 e release final de TCC.
+- release final do TCC baseada em critérios reais.
 
 ## Limitações e dívidas técnicas conhecidas
 
@@ -204,19 +204,23 @@ Existe uma inconsistência nominal: o primeiro arquivo se chama `ADR-001`, mas s
 - `syncPendingData()` ignora categorias e não envia, recebe ou confirma registros.
 - `syncStatus` sugere estados futuros sem outbox, retry ou semântica operacional completa.
 - O dashboard calcula `totalOutOfStock`, mas não apresenta o indicador.
+- O `productService` ainda precisa de validações defensivas para entradas que não passam pelos formulários.
+- O `useDexieQuery` precisa tratar corretamente a troca da função/consulta observada.
+- A interface ainda não distingue completamente, além da cor, estoque baixo de produto sem estoque.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
 - O README ainda descreve a etapa inicial e não acompanha todas as migrations, UUIDs, categorias, filtros, regras de estoque/código e 141 testes.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
-- A numeração interna do primeiro ADR diverge do nome do arquivo.
+- A numeração interna do ADR-001 foi corrigida nesta consolidação documental, sem alteração técnica da decisão.
 
 ## Continuidade dentro das 15 partes
 
-O Prompt Mestre é o planejamento oficial, mas o arquivo atual não contém uma lista literalmente numerada de 1 a 15. Para viabilizar continuidade sem inventar um plano externo, `docs/ROADMAP-TCC.md` registra uma correspondência operacional de 15 partes ancorada nas fases, milestones, critérios e histórico comprovados.
+O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalos de regras: Parte 1 (1–11), Parte 2 (12–18), Parte 3 (19–29), Parte 4 (30–35), Parte 5 (36–42), Parte 6 (43–54), Parte 7 (55–69), Parte 8 (70–79), Parte 9 (80–86), Parte 10 (87–98), Parte 11 (99–106), Parte 12 (107–118), Parte 13 (119–128), Parte 14 (129–138) e Parte 15 (139–143).
 
-- Última etapa de código concluída no worktree: auditabilidade das alterações de estoque e semântica/unicidade do código interno, ainda sem commit conforme solicitado.
-- Última decisão estrutural concluída antes dela: UUID para produtos e movimentações, com schema Dexie v9, no commit `89c3e74`.
-- Parte principal atual, conforme o contexto oficial de continuidade: **Parte 3 concluída** após encerrar as regras de consulta, auditabilidade de estoque e código interno.
-- Partes transversais já utilizadas: **Parte 8** (testes desde as regras críticas), **Parte 10** (ADRs e documentação) e **Parte 13** (lint, typecheck e build como critérios de qualidade). PWA básica da Parte 9 também foi antecipada no MVP inicial.
-- Próximo passo recomendado: revisar os critérios da Parte 4 do Prompt Mestre contra o que já foi antecipado no código, especialmente snapshots e legado, antes de iniciar qualquer nova implementação.
+- Última etapa funcional consolidada: auditabilidade das alterações de estoque, semântica/unicidade do código interno e UUIDs para as entidades locais.
+- Parte principal atual: **Parte 3 praticamente concluída**.
+- Pendências para encerrá-la: validações defensivas no `productService`, troca de consulta no `useDexieQuery` e distinção visual completa entre estoque baixo e sem estoque.
+- Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13. A PWA básica é funcionalidade antecipada e não caracteriza o início formal da Parte 4.
+- Parte 4: **não iniciada como implementação principal**; será a próxima parte da sequência após o encerramento da Parte 3.
+- Próximo passo recomendado: corrigir e validar as três pendências da Parte 3 em etapa técnica específica. Snapshots não são Parte 4.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

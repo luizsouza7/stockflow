@@ -10,7 +10,7 @@ Você está trabalhando em um projeto real chamado StockFlow.
 
 
 
-Este projeto será desenvolvido inicialmente como trabalho acadêmico e utilizado como entrega intermediária na disciplina Projeto Integrador 2, sendo posteriormente evoluído para o Trabalho de Conclusão de Curso — TCC.
+Este projeto é o Trabalho de Conclusão de Curso — TCC real. Não deve ser planejado, adaptado ou apresentado como Projeto Integrador, salvo nova decisão explícita do responsável pelo projeto.
 
 
 
@@ -192,15 +192,11 @@ O mesmo projeto web deverá adaptar sua interface responsivamente aos diferentes
 
 
 
-O projeto possui dois momentos.
+O projeto é desenvolvido como TCC, de forma incremental.
 
 
 
-Etapa intermediária — Projeto Integrador 2
-
-
-
-A versão intermediária poderá contemplar:
+Uma versão intermediária estável do TCC poderá contemplar:
 
 
 
@@ -234,7 +230,7 @@ testes essenciais.
 
 
 
-Essa versão deve ser identificável por release e tag específica no Git.
+Essa versão intermediária poderá ser identificada por release e tag específica no Git quando houver critérios reais para isso.
 
 
 
@@ -242,11 +238,11 @@ Sugestão:
 
 
 
-v0.4.0-pi2
+v0.4.0
 
 
 
-Etapa final — TCC
+Versão final — TCC
 
 
 
@@ -709,14 +705,6 @@ stockflow/
 │ ├── prompts/
 
 │ │ └── PROMPT-MESTRE-STOCKFLOW.md
-
-│ │
-
-│ ├── pi2/
-
-│ │ ├── escopo-pi2.md
-
-│ │ └── entrega-pi2.md
 
 │ │
 
@@ -4910,7 +4898,7 @@ v0.3.0 — Movimentações e alertas.
 
 
 
-v0.4.0-pi2 — Entrega do Projeto Integrador 2.
+v0.4.0 — Núcleo local estabilizado.
 
 
 
@@ -4990,7 +4978,7 @@ estoque baixo;
 
 movimentações recentes.
 
-M5 — PI2
+M5 — Estabilização do núcleo local
 
 estabilização;
 
@@ -5103,8 +5091,6 @@ testes;
 estrutura;
 
 roadmap;
-
-PI2;
 
 TCC;
 
@@ -6278,7 +6264,7 @@ sem estoque;
 
 período quando adequado.
 
-112\. FASE 5 — ENTREGA PI2
+112\. FASE 5 — ESTABILIZAÇÃO DO NÚCLEO DO TCC
 
 
 
@@ -6286,7 +6272,7 @@ Criar:
 
 
 
-documentação PI2;
+documentação do estado funcional;
 
 release identificável;
 
@@ -6302,7 +6288,7 @@ Não interromper a evolução geral do TCC.
 
 
 
-PI2 deverá ser um subconjunto estável do projeto completo.
+Essa entrega deverá ser um subconjunto estável do TCC completo e não altera a identidade acadêmica do StockFlow como TCC.
 
 
 
@@ -7308,7 +7294,7 @@ Documentação.
 
 
 
-PI2 delimitado.
+escopo do TCC delimitado.
 
 
 
@@ -7404,7 +7390,7 @@ manter o histórico de evolução.
 
 
 
-O StockFlow deve permitir que o Projeto Integrador 2 seja uma entrega intermediária estável e que o mesmo código continue evoluindo naturalmente para o TCC.
+O StockFlow deve permitir entregas incrementais estáveis, mantendo o mesmo código em evolução natural até a conclusão do TCC.
 
 
 

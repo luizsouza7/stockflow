@@ -1,6 +1,6 @@
 # Arquitetura Atual do StockFlow
 
-> Estado comprovado em 14/07/2026 na branch `develop`, tendo `db1cbeb` como commit anterior à etapa atual ainda não commitada. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro.
+> Estado funcional consolidado em 15/07/2026 na branch `develop`. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro. O Git é a fonte oficial para hashes e histórico de commits.
 
 ## Visão geral atual
 
@@ -66,6 +66,8 @@ Os services representam os casos de uso e coordenam repositories:
 - `syncService`: somente leitura de produtos e movimentações pendentes; não é sincronização funcional.
 
 O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa garantir atomicidade entre atualização do produto e criação da movimentação.
+
+Pendências técnicas conhecidas da Parte 3 não alteram a arquitetura descrita: faltam validações defensivas no `productService`, reação correta do `useDexieQuery` quando a consulta muda e distinção visual completa entre estoque baixo e sem estoque.
 
 ### Repositories
 
@@ -172,7 +174,7 @@ Produto, Movimentação e Categoria usam `id: string` com UUID v4 gerado no clie
 
 ### Valores monetários em centavos
 
-Preço de venda é persistido em `salePriceInCents` como inteiro seguro não negativo. A UI aceita vírgula ou ponto com até duas casas e centraliza parse/formatação. Ver o ADR de valores monetários; seu nome de arquivo e título interno têm numeração divergente.
+Preço de venda é persistido em `salePriceInCents` como inteiro seguro não negativo. A UI aceita vírgula ou ponto com até duas casas e centraliza parse/formatação. Ver o ADR-001 de valores monetários em centavos.
 
 ### Snapshots de movimentação
 
@@ -263,6 +265,10 @@ Nada dessa camada remota está implementado. Em particular, não existem:
 - multiusuário ou multiestabelecimento.
 
 O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays locais de produtos e movimentações pendentes.
+
+## Continuidade oficial
+
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A sequência principal está na Parte 3, praticamente concluída; testes, documentação/ADRs e critérios de qualidade são transversais. Após consolidar as três pendências técnicas conhecidas, a próxima parte principal será a Parte 4 (regras 30–35): offline-first, conectividade, PWA, atualização da PWA, persistência do IndexedDB e backup/exportação. Snapshots não são Parte 4.
 
 ## Referências arquiteturais
 

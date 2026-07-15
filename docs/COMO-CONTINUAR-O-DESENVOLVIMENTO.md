@@ -1,6 +1,8 @@
 # Como Continuar o Desenvolvimento do StockFlow
 
-> Guia de retomada atualizado em 14/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
+> Guia de retomada consolidado em 15/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
+
+O StockFlow é o TCC real. Não o trate, planeje ou adapte como Projeto Integrador sem uma nova solicitação explícita do responsável.
 
 ## Ordem obrigatória de leitura
 
@@ -16,12 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Commit de código de referência anterior à etapa atual: `db1cbeb`.
+- Última etapa funcional consolidada: núcleo local com auditabilidade de estoque, código interno e UUIDs.
 - Schema Dexie atual: versão 9.
 - Estado de testes comprovado: 17 arquivos, 141 testes aprovados em 14/07/2026.
 - Última etapa de código: auditabilidade do estoque e semântica/unicidade do código interno do produto.
-- Parte principal atual: **Parte 3 concluída**.
-- Próximo passo recomendado: revisar os critérios da Parte 4 contra snapshots e legado já antecipados. Não antecipar Supabase ou sincronização.
+- Parte principal atual: **Parte 3 praticamente concluída**.
+- Pendências atuais: validações defensivas no `productService`, troca de consulta no `useDexieQuery` e distinção visual completa entre estoque baixo e sem estoque.
+- Próximo passo recomendado: consolidar essas três correções em etapa técnica específica. Depois disso, reavaliar o encerramento da Parte 3; não iniciar a Parte 4 antes dessa decisão e não antecipar Supabase ou sincronização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -73,7 +76,7 @@ Depois:
 
 ## Como escolher a próxima mudança
 
-1. Comece pelo próximo item da parte principal atual no roadmap.
+1. Comece pelo próximo item da parte principal atual no roadmap oficial de 15 partes.
 2. Priorize integridade de dados, regras de estoque, funcionamento local, estabilidade, usabilidade e testes.
 3. Se uma prática transversal for necessária — teste, ADR ou critério de qualidade — use-a sem declarar a parte posterior como concluída.
 4. Se a mudança depender de decisão acadêmica, credencial ou requisito não verificável, documente o bloqueio e peça direção.
@@ -180,7 +183,7 @@ O relatório de entrega deve informar:
 ## Sinais de documentação desatualizada já conhecidos
 
 - `docs/auditoria-fase-0.md` contém uma raiz anterior e retrata lacunas de 12/07/2026, algumas já resolvidas.
-- O primeiro arquivo de ADR chama-se `ADR-001...`, mas o título interno diz “ADR-006”.
+- O ADR-001 teve sua numeração interna corrigida na consolidação documental de 15/07/2026.
 - O README ainda representa principalmente a Etapa 1 inicial e não detalha schema v9, UUIDs, migrations e a suíte atual.
 - O banner offline promete sincronização ao reconectar, embora a sincronização não exista.
 
@@ -188,4 +191,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. Considere o Prompt Mestre como planejamento oficial e os documentos de continuidade como fotografia verificável do StockFlow. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirme raiz, branch e mudanças locais. A Parte 3 está concluída; antes de implementar algo novo, revise os critérios da Parte 4 contra snapshots e legado já existentes. Não recrie o projeto, desfaça decisões consolidadas ou antecipe Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. A Parte 3 está praticamente concluída; consolide primeiro as validações defensivas do `productService`, a troca de consulta no `useDexieQuery` e a distinção visual entre estoque baixo e sem estoque. Só então reavalie seu encerramento. A Parte 4 é o bloco das regras 30–35; snapshots não pertencem a ela. Não recrie o projeto, desfaça decisões consolidadas ou antecipe Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
