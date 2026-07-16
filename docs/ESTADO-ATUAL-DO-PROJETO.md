@@ -65,7 +65,7 @@ Existe uma **PWA parcial com cache e atualização controlados**:
 - indicador baseado em `navigator.onLine` e eventos `online`/`offline`, com cleanup testado.
 - aviso de lifecycle do armazenamento para `versionchange` e upgrade bloqueado, sem reload automático.
 
-`navigator.onLine` indica somente a conectividade percebida pelo navegador; não comprova acesso completo à internet nem disponibilidade de backend. Futuras APIs, respostas privadas/autenticadas, recursos externos e métodos mutáveis não são cacheados pela estratégia atual. A instalação limpa, o primeiro reload offline e o ciclo real de atualização A → B com preservação do IndexedDB foram validados manualmente. Ainda não há solicitação via StorageManager, backup/exportação ou teste E2E automatizado.
+`navigator.onLine` indica somente a conectividade percebida pelo navegador; não comprova acesso completo à internet nem disponibilidade de backend. Futuras APIs, respostas privadas/autenticadas, recursos externos e métodos mutáveis não são cacheados pela estratégia atual. A instalação limpa, o primeiro reload offline e o ciclo real de atualização A → B com preservação do IndexedDB foram validados manualmente. Ainda não há solicitação via StorageManager ou teste E2E automatizado.
 
 ## Banco local, entidades e identificadores
 
@@ -135,8 +135,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **26**.
-- Testes aprovados em 15/07/2026: **224 de 224**.
+- Arquivos de teste atuais: **29**.
+- Testes aprovados em 15/07/2026: **250 de 250**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade, dos banners e do lifecycle do IndexedDB. Um teste com fake-indexeddb mantém uma conexão antiga aberta, observa o bloqueio real e confirma a liberação do upgrade após o fechamento. Testes de página comprovam cleanup em `pagehide`, reabertura explícita e preservação de dados após BFCache, ausência de listeners/canais duplicados, invalidação de `open()` pendente por estado terminal ou novo `pagehide` e proibição de conexão reaberta em `reload-required`. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
@@ -163,14 +163,15 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - estados reutilizáveis de loading, erro e vazio nas principais consultas;
 - feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
 - tratamento explícito de `versionchange`, upgrade bloqueado e coordenação de lifecycle entre abas, com reload apenas por ação do usuário;
-- suíte atual de 224 testes em 26 arquivos aprovada.
+- backup JSON versionado e exportação CSV local de produtos e movimentações, com validação e snapshot somente leitura;
+- suíte atual de 250 testes em 29 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
 ### Parcial
 
 - **TCC:** o núcleo local demonstrável existe, mas a PWA/offline ainda é parcial e as camadas remota, acadêmica e de validação permanecem incompletas.
-- **PWA/offline:** manifesto, cache restrito, indicador testado, atualização controlada e lifecycle robusto do IndexedDB existem; backup/exportação e validação E2E automatizada permanecem pendentes.
+- **PWA/offline:** manifesto, cache restrito, indicador testado, atualização controlada, lifecycle robusto do IndexedDB e backup/exportação local existem; validação E2E automatizada permanece pendente.
 - **Produtos:** busca, filtros combináveis, ordenação, estados vazios, código interno único entre ativos e proteção contra edição direta de estoque estão implementados.
 - **Movimentações:** entrada, saída, histórico e filtros combináveis por produto/tipo/período estão implementados; eventual movimento de ajuste permanece futuro.
 - **Dashboard:** usa dados reais e exibe separadamente produtos com estoque baixo e sem estoque; entradas/saídas por período permanecem futuras.
@@ -191,7 +192,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - retry, confirmação de envio e cursor de pull;
 - detecção, persistência e resolução de conflitos;
 - central/status real de sincronização;
-- backup, importação e exportação CSV/JSON;
+- importação/restauração de backup;
 - relatórios avançados;
 - testes E2E com Playwright;
 - GitHub Actions/CI;
@@ -220,7 +221,8 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Parte principal atual: **Parte 3 concluída**.
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
-- Parte 4: **iniciada e em andamento**; regras 30–34 implementadas e regra 35 não iniciada.
-- Próximo passo recomendado: revisar e commitar esta etapa; somente depois, e com autorização explícita, tratar a regra 35 sem antecipar partes posteriores.
+- Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
+- Parte 5: **não iniciada**.
+- Próximo passo recomendado: revisar e commitar a regra 35; somente depois, e com autorização explícita, iniciar a Parte 5 pela regra 36 sem antecipar sincronização.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

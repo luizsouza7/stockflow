@@ -18,13 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa funcional atual: lifecycle robusto do IndexedDB, com `versionchange`, upgrade bloqueado e coordenação básica entre abas.
+- Etapa funcional atual: backup/exportação local com JSON versionado e CSVs de produtos e movimentações.
 - Schema Dexie atual: versão 9.
-- Estado de testes comprovado: 26 arquivos, 224 testes aprovados em 15/07/2026.
+- Estado de testes comprovado: 29 arquivos, 250 testes aprovados em 15/07/2026.
 - Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
-- Parte principal atual: **Parte 4 em andamento; regras 30–34 implementadas**.
+- Parte principal atual: **Parte 4 concluída; regras 30–35 implementadas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: revisar e commitar a regra 34; somente depois, e com autorização explícita, tratar a regra 35 sem antecipar Supabase ou sincronização.
+- Próximo passo recomendado: revisar e commitar a regra 35; somente depois, e com autorização explícita, iniciar a Parte 5 pela regra 36 sem antecipar sincronização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -192,4 +192,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. A Parte 3 está concluída e não possui pendência conhecida nas regras 19–29. A Parte 4 é o bloco das regras 30–35 e está em andamento: regras 30–34 foram implementadas e a regra 35 permanece não iniciada. Snapshots não pertencem à Parte 4. Não recrie o projeto, desfaça decisões consolidadas ou antecipe backup/exportação, Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. As Partes 3 e 4 estão concluídas no escopo implementado; a Parte 4 compreende as regras 30–35. A regra 35 oferece backup JSON versionado e CSVs locais, sem importação/restauração, nuvem ou sincronização. A Parte 5 não foi iniciada. Snapshots não pertencem à Parte 4. Não recrie o projeto, desfaça decisões consolidadas ou antecipe Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.

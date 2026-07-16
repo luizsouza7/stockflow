@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 26 arquivos e 224 testes aprovados:
+A arquitetura é verificada por 29 arquivos e 250 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -235,7 +235,6 @@ Pendente:
 
 - prompt/UX de instalação;
 - persistência via StorageManager;
-- backup/exportação;
 - teste E2E offline automatizado.
 
 Portanto, PWA é **parcial**, não concluída.
@@ -280,7 +279,13 @@ O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays loca
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. A Parte 3 está concluída; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 4 (regras 30–35) permanece em andamento: offline-first, conectividade, PWA, atualização controlada e lifecycle robusto do IndexedDB (regras 30–34) foram implementados. Backup/exportação (regra 35) permanece não iniciado. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas no escopo implementado; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 4 (regras 30–35) consolidou offline-first, conectividade, PWA, atualização controlada, lifecycle robusto do IndexedDB e backup/exportação local. A Parte 5 não foi iniciada. Snapshots não são Parte 4.
+
+## Backup e exportação
+
+O fluxo é `UI → backupExportService → Dexie`. O acesso direto do service ao `localDb` é restrito à transação somente leitura que captura `categories`, `products` e `movements` como um único snapshot lógico; não foi criada uma abstração repository artificial para uma leitura atômica multi-tabela.
+
+O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 9`, inclui soft deletes e valida UUIDs, relações, tipos, inteiros, datas e movimentos legados antes do download. Produtos e movimentações também podem ser exportados em CSV. O fluxo é local/offline, não faz chamadas de rede e fica indisponível quando o lifecycle do banco não está normal. Importação/restauração não foi implementada e permanece futura até haver estratégia rigorosamente validada.
 
 ## Referências arquiteturais
 
