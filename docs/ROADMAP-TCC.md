@@ -1,6 +1,6 @@
 # Roadmap TCC — StockFlow
 
-> Consolidado em 15/07/2026. O StockFlow é o TCC real. O planejamento oficial é o `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, dividido nas 15 partes abaixo pelos intervalos de regras definidos pelo responsável pelo projeto.
+> Consolidado em 17/07/2026. O StockFlow é o TCC real. O planejamento oficial é o `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, dividido nas 15 partes abaixo pelos intervalos de regras definidos pelo responsável pelo projeto.
 
 ## Como interpretar o roadmap
 
@@ -62,11 +62,11 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar autenticação, comportamento de sessão offline, Supabase, PostgreSQL, colunas de sincronização, estratégia de `updated_at` e Row Level Security.
 
-**Status:** não iniciada.
+**Status:** em andamento; regras 36–42 implementadas em código e SQL, pendentes de validação manual em projeto Supabase real.
 
-**Preparação existente:** UUIDs, timestamps, soft delete e `syncStatus` facilitam a evolução, mas não constituem Auth, Supabase, PostgreSQL ou RLS.
+**Progresso comprovado:** cliente Supabase opcional via env pública, cadastro/login/logout, sessão inicial, listener com cleanup, funcionamento local sem login e página Conta carregada sob demanda. Migration versionada prepara perfis, estabelecimentos, memberships, categorias, produtos e movimentações com `business_id`, trigger de `updated_at`, índices, RLS e policies baseadas em `auth.uid()`.
 
-**Pendente:** toda a camada remota, credenciais reais, migrations, isolamento por estabelecimento, sessão e políticas RLS.
+**Pendente:** configurar projeto real, aplicar/revisar a migration no PostgreSQL e validar Auth/RLS entre dois usuários. Dados locais não estão associados a contas e nenhuma sincronização foi iniciada.
 
 ## Parte 6 — regras 43–54
 
@@ -94,7 +94,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 29 arquivos com 250 testes aprovados na validação de 15/07/2026, incluindo o caminho de migration v1 → v9 e as garantias de conectividade, política/cache PWA, lifecycle do IndexedDB, invalidação de restaurações assíncronas obsoletas no BFCache e backup/exportação local.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 34 arquivos com 290 testes aprovados na validação de 17/07/2026, incluindo o caminho de migration v1 → v9 e as garantias de conectividade, PWA, lifecycle do IndexedDB, backup/exportação, Auth opcional e SQL/RLS.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -126,7 +126,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** npm/lockfile, comandos de qualidade, registro de dívidas e protocolo de raiz/branch/worktree e de execução incremental estão documentados.
 
-**Pendente:** revisar `.env.example` e dados demo quando a camada remota for autorizada; manter dívida técnica rastreável e nunca mascarar resultados.
+**Pendente:** dados demo somente se forem necessários em etapa autorizada; manter dívida técnica rastreável e nunca mascarar resultados.
 
 ## Parte 12 — regras 107–118
 
@@ -136,7 +136,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** auditoria, fundação, produtos/categorias, movimentações e parte de dashboard/alertas foram implementados; existe PWA básica antecipada.
 
-**Pendente:** Auth/nuvem, sincronização, conflitos, E2E/CI e validação acadêmica permanecem futuros.
+**Pendente:** validação real de Auth/RLS, sincronização, conflitos, E2E/CI e validação acadêmica permanecem futuros.
 
 ## Parte 13 — regras 119–128
 
@@ -156,7 +156,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** histórico de movimentações, Dexie versionado até v9, migrations locais testadas, build usado na validação e arquitetura local documentada.
 
-**Pendente:** audit log administrativo somente se necessário, migrations/seed Supabase quando autorizados, documentação e diagramas da sincronização real e checklist final do TCC.
+**Pendente:** audit log administrativo somente se necessário, aplicação/validação da migration Supabase, seed se autorizado, documentação e diagramas da sincronização real e checklist final do TCC.
 
 ## Parte 15 — regras 139–143
 
@@ -170,4 +170,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Revisar e consolidar a implementação da regra 35. Somente depois de commit e autorização explícita para uma nova etapa, iniciar a Parte 5 pela regra 36, sem antecipar sincronização ou outras partes posteriores.
+Revisar a implementação da Parte 5 e validar manualmente Auth/RLS em um projeto Supabase de teste antes de consolidá-la. Não iniciar a Parte 6 sem autorização explícita.

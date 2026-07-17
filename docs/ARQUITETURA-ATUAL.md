@@ -1,6 +1,6 @@
 # Arquitetura Atual do StockFlow
 
-> Estado funcional consolidado em 15/07/2026 na branch `develop`. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro. O Git é a fonte oficial para hashes e histórico de commits.
+> Estado funcional consolidado em 17/07/2026 na branch `develop`. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro. O Git é a fonte oficial para hashes e histórico de commits.
 
 ## Visão geral atual
 
@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 29 arquivos e 250 testes aprovados:
+A arquitetura é verificada por 34 arquivos e 290 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -262,14 +262,20 @@ futura outbox e sincronização bidirecional
 Supabase / PostgreSQL / Auth / RLS
 ```
 
-No plano futuro, a escrita continuará local e uma outbox persistente deverá conduzir push, confirmação, retry e conflitos. Pull deverá trazer mudanças remotas validadas para uma transação local. Auth e RLS deverão identificar usuário/estabelecimento e isolar dados.
+No plano futuro, a escrita continuará local e uma outbox persistente deverá conduzir push, confirmação, retry e conflitos. Pull deverá trazer mudanças remotas validadas para uma transação local. Auth e o SQL com RLS já preparam identidade e isolamento por estabelecimento, mas não transferem entidades locais.
 
-Nada dessa camada remota está implementado. Em particular, não existem:
+Implementado como preparação da Parte 5:
 
-- client Supabase ou variáveis de ambiente;
-- schema/migrations PostgreSQL;
-- autenticação ou sessão offline autenticada;
-- RLS;
+- cliente Supabase opcional e carregado apenas pela rota Conta;
+- cadastro, login, sessão inicial, listener de Auth com cleanup e logout local;
+- `.env.example` com URL e chave pública, sem segredo real;
+- migration PostgreSQL versionada para perfis, estabelecimentos, memberships e entidades de estoque;
+- `business_id`, `version`, índices, trigger de `updated_at`, soft delete e RLS baseada em `auth.uid()`.
+
+Ainda não existem:
+
+- aplicação/validação da migration em um projeto remoto real;
+- associação dos registros IndexedDB a usuário ou estabelecimento;
 - outbox;
 - push, pull, retry ou cursor;
 - armazenamento/resolução de conflitos;
@@ -279,7 +285,13 @@ O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays loca
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas no escopo implementado; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 4 (regras 30–35) consolidou offline-first, conectividade, PWA, atualização controlada, lifecycle robusto do IndexedDB e backup/exportação local. A Parte 5 não foi iniciada. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas no escopo implementado; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 5 foi iniciada com Auth opcional e SQL/RLS preparado, sem sincronização. A Parte 6 não foi iniciada. Snapshots não são Parte 4.
+
+## Auth, sessão e isolamento remoto preparado
+
+O fluxo da conta é `Account → useAuthSession → authService → cliente Supabase`. A rota é lazy; abrir as páginas locais não inicializa o módulo Supabase. Se as variáveis estiverem ausentes ou inválidas, a página explica a indisponibilidade e não bloqueia o restante do sistema. Uma sessão previamente persistida pelo cliente oficial pode ser restaurada offline; novos logins/cadastros exigem conectividade e logout usa escopo local para remover a sessão deste navegador.
+
+Os dados IndexedDB continuam device-scoped e não pertencem a uma conta nesta parte. O SQL remoto usa estabelecimentos e memberships para isolar dados futuros, mas nenhum mapper, upload, download ou vínculo local foi implementado.
 
 ## Backup e exportação
 

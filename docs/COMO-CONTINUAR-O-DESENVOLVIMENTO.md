@@ -1,6 +1,6 @@
 # Como Continuar o Desenvolvimento do StockFlow
 
-> Guia de retomada consolidado em 15/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
+> Guia de retomada consolidado em 17/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
 
 O StockFlow é o TCC real. Não o trate, planeje ou adapte como Projeto Integrador sem uma nova solicitação explícita do responsável.
 
@@ -18,13 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa funcional atual: backup/exportação local com JSON versionado e CSVs de produtos e movimentações.
+- Etapa funcional atual: Parte 5 com Auth opcional e SQL PostgreSQL/RLS preparado.
 - Schema Dexie atual: versão 9.
-- Estado de testes comprovado: 29 arquivos, 250 testes aprovados em 15/07/2026.
+- Estado de testes comprovado: 34 arquivos, 290 testes aprovados em 17/07/2026.
 - Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
-- Parte principal atual: **Parte 4 concluída; regras 30–35 implementadas**.
+- Parte principal atual: **Parte 5 em andamento; regras 36–42 implementadas em código e SQL**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: revisar e commitar a regra 35; somente depois, e com autorização explícita, iniciar a Parte 5 pela regra 36 sem antecipar sincronização.
+- Próximo passo recomendado: revisar a Parte 5 e validar Auth/RLS em projeto Supabase de teste; não iniciar a Parte 6 sem autorização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -192,4 +192,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. As Partes 3 e 4 estão concluídas no escopo implementado; a Parte 4 compreende as regras 30–35. A regra 35 oferece backup JSON versionado e CSVs locais, sem importação/restauração, nuvem ou sincronização. A Parte 5 não foi iniciada. Snapshots não pertencem à Parte 4. Não recrie o projeto, desfaça decisões consolidadas ou antecipe Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. As Partes 3 e 4 estão concluídas. A Parte 5 possui Auth opcional e migration PostgreSQL/RLS preparada, mas precisa de validação manual em projeto Supabase real; os dados IndexedDB continuam device-scoped e não são sincronizados. A Parte 6 não foi iniciada. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura local. Não implemente outbox, push, pull, retry ou conflitos sem autorização explícita. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.

@@ -1,6 +1,6 @@
 # Estado Atual do Projeto StockFlow
 
-> Consolidado em 15/07/2026. Este documento descreve o estado funcional atual na branch `develop`. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem; hashes e histórico de commits devem ser consultados no Git.
+> Consolidado em 17/07/2026. Este documento descreve o estado funcional atual na branch `develop`. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem; hashes e histórico de commits devem ser consultados no Git.
 
 ## Identificação e finalidade
 
@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa funcional atual: persistência local robusta com tratamento de `versionchange`, upgrade bloqueado e coordenação básica entre abas.
+- Etapa funcional atual: Parte 5 com Auth opcional e SQL PostgreSQL/RLS preparado, sem sincronização.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -24,6 +24,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 - React Router DOM 6.30.4 instalado;
 - Tailwind CSS 3.4.19, PostCSS 8.5.16 e Autoprefixer 10.5.2 instalados;
 - Dexie 4.4.4 instalado sobre IndexedDB; `package.json` declara `dexie: ^4.0.11`;
+- cliente oficial `@supabase/supabase-js` 2.110.7, carregado sob demanda pela página Conta;
 - Vitest 4.1.10, React Testing Library 16.3.2, jsdom 28.1.0 e fake-indexeddb 6.2.5;
 - ESLint 9.39.4 com plugins de React Hooks e React Refresh;
 - npm com `package-lock.json` no formato 3.
@@ -85,7 +86,7 @@ Existe uma **PWA parcial com cache e atualização controlados**:
 | `Movement` | `string`, UUID v4 gerado no cliente | `productId: string`; pode ser rastreável com snapshots ou legada sem snapshots. |
 | `Category` | `string`, UUID v4 gerado no cliente | Soft delete; produtos sem categoria usam `categoryId` ausente. |
 
-Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. Não existem, no código atual, entidades implementadas para estabelecimento, perfil, associação de usuário, outbox, metadados de sincronização ou conflito.
+Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. Não existem entidades locais para estabelecimento, perfil, associação de usuário, outbox, metadados de sincronização ou conflito. O SQL futuro modela estabelecimentos e memberships sem alterar o IndexedDB.
 
 ## Migrations existentes
 
@@ -135,8 +136,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **29**.
-- Testes aprovados em 15/07/2026: **250 de 250**.
+- Arquivos de teste atuais: **34**.
+- Testes aprovados em 17/07/2026: **290 de 290**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade, dos banners e do lifecycle do IndexedDB. Um teste com fake-indexeddb mantém uma conexão antiga aberta, observa o bloqueio real e confirma a liberação do upgrade após o fechamento. Testes de página comprovam cleanup em `pagehide`, reabertura explícita e preservação de dados após BFCache, ausência de listeners/canais duplicados, invalidação de `open()` pendente por estado terminal ou novo `pagehide` e proibição de conexão reaberta em `reload-required`. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
@@ -164,7 +165,9 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - feedback de sucesso/erro e proteção em memória contra duplo envio nos formulários e exclusões principais;
 - tratamento explícito de `versionchange`, upgrade bloqueado e coordenação de lifecycle entre abas, com reload apenas por ação do usuário;
 - backup JSON versionado e exportação CSV local de produtos e movimentações, com validação e snapshot somente leitura;
-- suíte atual de 250 testes em 29 arquivos aprovada.
+- Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
+- migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
+- suíte atual de 290 testes em 34 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -182,11 +185,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ### Pendente / não implementado
 
-- autenticação e gerenciamento de sessão;
-- Supabase e client remoto;
-- PostgreSQL e migrations remotas;
-- estabelecimento, perfis, memberships e isolamento multiusuário;
-- Row Level Security;
+- aplicação e validação da migration em um projeto Supabase real;
+- associação dos dados locais a uma conta/estabelecimento;
 - sincronização real, bidirecional, push e pull;
 - outbox persistente;
 - retry, confirmação de envio e cursor de pull;
@@ -202,6 +202,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 ## Limitações e dívidas técnicas conhecidas
 
 - `navigator.onLine` indica conectividade do navegador, não disponibilidade de backend.
+- O dataset IndexedDB permanece vinculado ao dispositivo, não à conta autenticada; logout remove a sessão da interface, mas não apaga nem reatribui dados locais.
+- Auth/RLS possuem testes com mocks e validação estática; o comportamento real entre usuários ainda precisa ser validado em projeto Supabase de teste.
 - A coordenação de múltiplas abas possui cobertura automatizada, mas deve ser conferida manualmente em navegador real quando existir um upgrade de schema legítimo; não foi criada v10 artificial para demonstrá-la.
 - Duplicidades legadas de código são preservadas; a regra impede novas duplicidades ativas, mas não corrige dados históricos automaticamente.
 - A unicidade local por código é validada no service e não cobre concorrência futura com nuvem ou múltiplos dispositivos.
@@ -222,7 +224,8 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
-- Parte 5: **não iniciada**.
-- Próximo passo recomendado: revisar e commitar a regra 35; somente depois, e com autorização explícita, iniciar a Parte 5 pela regra 36 sem antecipar sincronização.
+- Parte 5: **em andamento**; regras 36–42 implementadas em código e SQL, aguardando validação manual em projeto Supabase real.
+- Parte 6: **não iniciada**.
+- Próximo passo recomendado: revisar a Parte 5 e validar Auth/RLS em ambiente Supabase de teste, sem iniciar sincronização.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

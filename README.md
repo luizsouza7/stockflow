@@ -10,7 +10,8 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Parte 4 (regras 30–35) concluída no escopo local.
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 9**.
-- Suíte atual: **250 testes em 29 arquivos**.
+- Parte 5 iniciada com Auth opcional e SQL PostgreSQL/RLS preparado.
+- Suíte atual: **290 testes em 34 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -63,16 +64,24 @@ A página **Dados** gera, sem rede, um backup JSON explícito com identificador 
 
 Também é possível exportar produtos e movimentações em CSV. Os arquivos são baixados localmente e não alteram o banco nem são enviados a servidor. Não há importação/restauração, backup automático ou recuperação em nuvem; a importação permanece futura até existir estratégia rigorosamente validada e segura.
 
+## Conta, Supabase e preparação PostgreSQL
+
+A rota **Conta** é carregada sob demanda e usa o cliente oficial Supabase quando `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` estão configuradas. Ela oferece cadastro, login, restauração/escuta da sessão e logout local, com mensagens amigáveis e cleanup do listener. Sem configuração ou sem login, o núcleo local permanece disponível. Copie `.env.example` para `.env.local`; nunca use chave `service_role`, senha do banco ou segredo administrativo em variáveis `VITE_*`.
+
+A migration versionada em `supabase/migrations` prepara perfis, estabelecimentos, memberships, categorias, produtos e movimentações. As tabelas de negócio usam `business_id`, RLS e policies baseadas em membership ativa e `auth.uid()`. O SQL não é executado pelo frontend e ainda precisa ser aplicado e validado em um projeto Supabase real.
+
+Auth e SQL preparado não constituem sincronização: nenhum dado IndexedDB é enviado ou baixado automaticamente.
+
 ## Limitações atuais
 
-- não há autenticação, Supabase ou banco remoto;
+- Auth depende de configuração e de um projeto Supabase real; a migration PostgreSQL ainda não foi aplicada por esta etapa;
 - não há sincronização real, outbox, retry, pull ou resolução de conflitos;
 - `syncPendingData()` é somente um ponto de preparação local e não envia dados;
 - não há importação/restauração, backup automático ou backup em nuvem;
 - não há testes E2E nem automação de navegador para instalação/offline da PWA, coverage configurada ou CI;
 - os dados permanecem no navegador e no dispositivo utilizados.
 
-Supabase, autenticação e sincronização pertencem ao planejamento futuro e não devem ser apresentados como funcionalidades prontas.
+O cliente Supabase e Auth foram preparados, mas sincronização e persistência remota dos dados de estoque continuam futuras.
 
 ## Estrutura resumida
 
@@ -116,7 +125,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v9.
 
-Estado validado nesta etapa: **250 testes aprovados em 29 arquivos**.
+Estado validado nesta etapa: **290 testes aprovados em 34 arquivos**.
 
 ## Banco local e migrations
 
@@ -165,7 +174,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 não foi iniciada.
+A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 foi iniciada com as regras 36–42 implementadas em código e SQL, pendente de validação manual em projeto Supabase real. A Parte 6 não foi iniciada.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

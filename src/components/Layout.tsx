@@ -14,6 +14,7 @@ const navItems = [
   { to: '/movimentacoes', label: 'Movimentos', icon: 'M' },
   { to: '/alertas', label: 'Alertas', icon: 'A' },
   { to: '/dados', label: 'Dados', icon: 'B' },
+  { to: '/conta', label: 'Conta', icon: 'U' },
 ];
 
 function navClass({ isActive }: { isActive: boolean }) {
@@ -80,7 +81,7 @@ export function Layout() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-slate-200 bg-white lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-slate-200 bg-white lg:hidden">
         {navItems.map((item) => (
           <NavLink
             key={item.to}

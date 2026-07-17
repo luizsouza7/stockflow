@@ -21,6 +21,10 @@ const router = createBrowserRouter([
       { path: 'movimentacoes', element: <Movements /> },
       { path: 'alertas', element: <Alerts /> },
       { path: 'dados', element: <DataExport /> },
+      {
+        path: 'conta',
+        lazy: async () => ({ Component: (await import('./pages/Account')).Account }),
+      },
     ],
   },
 ]);
