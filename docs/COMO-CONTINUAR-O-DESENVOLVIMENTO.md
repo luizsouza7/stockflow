@@ -18,13 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa funcional atual: Parte 5 com Auth opcional e SQL PostgreSQL/RLS preparado.
-- Schema Dexie atual: versão 9.
-- Estado de testes comprovado: 34 arquivos, 290 testes aprovados em 17/07/2026.
+- Etapa funcional atual: Parte 6A com outbox local transacional; não existe sincronização remota.
+- Schema Dexie atual: versão 10.
+- Estado de testes comprovado: 37 arquivos, 307 testes aprovados em 17/07/2026.
 - Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
-- Parte principal atual: **Parte 5 em andamento; regras 36–42 implementadas em código e SQL**.
+- Parte principal atual: **Parte 6 iniciada somente na fatia 6A; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: revisar a Parte 5 e validar Auth/RLS em projeto Supabase de teste; não iniciar a Parte 6 sem autorização.
+- Próximo passo recomendado: revisar a 6A e validar o upgrade v9 → v10 entre abas; não iniciar push, pull ou conflitos sem autorização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -70,8 +70,8 @@ Depois:
 - Usar `Domain` para regras puras, sem React ou Dexie.
 - Manter a transação de movimento atômica.
 - Evitar overengineering, camadas genéricas e dependências sem necessidade comprovada.
-- Não tratar `syncStatus` ou `syncPendingData()` como sincronização funcional.
-- Não afirmar que Supabase, Auth, PostgreSQL, RLS, outbox, conflitos ou multiusuário existem antes do código e dos testes correspondentes.
+- Não tratar `syncStatus`, outbox ou `getLocalSyncPreparationStatus()` como sincronização funcional.
+- Não afirmar que push, pull, retry ativo, conflitos ou multiusuário existem antes do código e dos testes correspondentes.
 - Não inventar credenciais, resultados acadêmicos, estatísticas, testes executados ou funcionalidades concluídas.
 
 ## Como escolher a próxima mudança
@@ -94,7 +94,7 @@ Antes de qualquer mudança persistida:
 - nunca invente snapshot, associação ou valor histórico;
 - documente contexto, decisão e consequências em ADR quando a mudança for arquitetural.
 
-A versão atual é 9. Uma mudança futura de schema deve começar em versão superior e preservar a sequência existente.
+A versão atual é 10. Uma mudança futura de schema deve começar em versão superior e preservar a sequência v1 → v10 existente.
 
 ## Regras específicas para estoque
 
@@ -133,7 +133,7 @@ Ao chegar às partes autorizadas:
 - conflitos devem ser detectados e armazenados, não sobrescritos silenciosamente;
 - o service worker não deve cachear respostas privadas indiscriminadamente.
 
-Até lá, não transformar o stub atual em sincronização simulada apresentada como pronta.
+Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
 ## Validação ao final de cada etapa
 
@@ -184,7 +184,7 @@ O relatório de entrega deve informar:
 
 - `docs/auditoria-fase-0.md` contém uma raiz anterior e retrata lacunas de 12/07/2026, algumas já resolvidas.
 - O ADR-001 teve sua numeração interna corrigida na consolidação documental de 15/07/2026.
-- O README representa o estado funcional, schema v9, migrations, arquitetura, limitações, suíte e roadmap atuais.
+- O README representa o estado funcional, schema v10, migrations, arquitetura, limitações, suíte e roadmap atuais.
 - O primeiro reload offline e o ciclo de atualização A → B já foram validados manualmente; a coordenação de abas deve ser conferida novamente quando houver um upgrade de schema legítimo.
 - O identificador de build é derivado automaticamente dos artefatos gerados; não deve ser substituído por incremento manual de cache.
 
@@ -192,4 +192,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. As Partes 3 e 4 estão concluídas. A Parte 5 possui Auth opcional e migration PostgreSQL/RLS preparada, mas precisa de validação manual em projeto Supabase real; os dados IndexedDB continuam device-scoped e não são sincronizados. A Parte 6 não foi iniciada. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura local. Não implemente outbox, push, pull, retry ou conflitos sem autorização explícita. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. As Partes 3 e 4 estão concluídas. A Parte 5 possui Auth opcional e migration PostgreSQL/RLS preparada, mas precisa de validação manual em projeto Supabase real; os dados IndexedDB continuam device-scoped. A Parte 6 foi iniciada somente pela 6A: a outbox local v10 registra intenções transacionais, mas nada é enviado ou baixado. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura local. Não implemente push, pull, retry ativo ou conflitos sem autorização explícita. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.

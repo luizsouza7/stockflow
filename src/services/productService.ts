@@ -9,6 +9,8 @@ import {
   normalizeProductCodeForComparison,
   sanitizeProductCode,
 } from '../domain/productCode';
+import { localDb } from './db/localDb';
+import { outboxService } from './outboxService';
 
 export type ProductEditingLookup =
   | { status: 'active'; product: Product }
@@ -62,7 +64,25 @@ export const productService = {
     await validateCategoryAssociation(data.categoryId);
     const code = sanitizeProductCode(data.code);
     await ensureUniqueActiveCode(code);
-    return productRepository.create({ ...data, name, code, id: generateUuid() });
+    const product: Product = {
+      ...data,
+      id: generateUuid(),
+      name,
+      code,
+      syncStatus: 'pending',
+    };
+
+    return localDb.transaction('rw', localDb.products, localDb.outbox, async () => {
+      const id = await productRepository.create(product);
+      await outboxService.enqueue({
+        entityType: 'product',
+        entityId: id,
+        operation: 'product.created',
+        payload: product,
+        occurredAt: product.updatedAt,
+      });
+      return id;
+    });
   },
 
   async update(id: string, data: UpdateProductInput): Promise<number> {
@@ -101,15 +121,47 @@ export const productService = {
       changes.code = code;
     }
 
-    return productRepository.update(id, changes);
+    return localDb.transaction('rw', localDb.products, localDb.outbox, async () => {
+      const changed = await productRepository.update(id, changes);
+      if (!changed) return changed;
+      const updatedProduct = await productRepository.findById(id);
+      if (!updatedProduct) throw new Error('Produto nao encontrado.');
+      await outboxService.enqueue({
+        entityType: 'product',
+        entityId: id,
+        operation: 'product.updated',
+        payload: updatedProduct,
+        occurredAt: updatedProduct.updatedAt,
+      });
+      return changed;
+    });
   },
 
   async softDelete(id: string): Promise<void> {
-    const changed = await productRepository.update(id, {
-      deletedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      syncStatus: 'pending',
-    });
+    const now = new Date().toISOString();
+    const changed = await localDb.transaction(
+      'rw',
+      localDb.products,
+      localDb.outbox,
+      async () => {
+        const updated = await productRepository.update(id, {
+          deletedAt: now,
+          updatedAt: now,
+          syncStatus: 'pending',
+        });
+        if (!updated) return updated;
+        const deletedProduct = await productRepository.findById(id);
+        if (!deletedProduct) throw new Error('Produto nao encontrado.');
+        await outboxService.enqueue({
+          entityType: 'product',
+          entityId: id,
+          operation: 'product.deleted',
+          payload: deletedProduct,
+          occurredAt: now,
+        });
+        return updated;
+      },
+    );
 
     if (!changed) {
       throw new Error('Produto nao encontrado.');

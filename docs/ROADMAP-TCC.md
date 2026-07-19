@@ -34,7 +34,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Product, Category e Movement usam UUID; datas seguem estratégia consistente; Dexie está na versão 9; valores monetários usam centavos; soft delete, snapshots, histórico e transação atômica de entrada/saída estão cobertos por testes.
+**Progresso comprovado:** Product, Category e Movement usam UUID; datas seguem estratégia consistente; Dexie está na versão 10; valores monetários usam centavos; soft delete, snapshots, histórico e transação atômica de entrada/saída estão cobertos por testes.
 
 **Pendente:** entidades de usuário/estabelecimento/sincronização pertencem à evolução futura. As validações defensivas de nome e estoque mínimo no `productService` foram consolidadas sem alterar o schema.
 
@@ -56,7 +56,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** operações locais continuam usando IndexedDB; o estado inicial e os eventos de conectividade possuem testes e cleanup; a mensagem offline não promete sincronização; o service worker distingue navegações e caminhos estáticos conhecidos de APIs, rotas privadas, recursos externos e métodos mutáveis; o build injeta identificador determinístico e isola caches por versão; caches antigos do StockFlow são removidos por prefixo somente na ativação; o registro ocorre somente em produção; uma nova versão aguardando pode ser aplicada por ação do usuário com reload único controlado; o lifecycle do IndexedDB trata `versionchange`, upgrade bloqueado, cleanup e aviso entre abas sem compartilhar dados de domínio; e a página Dados exporta backup JSON versionado e CSVs de produtos/movimentações, offline, sem modificar o banco ou enviar dados para servidor. O primeiro reload offline e o ciclo real de atualização A → B com preservação do IndexedDB foram validados manualmente.
 
-**Pendente neste recorte:** nenhuma. Importação/restauração não integra a entrega segura atual e permanece futura; a coordenação de múltiplas abas deve ser novamente validada em navegador quando surgir um upgrade de schema legítimo. Nenhuma v10 artificial foi criada.
+**Pendente neste recorte:** nenhuma. Importação/restauração não integra a entrega segura atual e permanece futura; a coordenação de múltiplas abas deve ser novamente validada em navegador com o upgrade legítimo v10 da outbox.
 
 ## Parte 5 — regras 36–42
 
@@ -74,9 +74,9 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** não iniciada.
 
-**Preparação existente:** entidades locais possuem `syncStatus` e o stub `syncPendingData()` consulta parte das pendências. Isso não é sincronização funcional.
+**Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
-**Pendente:** outbox persistente e atômica, engine de push/pull, confirmação, cursor, backoff, conflitos, concorrência, função PostgreSQL e central de sincronização.
+**Pendente:** engine de push/pull, confirmação, cursor, backoff ativo, conflitos, concorrência, função PostgreSQL e central de sincronização. Nenhum dado é enviado ou buscado nesta fatia.
 
 ## Parte 7 — regras 55–69
 
@@ -94,7 +94,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 34 arquivos com 290 testes aprovados na validação de 17/07/2026, incluindo o caminho de migration v1 → v9 e as garantias de conectividade, PWA, lifecycle do IndexedDB, backup/exportação, Auth opcional e SQL/RLS.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 37 arquivos com 307 testes aprovados na validação de 17/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, conectividade, PWA, lifecycle do IndexedDB, backup/exportação, Auth opcional e SQL/RLS.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -154,7 +154,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** iniciada.
 
-**Progresso comprovado:** histórico de movimentações, Dexie versionado até v9, migrations locais testadas, build usado na validação e arquitetura local documentada.
+**Progresso comprovado:** histórico de movimentações, Dexie versionado até v10, migrations locais testadas, build usado na validação e arquitetura local documentada.
 
 **Pendente:** audit log administrativo somente se necessário, aplicação/validação da migration Supabase, seed se autorizado, documentação e diagramas da sincronização real e checklist final do TCC.
 
@@ -170,4 +170,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Revisar a implementação da Parte 5 e validar manualmente Auth/RLS em um projeto Supabase de teste antes de consolidá-la. Não iniciar a Parte 6 sem autorização explícita.
+Revisar a implementação da fatia 6A e validar manualmente o upgrade v9 → v10 entre abas. Não iniciar push, pull ou outra fatia da Parte 6 sem autorização explícita.

@@ -5,7 +5,7 @@ import { localDb } from './db/localDb';
 
 export const STOCKFLOW_BACKUP_FORMAT = 'stockflow-backup';
 export const STOCKFLOW_BACKUP_FORMAT_VERSION = 1;
-export const STOCKFLOW_DATABASE_SCHEMA_VERSION = 9;
+export const STOCKFLOW_DATABASE_SCHEMA_VERSION = 10;
 
 export interface StockFlowBackup {
   format: typeof STOCKFLOW_BACKUP_FORMAT;

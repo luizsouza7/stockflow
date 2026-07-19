@@ -64,7 +64,7 @@ Os services representam os casos de uso e coordenam repositories:
 - `categoryService`: regras de nome, unicidade lógica e exclusão condicionada a produtos ativos;
 - `stockMovementService`: transação atômica de estoque e montagem do histórico;
 - `dashboardService`: cálculo dos indicadores reais;
-- `syncService`: somente leitura de produtos e movimentações pendentes; não é sincronização funcional.
+- `outboxService`: cria eventos locais e resume estados da outbox; `syncService` apenas expõe o resumo local e não executa sincronização.
 
 O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa garantir atomicidade entre atualização do produto e criação da movimentação.
 
@@ -94,7 +94,7 @@ Os repositories atuais são módulos concretos. Existe apenas a persistência lo
 - versões e funções de upgrade;
 - stores temporárias usadas somente na migration de UUID.
 
-O schema atual é a versão 9 e contém `products`, `movements` e `categories`. A biblioteca Dexie instalada é 4.4.4.
+O schema atual é a versão 10 e contém `products`, `movements`, `categories` e `outbox`. A v10 adiciona somente a outbox, sem alterar as stores de domínio. A biblioteca Dexie instalada é 4.4.4.
 
 `src/services/db/databaseLifecycle.ts` observa a instância central antes do primeiro render. Em `versionchange`, a conexão antiga é fechada e a UI exige uma decisão explícita de reload. Em `blocked`, a aba que tenta o upgrade mostra orientação clara e envia somente `{ type: 'DATABASE_UPGRADE_BLOCKED' }` pelo canal `stockflow-database-lifecycle`; abas que reconhecem essa mensagem fecham suas conexões. Mensagens desconhecidas são ignoradas e o canal é opcional. As subscriptions da UI recebem estado, mas não controlam a instalação dos listeners Dexie.
 
@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 34 arquivos e 290 testes aprovados:
+A arquitetura é verificada por 37 arquivos e 307 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -205,7 +205,7 @@ Categoria possui identidade, timestamps, soft delete e `syncStatus`. Produto gua
 
 ## Offline-first atual
 
-O IndexedDB é a fonte de verdade operacional. O usuário consegue trabalhar com dados locais sem aguardar rede. As entidades novas recebem `syncStatus: "pending"`, mas não existe outbox nem envio.
+O IndexedDB é a fonte de verdade operacional. O usuário consegue trabalhar com dados locais sem aguardar rede. As entidades novas recebem `syncStatus: "pending"` e as mutações sincronizáveis geram uma intenção na outbox dentro da mesma transação. A outbox permanece local e não realiza envio.
 
 O `OfflineBanner` comunica que a aplicação continua usando os dados armazenados no dispositivo. Ele não promete sincronização, nuvem ou compartilhamento entre dispositivos.
 
@@ -262,7 +262,7 @@ futura outbox e sincronização bidirecional
 Supabase / PostgreSQL / Auth / RLS
 ```
 
-No plano futuro, a escrita continuará local e uma outbox persistente deverá conduzir push, confirmação, retry e conflitos. Pull deverá trazer mudanças remotas validadas para uma transação local. Auth e o SQL com RLS já preparam identidade e isolamento por estabelecimento, mas não transferem entidades locais.
+A escrita continua local e a outbox persistente já registra intenção, ordem, idempotência e campos para tentativas futuras. Push, confirmação, retry ativo e conflitos ainda deverão consumir essa fila. Pull deverá trazer mudanças remotas validadas para uma transação local. Auth e o SQL com RLS já preparam identidade e isolamento por estabelecimento, mas não transferem entidades locais.
 
 Implementado como preparação da Parte 5:
 
@@ -276,7 +276,7 @@ Ainda não existem:
 
 - aplicação/validação da migration em um projeto remoto real;
 - associação dos registros IndexedDB a usuário ou estabelecimento;
-- outbox;
+- processamento remoto da outbox;
 - push, pull, retry ou cursor;
 - armazenamento/resolução de conflitos;
 - multiusuário ou multiestabelecimento.
@@ -285,7 +285,7 @@ O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays loca
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas no escopo implementado; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 5 foi iniciada com Auth opcional e SQL/RLS preparado, sem sincronização. A Parte 6 não foi iniciada. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas no escopo implementado; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 5 foi iniciada com Auth opcional e SQL/RLS preparado. A Parte 6 foi iniciada somente pela fundação local 6A, sem sincronização remota. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 

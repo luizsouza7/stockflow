@@ -86,7 +86,7 @@ afterAll(async () => {
 });
 
 describe('backup local JSON', () => {
-  it('gera formato proprio v1 com schema Dexie v9 e nome previsivel', async () => {
+  it('gera formato proprio v1 com schema Dexie v10 e nome previsivel', async () => {
     const file = await backupExportService.createJsonBackup(
       new Date('2026-07-15T15:30:00.000Z'),
     );
@@ -102,7 +102,7 @@ describe('backup local JSON', () => {
       exportedAt: '2026-07-15T15:30:00.000Z',
       databaseSchemaVersion: STOCKFLOW_DATABASE_SCHEMA_VERSION,
     });
-    expect(localDb.verno).toBe(9);
+    expect(localDb.verno).toBe(10);
   });
 
   it('preserva categorias, produtos ativos, soft deletes, campos opcionais e relacionamentos', async () => {
@@ -176,7 +176,7 @@ describe('backup local JSON', () => {
       format: STOCKFLOW_BACKUP_FORMAT,
       version: 1,
       exportedAt: '2026-07-15T00:00:00.000Z',
-      databaseSchemaVersion: 9,
+      databaseSchemaVersion: STOCKFLOW_DATABASE_SCHEMA_VERSION,
       data: {
         categories: [category],
         products: [activeProduct],

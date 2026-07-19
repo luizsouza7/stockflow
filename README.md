@@ -9,9 +9,10 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Parte 3 do Prompt Mestre concluída.
 - Parte 4 (regras 30–35) concluída no escopo local.
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
-- Schema Dexie atual: **versão 9**.
+- Schema Dexie atual: **versão 10**, com outbox local persistente.
 - Parte 5 iniciada com Auth opcional e SQL PostgreSQL/RLS preparado.
-- Suíte atual: **290 testes em 34 arquivos**.
+- Parte 6 iniciada somente na fatia 6A: fundação local da sincronização, sem push ou pull.
+- Suíte atual: **307 testes em 37 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -60,7 +61,7 @@ O indicador usa `navigator.onLine` e eventos nativos `online`/`offline`; ele inf
 
 ## Backup e exportação local
 
-A página **Dados** gera, sem rede, um backup JSON explícito com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `9` como metadado e coleções separadas de categorias, produtos e movimentações. A leitura ocorre em uma transação somente leitura das três tabelas e inclui soft deletes e histórico, preservando UUIDs, relações, centavos e a distinção entre movimentos rastreados e legados.
+A página **Dados** gera, sem rede, um backup JSON explícito com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `10` como metadado e coleções separadas de categorias, produtos e movimentações. A outbox não integra o arquivo de backup de domínio. A leitura ocorre em uma transação somente leitura das três tabelas de domínio e inclui soft deletes e histórico, preservando UUIDs, relações, centavos e a distinção entre movimentos rastreados e legados.
 
 Também é possível exportar produtos e movimentações em CSV. Os arquivos são baixados localmente e não alteram o banco nem são enviados a servidor. Não há importação/restauração, backup automático ou recuperação em nuvem; a importação permanece futura até existir estratégia rigorosamente validada e segura.
 
@@ -75,8 +76,8 @@ Auth e SQL preparado não constituem sincronização: nenhum dado IndexedDB é e
 ## Limitações atuais
 
 - Auth depende de configuração e de um projeto Supabase real; a migration PostgreSQL ainda não foi aplicada por esta etapa;
-- não há sincronização real, outbox, retry, pull ou resolução de conflitos;
-- `syncPendingData()` é somente um ponto de preparação local e não envia dados;
+- existe outbox somente local, mas não há sincronização real, push, pull, retry de rede ou resolução de conflitos;
+- `getLocalSyncPreparationStatus()` consulta somente o resumo local e não envia dados;
 - não há importação/restauração, backup automático ou backup em nuvem;
 - não há testes E2E nem automação de navegador para instalação/offline da PWA, coverage configurada ou CI;
 - os dados permanecem no navegador e no dispositivo utilizados.
@@ -123,13 +124,13 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 ## Testes
 
-A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v9.
+A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v10.
 
-Estado validado nesta etapa: **290 testes aprovados em 34 arquivos**.
+Estado validado nesta etapa: **307 testes aprovados em 37 arquivos**.
 
 ## Banco local e migrations
 
-O banco padrão é `stockflow-local-db`. O schema final v9 contém `products`, `categories` e `movements`.
+O banco padrão é `stockflow-local-db`. O schema final v10 contém `products`, `categories`, `movements` e `outbox`.
 
 | Versão | Evolução principal |
 | --- | --- |
@@ -140,7 +141,7 @@ O banco padrão é `stockflow-local-db`. O schema final v9 contém `products`, `
 | v5 | categorias convertidas em entidades |
 | v6–v9 | migração segura dos IDs e relações para UUID e limpeza das stores temporárias |
 
-As migrations preservam dados históricos e relações. O teste permanente v1 → v9 comprova preço em centavos, quantidade, categoria, movimentação legada, UUIDs e relação entre produto e movimentação.
+As migrations preservam dados históricos e relações. O teste permanente v1 → v10 comprova preço em centavos, quantidade, categoria, movimentação legada, UUIDs e relação entre produto e movimentação; o upgrade v9 → v10 preserva as três tabelas existentes e inicia a outbox vazia.
 
 ## Decisões arquiteturais
 
@@ -174,7 +175,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 foi iniciada com as regras 36–42 implementadas em código e SQL, pendente de validação manual em projeto Supabase real. A Parte 6 não foi iniciada.
+A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 foi iniciada com as regras 36–42 implementadas em código e SQL, pendente de validação manual em projeto Supabase real. A Parte 6 foi iniciada somente na fatia 6A: mutações locais geram eventos transacionais na outbox, e a interface informa pendências sem prometer nuvem. Push, pull, retry ativo, conflitos e concorrência remota continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

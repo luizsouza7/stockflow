@@ -6,6 +6,7 @@ import { StatusBadge } from './StatusBadge';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePwaUpdate } from '../hooks/usePwaUpdate';
 import { useDatabaseLifecycle } from '../hooks/useDatabaseLifecycle';
+import { SyncStatusIndicator } from './SyncStatusIndicator';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'D' },
@@ -73,6 +74,10 @@ export function Layout() {
             <OfflineBanner isOnline={isOnline} />
             <PwaUpdateBanner isVisible={isUpdateAvailable} onUpdate={updateNow} />
             <DatabaseLifecycleBanner state={databaseLifecycleState} onReload={reloadNow} />
+            <SyncStatusIndicator
+              isOnline={isOnline}
+              databaseLifecycleStatus={databaseLifecycleState.status}
+            />
           </header>
 
           <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">

@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa funcional atual: Parte 5 com Auth opcional e SQL PostgreSQL/RLS preparado, sem sincronização.
+- Etapa funcional atual: Parte 6A com outbox local transacional; Auth e SQL PostgreSQL/RLS da Parte 5 permanecem preservados, sem sincronização remota.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -74,7 +74,7 @@ Existe uma **PWA parcial com cache e atualização controlados**:
 
 - Biblioteca instalada: Dexie 4.4.4.
 - Nome padrão do banco: `stockflow-local-db`.
-- **Versão real atual do schema local: 9**.
+- **Versão real atual do schema local: 10**.
 - Tabelas finais: `products`, `movements` e `categories`.
 - A instância central possui coordenação de lifecycle sem criar banco, tabela ou migration adicional.
 
@@ -86,7 +86,7 @@ Existe uma **PWA parcial com cache e atualização controlados**:
 | `Movement` | `string`, UUID v4 gerado no cliente | `productId: string`; pode ser rastreável com snapshots ou legada sem snapshots. |
 | `Category` | `string`, UUID v4 gerado no cliente | Soft delete; produtos sem categoria usam `categoryId` ausente. |
 
-Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. Não existem entidades locais para estabelecimento, perfil, associação de usuário, outbox, metadados de sincronização ou conflito. O SQL futuro modela estabelecimentos e memberships sem alterar o IndexedDB.
+Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. Existe uma outbox local, mas não existem entidades locais para estabelecimento, perfil, associação de usuário ou conflito. `userId` e `businessId` são opcionais na outbox e não são preenchidos sem vínculo seguro. O SQL futuro modela estabelecimentos e memberships sem associar automaticamente os dados device-scoped atuais.
 
 ## Migrations existentes
 
@@ -101,8 +101,9 @@ Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. N
 | 7 | Remoção das stores antigas com primary key autoincremental. |
 | 8 | Recriação de `products` e `movements` com primary key UUID e restauração dos dados. |
 | 9 | Remoção das stores temporárias; schema final contém somente as três tabelas públicas. |
+| 10 | Adição isolada da store `outbox`; as tabelas de domínio são preservadas e a fila começa vazia no upgrade. |
 
-As versões 6 a 9 formam uma única sequência técnica de upgrade por limitação do IndexedDB/Dexie ao trocar a primary key. Os testes verificam preservação, reabertura, igualdade do schema final e rollback diante de referência órfã. Há também um teste permanente do caminho completo v1 → v9, com produto, preço histórico, quantidade, categoria, movimentação e relação entre IDs preservados.
+As versões 6 a 9 formam uma única sequência técnica de upgrade por limitação do IndexedDB/Dexie ao trocar a primary key; nenhuma migration antiga foi alterada. A v10 adiciona somente a outbox. Os testes verificam fresh install, v9 → v10, preservação, reabertura, igualdade do schema final e rollback diante de referência órfã. Há também um teste permanente do caminho completo v1 → v10, com produto, preço histórico, quantidade, categoria, movimentação e relação entre IDs preservados.
 
 ## Regras de negócio consolidadas
 
@@ -137,7 +138,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 ## Testes comprovados
 
 - Arquivos de teste atuais: **34**.
-- Testes aprovados em 17/07/2026: **290 de 290**.
+- Testes aprovados em 17/07/2026: **307 de 307**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade, dos banners e do lifecycle do IndexedDB. Um teste com fake-indexeddb mantém uma conexão antiga aberta, observa o bloqueio real e confirma a liberação do upgrade após o fechamento. Testes de página comprovam cleanup em `pagehide`, reabertura explícita e preservação de dados após BFCache, ausência de listeners/canais duplicados, invalidação de `open()` pendente por estado terminal ou novo `pagehide` e proibição de conexão reaberta em `reload-required`. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
@@ -167,7 +168,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - backup JSON versionado e exportação CSV local de produtos e movimentações, com validação e snapshot somente leitura;
 - Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
 - migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
-- suíte atual de 290 testes em 34 arquivos aprovada.
+- suíte atual de 307 testes em 37 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -180,7 +181,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - **Dashboard:** usa dados reais e exibe separadamente produtos com estoque baixo e sem estoque; entradas/saídas por período permanecem futuras.
 - **Feedback e erros:** melhorados nas páginas principais, mas não há Error Boundary nem uma taxonomia completa por origem.
 - **Testes:** há boa cobertura local e alguns testes de componente, porém faltam E2E, offline/PWA, coverage e CI.
-- **Preparação para sync:** entidades têm UUID e `syncStatus`, e `syncPendingData()` lista produtos e movimentações pendentes. Isso é somente um stub; categorias nem participam dessa consulta.
+- **Preparação para sync:** entidades têm UUID e `syncStatus`; a outbox recebe categorias, produtos e movimentações; `getLocalSyncPreparationStatus()` expõe somente um resumo local.
 - **Documentação:** Prompt Mestre, auditoria, ADRs e estes arquivos existem; a documentação acadêmica, requisitos, rastreabilidade, diagramas e resultados ainda não estão completos.
 
 ### Pendente / não implementado
@@ -188,7 +189,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - aplicação e validação da migration em um projeto Supabase real;
 - associação dos dados locais a uma conta/estabelecimento;
 - sincronização real, bidirecional, push e pull;
-- outbox persistente;
+- processamento remoto da outbox persistente;
 - retry, confirmação de envio e cursor de pull;
 - detecção, persistência e resolução de conflitos;
 - central/status real de sincronização;
@@ -204,12 +205,12 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - `navigator.onLine` indica conectividade do navegador, não disponibilidade de backend.
 - O dataset IndexedDB permanece vinculado ao dispositivo, não à conta autenticada; logout remove a sessão da interface, mas não apaga nem reatribui dados locais.
 - Auth/RLS possuem testes com mocks e validação estática; o comportamento real entre usuários ainda precisa ser validado em projeto Supabase de teste.
-- A coordenação de múltiplas abas possui cobertura automatizada, mas deve ser conferida manualmente em navegador real quando existir um upgrade de schema legítimo; não foi criada v10 artificial para demonstrá-la.
+- A coordenação de múltiplas abas possui cobertura automatizada; a v10 é um upgrade legítimo para a outbox e ainda deve ser conferida manualmente em navegador real.
 - Duplicidades legadas de código são preservadas; a regra impede novas duplicidades ativas, mas não corrige dados históricos automaticamente.
 - A unicidade local por código é validada no service e não cobre concorrência futura com nuvem ou múltiplos dispositivos.
 - Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
-- `syncPendingData()` ignora categorias e não envia, recebe ou confirma registros.
-- `syncStatus` sugere estados futuros sem outbox, retry ou semântica operacional completa.
+- `getLocalSyncPreparationStatus()` não envia, recebe ou confirma registros.
+- `syncStatus` e a outbox sustentam a fundação local, mas ainda não existe retry ativo, confirmação remota ou semântica operacional completa.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
 - O README foi atualizado para representar o núcleo local, a arquitetura, as migrations, a suíte atual, as limitações e o roadmap oficial.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
@@ -225,7 +226,7 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **em andamento**; regras 36–42 implementadas em código e SQL, aguardando validação manual em projeto Supabase real.
-- Parte 6: **não iniciada**.
-- Próximo passo recomendado: revisar a Parte 5 e validar Auth/RLS em ambiente Supabase de teste, sem iniciar sincronização.
+- Parte 6: **iniciada somente na fatia 6A**; outbox local, contratos, status honesto e testes implementados. Push, pull, retry ativo, conflitos, concorrência remota e RPC não foram implementados.
+- Próximo passo recomendado: revisar a 6A e validar o upgrade v9 → v10 entre abas em navegador real; qualquer fatia remota posterior exige autorização separada.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.
