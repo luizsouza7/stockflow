@@ -19,7 +19,7 @@ describe('dashboardService', () => {
 
   it('calcula indicadores usando apenas produtos ativos', async () => {
     const now = new Date().toISOString();
-    const outOfStockId = await productService.create({
+    await productService.create({
       name: 'Cafe',
       code: 'CAFE',
       salePriceInCents: 1000,
@@ -29,7 +29,17 @@ describe('dashboardService', () => {
       updatedAt: now,
       syncStatus: 'pending',
     });
-    const activeId = await productService.create({
+    await productService.create({
+      name: 'Feijao',
+      code: 'FEIJAO',
+      salePriceInCents: 1500,
+      currentQuantity: 2,
+      minimumStock: 2,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+    });
+    const deletedId = await productService.create({
       name: 'Arroz',
       code: 'ARROZ',
       salePriceInCents: 2000,
@@ -39,22 +49,23 @@ describe('dashboardService', () => {
       updatedAt: now,
       syncStatus: 'pending',
     });
-    await productService.softDelete(activeId);
     await stockMovementService.register({
-      productId: outOfStockId,
+      productId: deletedId,
       type: 'entrada',
       quantity: 1,
       note: '',
       date: now,
       syncStatus: 'pending',
     });
+    await productService.softDelete(deletedId);
 
     const summary = await getDashboardSummary();
 
     expect(summary).toMatchObject({
-      totalProducts: 1,
-      totalNeedingRestock: 1,
-      totalOutOfStock: 0,
+      totalProducts: 2,
+      totalLowStock: 1,
+      totalNeedingRestock: 2,
+      totalOutOfStock: 1,
       totalMovements: 1,
     });
     expect(summary.recentMovements).toHaveLength(1);

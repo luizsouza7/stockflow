@@ -1,7 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { OfflineBanner } from './OfflineBanner';
+import { PwaUpdateBanner } from './PwaUpdateBanner';
+import { DatabaseLifecycleBanner } from './DatabaseLifecycleBanner';
 import { StatusBadge } from './StatusBadge';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { usePwaUpdate } from '../hooks/usePwaUpdate';
+import { useDatabaseLifecycle } from '../hooks/useDatabaseLifecycle';
+import { SyncStatusIndicator } from './SyncStatusIndicator';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'D' },
@@ -9,6 +14,8 @@ const navItems = [
   { to: '/categorias', label: 'Categorias', icon: 'C' },
   { to: '/movimentacoes', label: 'Movimentos', icon: 'M' },
   { to: '/alertas', label: 'Alertas', icon: 'A' },
+  { to: '/dados', label: 'Dados', icon: 'B' },
+  { to: '/conta', label: 'Conta', icon: 'U' },
 ];
 
 function navClass({ isActive }: { isActive: boolean }) {
@@ -21,6 +28,8 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function Layout() {
   const isOnline = useOnlineStatus();
+  const { isUpdateAvailable, updateNow } = usePwaUpdate();
+  const { state: databaseLifecycleState, reloadNow } = useDatabaseLifecycle();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -34,7 +43,7 @@ export function Layout() {
               Controle de estoque
             </h1>
             <p className="mt-2 text-sm font-medium text-slate-500">
-              Etapa 1 - Projeto Integrador 2
+              TCC — Sistema de controle de estoque
             </p>
           </div>
           <nav className="space-y-1">
@@ -54,7 +63,7 @@ export function Layout() {
             <div className="flex min-h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-700 lg:hidden">
-                  StockFlow - PI2
+                  StockFlow — TCC
                 </p>
                 <h2 className="text-lg font-semibold text-slate-950 sm:text-xl">
                   Painel de estoque
@@ -63,6 +72,12 @@ export function Layout() {
               <StatusBadge isOnline={isOnline} />
             </div>
             <OfflineBanner isOnline={isOnline} />
+            <PwaUpdateBanner isVisible={isUpdateAvailable} onUpdate={updateNow} />
+            <DatabaseLifecycleBanner state={databaseLifecycleState} onReload={reloadNow} />
+            <SyncStatusIndicator
+              isOnline={isOnline}
+              databaseLifecycleStatus={databaseLifecycleState.status}
+            />
           </header>
 
           <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">
@@ -71,7 +86,7 @@ export function Layout() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-slate-200 bg-white lg:hidden">
         {navItems.map((item) => (
           <NavLink
             key={item.to}

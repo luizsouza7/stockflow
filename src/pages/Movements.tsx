@@ -9,6 +9,15 @@ import { hasStockSnapshot } from '../domain/stockMovement';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { getUserFacingError } from '../utils/errors';
+import {
+  DEFAULT_MOVEMENT_FILTERS,
+  filterAndSortMovements,
+  getMovementProductOptions,
+  hasActiveMovementFilters,
+  type MovementFilters,
+  type MovementSort,
+  type MovementTypeFilter,
+} from '../domain/movementFilters';
 
 export function Movements() {
   const productsQuery = useDexieQuery(() => productService.listActive(), []);
@@ -22,12 +31,31 @@ export function Movements() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [historyFilters, setHistoryFilters] = useState<MovementFilters>(
+    DEFAULT_MOVEMENT_FILTERS,
+  );
   const submissionInProgress = useRef(false);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === productId),
     [productId, products],
   );
+  const movementFilterResult = useMemo(
+    () => filterAndSortMovements(movements, historyFilters),
+    [historyFilters, movements],
+  );
+  const historyProductOptions = useMemo(
+    () => getMovementProductOptions(movements),
+    [movements],
+  );
+  const hasActiveHistoryFilters = hasActiveMovementFilters(historyFilters);
+
+  function updateHistoryFilter<K extends keyof MovementFilters>(
+    key: K,
+    value: MovementFilters[K],
+  ) {
+    setHistoryFilters((current) => ({ ...current, [key]: value }));
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -206,6 +234,90 @@ export function Movements() {
           <h2 className="font-semibold text-slate-950">Historico</h2>
         </div>
 
+        <div className="border-b border-slate-200 bg-slate-50 p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-slate-700" htmlFor="movement-product-filter">
+              Filtrar por produto
+              <select
+                id="movement-product-filter"
+                value={historyFilters.productId}
+                onChange={(event) => updateHistoryFilter('productId', event.target.value)}
+                className="input mt-2"
+              >
+                <option value="">Todos os produtos</option>
+                {historyProductOptions.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} ({product.code || 'Sem codigo'})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700" htmlFor="movement-type-filter">
+              Filtrar por tipo
+              <select
+                id="movement-type-filter"
+                value={historyFilters.type}
+                onChange={(event) =>
+                  updateHistoryFilter('type', event.target.value as MovementTypeFilter)
+                }
+                className="input mt-2"
+              >
+                <option value="all">Todas</option>
+                <option value="entrada">Entradas</option>
+                <option value="saida">Saidas</option>
+              </select>
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700" htmlFor="movement-start-date">
+              Data inicial
+              <input
+                id="movement-start-date"
+                type="date"
+                value={historyFilters.startDate}
+                onChange={(event) => updateHistoryFilter('startDate', event.target.value)}
+                className="input mt-2"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700" htmlFor="movement-end-date">
+              Data final
+              <input
+                id="movement-end-date"
+                type="date"
+                value={historyFilters.endDate}
+                onChange={(event) => updateHistoryFilter('endDate', event.target.value)}
+                className="input mt-2"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700 sm:col-span-2" htmlFor="movement-sort">
+              Ordenar por
+              <select
+                id="movement-sort"
+                value={historyFilters.sort}
+                onChange={(event) =>
+                  updateHistoryFilter('sort', event.target.value as MovementSort)
+                }
+                className="input mt-2"
+              >
+                <option value="newest">Mais recentes primeiro</option>
+                <option value="oldest">Mais antigas primeiro</option>
+              </select>
+            </label>
+          </div>
+
+          {hasActiveHistoryFilters && (
+            <button
+              type="button"
+              onClick={() => setHistoryFilters(DEFAULT_MOVEMENT_FILTERS)}
+              className="mt-4 min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
+
         {movementsQuery.isLoading ? (
           <div className="p-4">
             <LoadingState message="Carregando movimentacoes..." />
@@ -217,22 +329,35 @@ export function Movements() {
               onRetry={movementsQuery.refetch}
             />
           </div>
+        ) : movementFilterResult.validationError ? (
+          <div className="p-4">
+            <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+              {movementFilterResult.validationError}
+            </p>
+          </div>
         ) : movements.length === 0 ? (
           <div className="p-4">
             <EmptyState
-              title="Historico vazio"
+              title="Nenhuma movimentacao registrada."
               description="Registre uma entrada ou saida para criar o primeiro registro."
+            />
+          </div>
+        ) : movementFilterResult.movements.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              title="Nenhuma movimentacao encontrada com os filtros atuais."
+              description="Ajuste ou limpe os filtros para consultar outros registros."
             />
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {movements.map((movement) => (
+            {movementFilterResult.movements.map((movement) => (
               <article key={movement.id} className="px-4 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="font-semibold text-slate-950">{movement.productName}</h3>
                     <p className="text-sm text-slate-500">
-                      {movement.productCode} • {formatDate(movement.date)}
+                      {movement.productCode || 'Sem codigo'} • {formatDate(movement.date)}
                     </p>
                     {movement.note && (
                       <p className="mt-2 text-sm text-slate-600">{movement.note}</p>

@@ -62,6 +62,18 @@ describe('robustez dos formularios', () => {
         expect(nameInput.value).toBe('Cafe');
       }
     });
+    expect(screen.queryByLabelText('Quantidade inicial')).toBeNull();
+    expect(screen.getByText('Estoque atual:')).toBeTruthy();
+    expect(screen.getByText('Para alterar o estoque, registre uma entrada ou saida.')).toBeTruthy();
+  });
+
+  it('exibe quantidade inicial somente na criacao', () => {
+    configureProductFormQuery({ status: 'not-found' });
+
+    renderProductForm('/produtos/novo');
+
+    expect(screen.getByLabelText('Quantidade inicial')).toBeTruthy();
+    expect(screen.queryByText('Para alterar o estoque, registre uma entrada ou saida.')).toBeNull();
   });
 
   it.each([
@@ -198,7 +210,9 @@ function renderProductForm(initialEntry: string) {
 
 function fillProductForm() {
   fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Cafe' } });
-  fireEvent.change(screen.getByLabelText('Codigo'), { target: { value: 'CAFE' } });
+  fireEvent.change(screen.getByLabelText('Codigo interno (opcional)'), {
+    target: { value: 'CAFE' },
+  });
   fireEvent.change(screen.getByLabelText('Preco'), { target: { value: '10,00' } });
 }
 

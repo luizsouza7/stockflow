@@ -3,6 +3,7 @@ import type { LegacyMovement, Movement, TrackedMovement } from '../../types/Move
 import type { Product } from '../../types/Product';
 import type { Category } from '../../types/Category';
 import { generateUuid } from '../../utils/id';
+import type { OutboxEntry } from '../../types/Sync';
 
 interface LegacyProductWithDecimalPrice {
   price?: unknown;
@@ -51,6 +52,7 @@ export class StockFlowDatabase extends Dexie {
   products!: Table<Product, string>;
   movements!: Table<Movement, string>;
   categories!: Table<Category, string>;
+  outbox!: Table<OutboxEntry, string>;
 
   constructor(databaseName = 'stockflow-local-db') {
     super(databaseName);
@@ -289,6 +291,11 @@ export class StockFlowDatabase extends Dexie {
     this.version(9).stores({
       [productsMigrationTable]: null,
       [movementsMigrationTable]: null,
+    });
+
+    this.version(10).stores({
+      outbox:
+        'id, [entityType+entityId], operation, status, createdAt, updatedAt, nextAttemptAt, &idempotencyKey, userId, businessId',
     });
   }
 }

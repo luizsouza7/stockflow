@@ -1,6 +1,6 @@
 # Arquitetura Atual do StockFlow
 
-> Estado comprovado em 14/07/2026 na branch `develop`, tendo `928d124` como commit de código de referência. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro.
+> Estado funcional consolidado em 17/07/2026 na branch `develop`. Este documento descreve o que existe agora e separa explicitamente o planejamento futuro. O Git é a fonte oficial para hashes e histórico de commits.
 
 ## Visão geral atual
 
@@ -27,8 +27,8 @@ O desenho é deliberadamente simples: não há controllers, interfaces genérica
 `src/pages` contém as telas e coordena interação, estados de formulário e navegação:
 
 - `Dashboard.tsx`: indicadores e movimentações recentes;
-- `Products.tsx`: busca, listagem, feedback e exclusão lógica;
-- `ProductForm.tsx`: cadastro e edição;
+- `Products.tsx`: busca, filtros, ordenação, listagem, feedback e exclusão lógica;
+- `ProductForm.tsx`: cadastro com saldo inicial e edição sem alteração direta de estoque;
 - `Categories.tsx`: cadastro, edição, listagem e exclusão lógica;
 - `Movements.tsx`: entrada, saída e histórico;
 - `Alerts.tsx`: produtos que precisam de reposição.
@@ -38,7 +38,8 @@ O desenho é deliberadamente simples: não há controllers, interfaces genérica
 ### Hooks
 
 - `useDexieQuery`: encapsula `liveQuery`, assinatura/limpeza, `data`, `isLoading`, `error` e `refetch`.
-- `useOnlineStatus`: observa `navigator.onLine` e eventos `online`/`offline`.
+- `useOnlineStatus`: inicializa por `navigator.onLine`, observa eventos `online`/`offline` e remove os listeners no cleanup. O valor representa conectividade percebida pelo navegador, não disponibilidade comprovada da internet ou de backend.
+- `usePwaUpdate`: registra o service worker somente em produção e expõe uma atualização pronta para a UI sem aplicá-la automaticamente.
 
 O primeiro mantém as telas reativas às alterações locais. O segundo é apenas sinal de conectividade do navegador; não prova que um backend está acessível.
 
@@ -49,7 +50,9 @@ O primeiro mantém as telas reativas às alterações locais. O segundo é apena
 - sanitização, normalização e validação do nome de categoria;
 - cálculo de snapshots de entrada/saída e validação de quantidade;
 - distinção entre movimentação rastreável e legada;
-- classificação `normal`, `low-stock` e `out-of-stock`.
+- classificação `normal`, `low-stock` e `out-of-stock`;
+- sanitização e normalização lógica do código interno do produto;
+- composição pura dos filtros e ordenações de produtos e movimentações.
 
 Essas funções são testáveis isoladamente e evitam duplicar decisões importantes nas telas.
 
@@ -57,13 +60,15 @@ Essas funções são testáveis isoladamente e evitam duplicar decisões importa
 
 Os services representam os casos de uso e coordenam repositories:
 
-- `productService`: listagem enriquecida com categoria, validação de associação, criação, edição e soft delete;
+- `productService`: listagem enriquecida com categoria, saldo inicial, unicidade de código, edição sem estoque e soft delete;
 - `categoryService`: regras de nome, unicidade lógica e exclusão condicionada a produtos ativos;
 - `stockMovementService`: transação atômica de estoque e montagem do histórico;
 - `dashboardService`: cálculo dos indicadores reais;
-- `syncService`: somente leitura de produtos e movimentações pendentes; não é sincronização funcional.
+- `outboxService`: cria eventos e resume estados; `syncService` mantém claim/retry genérico; `manualPushService` valida sessão/business e compõe o executor; `syncRemoteGateway` mapeia categorias/produtos e chama apenas as RPCs permitidas.
 
 O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa garantir atomicidade entre atualização do produto e criação da movimentação.
+
+A Parte 3 foi concluída sem alterar essa arquitetura: o `productService` aplica validações defensivas, o `useDexieQuery` reage a dependências explícitas e a UI distingue estoque baixo de estoque zerado.
 
 ### Repositories
 
@@ -71,7 +76,7 @@ O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa gar
 
 - leitura ativa ou completa;
 - busca por ID;
-- criação e atualização;
+- criação, atualização de dados e atualização explícita de estoque;
 - consultas por `syncStatus`;
 - contagem de produtos ativos por categoria;
 - histórico de movimentações ordenado por data.
@@ -89,7 +94,11 @@ Os repositories atuais são módulos concretos. Existe apenas a persistência lo
 - versões e funções de upgrade;
 - stores temporárias usadas somente na migration de UUID.
 
-O schema atual é a versão 9 e contém `products`, `movements` e `categories`. A biblioteca Dexie instalada é 4.4.4.
+O schema atual é a versão 10 e contém `products`, `movements`, `categories` e `outbox`. A v10 adiciona somente a outbox, sem alterar as stores de domínio. A biblioteca Dexie instalada é 4.4.4.
+
+`src/services/db/databaseLifecycle.ts` observa a instância central antes do primeiro render. Em `versionchange`, a conexão antiga é fechada e a UI exige uma decisão explícita de reload. Em `blocked`, a aba que tenta o upgrade mostra orientação clara e envia somente `{ type: 'DATABASE_UPGRADE_BLOCKED' }` pelo canal `stockflow-database-lifecycle`; abas que reconhecem essa mensagem fecham suas conexões. Mensagens desconhecidas são ignoradas e o canal é opcional. As subscriptions da UI recebem estado, mas não controlam a instalação dos listeners Dexie.
+
+`src/services/db/databaseLifecyclePageRuntime.ts` controla o lifecycle da página. Em qualquer `pagehide`, remove realmente os listeners Dexie, fecha o canal ativo e fecha a conexão. Se `persisted` for verdadeiro, registra um único `pageshow`; no retorno, reinstala um monitor e chama `open()` explicitamente. Cada restauração recebe uma geração e é serializada em relação à anterior. `pagehide` e `dispose` invalidam a geração corrente; o término de `open()` revalida geração, monitor e estado. Sucesso obsoleto fecha novamente o banco, enquanto rejeição obsoleta é ignorada. Falha da tentativa válida produz `reload-required`. Se a conexão tiver sido fechada deliberadamente por `versionchange` ou `DATABASE_UPGRADE_BLOCKED`, `reload-required` é terminal: os listeners Dexie e o canal são encerrados imediatamente, e o runtime não os reinstala nem mantém o banco reaberto. Não há sincronização de entidades por esse canal.
 
 ### Migrations
 
@@ -105,14 +114,14 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 11 arquivos e 90 testes aprovados:
+A arquitetura é verificada por 37 arquivos e 307 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
-- Dexie/fake-indexeddb: transações, rollback, reabertura e migrations;
+- Dexie/fake-indexeddb: transações, rollback, reabertura, migrations, `versionchange` e bloqueio entre conexões;
 - React Testing Library/jsdom: consultas reativas, formulários e rotas.
 
-Não há testes E2E, offline/service worker, coverage ou CI.
+Há testes unitários da conectividade, da política do service worker e da coordenação de atualização. Não há testes E2E/Playwright, automação de navegador offline, coverage ou CI.
 
 ## Fluxos atuais
 
@@ -170,7 +179,7 @@ Produto, Movimentação e Categoria usam `id: string` com UUID v4 gerado no clie
 
 ### Valores monetários em centavos
 
-Preço de venda é persistido em `salePriceInCents` como inteiro seguro não negativo. A UI aceita vírgula ou ponto com até duas casas e centraliza parse/formatação. Ver o ADR de valores monetários; seu nome de arquivo e título interno têm numeração divergente.
+Preço de venda é persistido em `salePriceInCents` como inteiro seguro não negativo. A UI aceita vírgula ou ponto com até duas casas e centraliza parse/formatação. Ver o ADR-001 de valores monetários em centavos.
 
 ### Snapshots de movimentação
 
@@ -188,11 +197,19 @@ Categoria possui identidade, timestamps, soft delete e `syncStatus`. Produto gua
 
 `needsRestock` inclui sem estoque e estoque baixo. A regra é centralizada em `src/domain/stockStatus.ts`.
 
+### Auditabilidade do estoque e código interno
+
+`currentQuantity` pode receber um saldo inicial somente na criação. Depois da persistência, a edição comum não aceita esse campo; entradas e saídas passam pelo `stockMovementService`, que calcula snapshots e usa a operação explícita `productRepository.updateStock()` dentro da mesma transação da movimentação.
+
+`code` é uma referência interna opcional, não código de barras. A ausência é persistida como string vazia. O valor salvo recebe apenas trim externo e preserva caixa e caracteres internos; para unicidade entre produtos ativos, a comparação aplica trim e caixa insensível. Produtos excluídos não bloqueiam reutilização, e duplicidades legadas não são alteradas automaticamente porque histórico e identidade usam UUID.
+
 ## Offline-first atual
 
-O IndexedDB é a fonte de verdade operacional. O usuário consegue trabalhar com dados locais sem aguardar rede. As entidades novas recebem `syncStatus: "pending"`, mas não existe outbox nem envio.
+O IndexedDB continua sendo a fonte de verdade operacional. A outbox registra a intenção na mesma transação. O push remoto é uma ação manual adicional: não bloqueia o trabalho local, não altera entidades ao vincular contexto e não executa pull.
 
-Há uma limitação de comunicação: `OfflineBanner` diz que alterações serão sincronizadas quando a conexão voltar. Como isso ainda não acontece, o texto deve ser corrigido em uma etapa de código futura, não nesta etapa documental.
+O `OfflineBanner` comunica que a aplicação continua usando os dados armazenados no dispositivo. Ele não promete sincronização, nuvem ou compartilhamento entre dispositivos.
+
+O `DatabaseLifecycleBanner` distingue atualização necessária de upgrade bloqueado. A primeira condição oferece “Recarregar agora”; a segunda orienta fechar ou recarregar outras abas. Não existe reload automático: o gerenciador aceita a ação no máximo uma vez durante a vida da página.
 
 ## PWA no estado real
 
@@ -202,19 +219,23 @@ Implementado:
 - `public/pwa-icon.svg`;
 - `public/sw.js`;
 - link do manifest em `index.html`;
-- registro do service worker em `src/main.tsx`;
-- cache inicial de `/`, `/index.html`, manifest e ícone;
-- cache dinâmico e fallback para `index.html`.
+- registro do service worker de módulo por `usePwaUpdate`, somente em produção;
+- precache do `index.html`, com JavaScript e CSS descobertos no HTML tratados como essenciais para concluir o `install`; manifest e ícone permanecem opcionais;
+- chaves de cache canônicas em URL absoluta, iguais na gravação do precache e na leitura de uma `Request` interceptada, sem `ignoreSearch`;
+- fallback de `index.html` exclusivo para requisições de navegação da mesma origem;
+- cache-first somente para caminhos estáticos conhecidos: `/assets/...`, manifest, ícone e o módulo de política do worker; `request.destination` não autoriza rotas arbitrárias;
+- exclusão por padrão de `/api`, recursos externos, respostas privadas/não OK e métodos não GET;
+- identificador de build determinístico calculado pelo Vite a partir dos arquivos efetivamente gerados e injetado em `sw.js` e `sw-policy.js`;
+- cache isolado por versão no formato `stockflow-static-<build-id>`; um worker em instalação não escreve no cache do worker ativo;
+- limpeza dos caches anteriores do prefixo `stockflow-` somente na ativação, preservando caches alheios;
+- nova versão mantida em `waiting` até a ação “Atualizar agora”, que envia `{ type: 'SKIP_WAITING' }`;
+- `controllerchange` recarrega uma única vez somente depois da solicitação do usuário.
 
 Pendente:
 
 - prompt/UX de instalação;
-- atualização segura e aviso de nova versão;
-- cache limitado por origem/tipo/status;
-- política para dados privados futuros;
 - persistência via StorageManager;
-- backup/exportação;
-- teste offline automatizado e validação do build implantado.
+- teste E2E offline automatizado.
 
 Portanto, PWA é **parcial**, não concluída.
 
@@ -229,32 +250,56 @@ Está implementada em memória nos fluxos de:
 
 Cada fluxo combina `useRef` como trava imediata, estado `isSubmitting`/ID em exclusão e botões desabilitados. Isso protege a sessão atual da UI, mas não é idempotência persistente ou distribuída.
 
-## Arquitetura futura — apenas planejamento
+## Arquitetura de sincronização parcial
 
 ```text
 React / PWA
     ↓
-IndexedDB / Dexie
-    ↓
-futura outbox e sincronização bidirecional
-    ↓
+IndexedDB / Dexie + outbox local
+    ↓ ação manual, sessão e business validados
+manualPushService → syncRemoteGateway
+    ↓ RPC idempotente/versionada
 Supabase / PostgreSQL / Auth / RLS
 ```
 
-No plano futuro, a escrita continuará local e uma outbox persistente deverá conduzir push, confirmação, retry e conflitos. Pull deverá trazer mudanças remotas validadas para uma transação local. Auth e RLS deverão identificar usuário/estabelecimento e isolar dados.
+A escrita continua local. O claim remoto filtra `userId`/`businessId`; eventos sem contexto não viram `processing`. O gateway aceita somente categorias/produtos. A migration 6C cria `sync_operations` com chave `(business_id, idempotency_key)` e RPCs para create/update/soft delete. Updates exigem a `remoteVersion` arquivada pelo último evento `synced`; divergência vira erro amigável, não overwrite. Produtos atualizados nunca escrevem `current_quantity`; movimentos aguardam RPC atômica futura.
 
-Nada dessa camada remota está implementado. Em particular, não existem:
+O claim transacional serializa execuções concorrentes no IndexedDB, inclusive entre conexões/abas, e evita a duplicação óbvia. `updatedAt` é usado como token simples para que sucesso ou falha não finalize um item recuperado concorrentemente. Isso não substitui idempotência no servidor nem um lock distribuído futuro; a validação manual entre abas permanece recomendada.
 
-- client Supabase ou variáveis de ambiente;
-- schema/migrations PostgreSQL;
-- autenticação ou sessão offline autenticada;
-- RLS;
-- outbox;
-- push, pull, retry ou cursor;
+Implementado como preparação da Parte 5:
+
+- cliente Supabase opcional e carregado apenas pela rota Conta;
+- cadastro, login, sessão inicial, listener de Auth com cleanup e logout local;
+- `.env.example` com URL e chave pública, sem segredo real;
+- migration PostgreSQL versionada para perfis, estabelecimentos, memberships e entidades de estoque;
+- `business_id`, `version`, índices, trigger de `updated_at`, soft delete e RLS baseada em `auth.uid()`.
+
+Ainda não existem:
+
+- aplicação/validação das migrations em um projeto remoto real;
+- associação automática dos registros IndexedDB;
+- pull, cursor ou retry automático;
+- push de movimentações;
 - armazenamento/resolução de conflitos;
 - multiusuário ou multiestabelecimento.
 
-O arquivo `syncService.ts` não muda esse estado: ele apenas devolve arrays locais de produtos e movimentações pendentes.
+Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorno online ou timer. Somente o botão da Conta inicia o fluxo. A consulta de businesses também exige clique explícito. Não há `fetch` próprio, Service Worker Sync ou background sync.
+
+## Continuidade oficial
+
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída no escopo de código/SQL. A Parte 6 avançou até a 6C com push parcial/manual, mas continua incompleta. Snapshots não são Parte 4.
+
+## Auth, sessão e isolamento remoto preparado
+
+O fluxo da conta é `Account → useAuthSession → authService → cliente Supabase`. A rota é lazy; abrir as páginas locais não inicializa o módulo Supabase. Se as variáveis estiverem ausentes ou inválidas, a página explica a indisponibilidade e não bloqueia o restante do sistema. Uma sessão previamente persistida pelo cliente oficial pode ser restaurada offline; novos logins/cadastros exigem conectividade e logout usa escopo local para remover a sessão deste navegador.
+
+Dados IndexedDB continuam device-scoped até uma ação consciente de associação da outbox. A seleção é isolada por usuário e revalidada por membership; logout limpa o contexto ativo. Eventos vinculados permanecem vinculados ao usuário/business original e não são reutilizados por outra conta.
+
+## Backup e exportação
+
+O fluxo é `UI → backupExportService → Dexie`. O acesso direto do service ao `localDb` é restrito à transação somente leitura que captura `categories`, `products` e `movements` como um único snapshot lógico; não foi criada uma abstração repository artificial para uma leitura atômica multi-tabela.
+
+O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 9`, inclui soft deletes e valida UUIDs, relações, tipos, inteiros, datas e movimentos legados antes do download. Produtos e movimentações também podem ser exportados em CSV. O fluxo é local/offline, não faz chamadas de rede e fica indisponível quando o lifecycle do banco não está normal. Importação/restauração não foi implementada e permanece futura até haver estratégia rigorosamente validada.
 
 ## Referências arquiteturais
 

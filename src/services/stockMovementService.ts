@@ -2,12 +2,18 @@ import { calculateStockSnapshot } from '../domain/stockMovement';
 import { movementRepository } from '../repositories/movementRepository';
 import { productRepository } from '../repositories/productRepository';
 import { localDb } from './db/localDb';
-import type { MovementWithProduct, RegisterMovementInput } from '../types/Movement';
+import type { MovementWithProduct, RegisterMovementInput, TrackedMovement } from '../types/Movement';
 import { generateUuid } from '../utils/id';
+import { outboxService } from './outboxService';
 
 export const stockMovementService = {
   async register(movement: RegisterMovementInput): Promise<void> {
-    await localDb.transaction('rw', localDb.products, localDb.movements, async () => {
+    await localDb.transaction(
+      'rw',
+      localDb.products,
+      localDb.movements,
+      localDb.outbox,
+      async () => {
       const product = await productRepository.findById(movement.productId);
 
       if (!product || product.deletedAt) {
@@ -20,19 +26,30 @@ export const stockMovementService = {
         movement.quantity,
       );
 
-      await productRepository.update(product.id, {
+      const now = new Date().toISOString();
+      await productRepository.updateStock(product.id, {
         currentQuantity: snapshot.resultingQuantity,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
         syncStatus: 'pending',
       });
 
-      await movementRepository.create({
+      const persistedMovement: TrackedMovement = {
         id: generateUuid(),
         ...movement,
         ...snapshot,
         isLegacy: false,
+        syncStatus: 'pending',
+      };
+      await movementRepository.create(persistedMovement);
+      await outboxService.enqueue({
+        entityType: 'movement',
+        entityId: persistedMovement.id,
+        operation: 'movement.created',
+        payload: persistedMovement,
+        occurredAt: now,
       });
-    });
+      },
+    );
   },
 
   async listHistory(): Promise<MovementWithProduct[]> {

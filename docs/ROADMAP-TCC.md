@@ -1,337 +1,177 @@
 # Roadmap TCC — StockFlow
 
-> Atualizado em 14/07/2026. O planejamento oficial é `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`. O Prompt atual organiza o trabalho por milestones M1–M11 e fases 0–11, mas não apresenta uma lista literalmente numerada de 15 partes. As 15 partes abaixo são uma correspondência operacional conservadora para continuidade, baseada nessas seções e no histórico comprovado; não substituem nem ampliam arbitrariamente o Prompt Mestre.
+> Consolidado em 17/07/2026. O StockFlow é o TCC real. O planejamento oficial é o `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, dividido nas 15 partes abaixo pelos intervalos de regras definidos pelo responsável pelo projeto.
 
-## Como interpretar os status
+## Como interpretar o roadmap
 
 - **não iniciada:** não há implementação comprovada;
-- **iniciada:** há preparação ou um subconjunto pequeno;
-- **avançada:** parte substancial existe, mas faltam critérios relevantes;
-- **praticamente concluída:** resta estabilização/documentação pontual, sem grande núcleo funcional ausente;
-- **concluída:** objetivos delimitados da parte foram comprovados no repositório.
+- **iniciada:** existe preparação ou um subconjunto do objetivo;
+- **avançada:** parte substancial existe, mas permanecem critérios relevantes;
+- **praticamente concluída:** o núcleo existe e restam correções delimitadas;
+- **concluída:** o objetivo delimitado foi comprovado, sem pendência conhecida que impeça o encerramento.
 
-Não são usados percentuais artificiais.
+Não são usados percentuais. As “fases” das regras 107–118 e os milestones citados no Prompt Mestre são conteúdo da Parte 12 e não substituem esta sequência oficial.
 
-## Sequência principal e trabalho transversal
+## Sequência principal e elementos transversais
 
-A sequência principal continua ordenada. A **Parte principal atual é a Parte 8 — Estratégia formal de testes**. Partes posteriores podem fornecer práticas transversais sem serem consideradas concluídas:
+As **Partes 3 e 4 estão concluídas** no escopo implementado. Testes, documentação, ADRs, lint, typecheck e build são elementos transversais aplicados desde o início; seu uso antecipado não conclui as partes posteriores às quais pertencem.
 
-- testes foram escritos desde as primeiras regras críticas, antes da Parte 8 formal;
-- ADRs foram criados junto das migrations e decisões, antes da Parte 10 formal;
-- lint, typecheck, testes e build são critérios usados antes da Parte 13 formal;
-- uma PWA básica já existia antes do endurecimento formal da Parte 9.
+Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimentações já implementadas. Eles não são a Parte 4. A Parte 4 oficial é exclusivamente o bloco das regras 30–35.
 
-Isso preserva qualidade e rastreabilidade durante o desenvolvimento. Não significa que testes, documentação, PWA ou qualidade/CI estejam completos.
+## Parte 1 — regras 1–11
 
-## Parte 1 — Auditoria e baseline
-
-**Objetivo:** conhecer o repositório real, stack, funcionalidades, riscos e lacunas antes de evoluir o sistema, conforme Fase 0 do Prompt Mestre.
-
-**Status:** concluída.
-
-**Já implementado/comprovado:**
-
-- auditoria registrada em `docs/auditoria-fase-0.md`;
-- inventário de stack, funcionalidades locais, riscos de dados, PWA e sync;
-- identificação inicial das prioridades de integridade.
-
-**Restante:**
-
-- não repetir a auditoria completa sem mudança relevante;
-- tratar o documento como registro histórico, pois a raiz nele está antiga e várias lacunas já foram resolvidas.
-
-## Parte 2 — Integridade local e regras críticas
-
-**Objetivo:** consolidar regras de entrada/saída, atomicidade, rollback, soft delete e testes do banco local.
-
-**Status:** concluída.
-
-**Já implementado/comprovado:**
-
-- transação Dexie para atualizar estoque e criar movimentação;
-- bloqueio de saída maior que o disponível;
-- validação de quantidade inteira positiva;
-- soft delete de produto com histórico preservado;
-- testes com fake-indexeddb para entrada, saída, rollback e persistência.
-
-**Restante:**
-
-- melhorias futuras de auditabilidade, como impedir alteração direta de estoque sem movimentação, pertencem à estabilização do domínio e não invalidam o núcleo concluído desta parte.
-
-## Parte 3 — Valores monetários em centavos
-
-**Objetivo:** eliminar ponto flutuante da persistência de preço de venda e migrar dados existentes com segurança.
-
-**Status:** concluída.
-
-**Já implementado/comprovado:**
-
-- `salePriceInCents` como inteiro seguro não negativo;
-- parse e formatação centralizados;
-- migration Dexie v3;
-- testes de conversão, rejeição de entradas inválidas e reedição sem multiplicação.
-
-**Restante:**
-
-- custo de produto e outras grandezas monetárias não fazem parte do escopo atual;
-- corrigir em momento documental apropriado a numeração divergente do ADR correspondente.
-
-## Parte 4 — Snapshots e rastreabilidade das movimentações
-
-**Objetivo:** registrar estoque anterior/resultante sem inventar dados históricos.
-
-**Status:** concluída.
-
-**Já implementado/comprovado:**
-
-- `previousQuantity` e `resultingQuantity` em novas movimentações;
-- tipo discriminado entre movimento rastreável e legado;
-- migration v4 marcando legado sem fabricar snapshot;
-- apresentação do snapshot ou aviso de legado no histórico;
-- testes de cálculo, encadeamento, migration e preservação.
-
-**Restante:**
-
-- eventual ajuste de estoque deve ser modelado como nova movimentação em parte futura, se o requisito for confirmado.
-
-## Parte 5 — Separação Domain, Services e Repositories
-
-**Objetivo:** retirar regras e consultas diretas das páginas, mantendo uma arquitetura simples e testável.
-
-**Status:** concluída.
-
-**Já implementado/comprovado:**
-
-- fluxo `UI → Service → Repository → Dexie`;
-- domínio puro para estoque, movimento e categoria;
-- `localDb.ts` concentrado em schema/migrations/instância;
-- dashboard e alertas consumindo services/regras centralizadas;
-- ADR arquitetural correspondente.
-
-**Restante:**
-
-- evitar abstrações genéricas até existir uma necessidade remota real;
-- manter a separação nas próximas funcionalidades.
-
-## Parte 6 — Categorias como entidades
-
-**Objetivo:** substituir texto livre por categoria identificável, gerenciável e adequada à criação offline.
-
-**Status:** concluída.
-
-**Já implementado/comprovado:**
-
-- entidade `Category` com UUID, timestamps, soft delete e `syncStatus`;
-- cadastro, edição, listagem e exclusão lógica;
-- sanitização, limite e unicidade lógica do nome;
-- associação opcional de produto a categoria ativa;
-- bloqueio de exclusão quando há produto ativo;
-- migration v5 do texto legado e testes.
-
-**Restante:**
-
-- filtros de produtos por categoria estão programados para estabilização do escopo PI2.
-
-## Parte 7 — UUIDs e robustez dos fluxos locais
-
-**Objetivo:** eliminar IDs locais autoincrementais das entidades sincronizáveis e tornar consultas/formulários/rotas resistentes a falhas e duplicidade de envio.
-
-**Status:** praticamente concluída.
-
-**Já implementado/comprovado:**
-
-- UUID para Produto, Movimentação e Categoria;
-- `Movement.productId` em string;
-- migration técnica v6–v9 com preservação e rollback;
-- estados loading/error/empty nas páginas principais;
-- tratamento de produto inexistente ou excluído em edição;
-- feedback de sucesso/erro;
-- proteção de duplo envio e exclusão;
-- commit mais recente de código: `928d124`.
-
-**Restante:**
-
-- revisar regras de código de produto e alteração direta de quantidade;
-- aplicar acessibilidade e tratamento de erro restantes sem ampliar escopo;
-- considerar esta parte encerrada somente após a revisão do desenvolvedor.
-
-## Parte 8 — Estratégia formal de testes
-
-**Objetivo:** consolidar testes unitários, banco local, componentes e fluxos essenciais; preparar E2E conforme Fase 10 do Prompt Mestre.
+**Objetivo real:** estabelecer protocolo de análise, identidade e escopo do StockFlow como produto acadêmico real, título e objetivos do TCC, público-alvo, escopo negativo, stack, política de dependências e princípios arquiteturais.
 
 **Status:** avançada.
 
-**Já implementado/comprovado:**
+**Progresso comprovado:** auditoria inicial, identidade do produto, título e objetivos preliminares, público-alvo, escopo negativo, stack coerente e arquitetura local-first simples estão registrados e implementados no recorte atual.
 
-- Vitest, fake-indexeddb, jsdom e React Testing Library;
-- 11 arquivos e 90 testes aprovados;
-- regras de estoque, categorias, moeda e status;
-- transações, rollback, soft delete e migrations;
-- repository/service/dashboard;
-- hook reativo, formulários e rotas críticas.
+**Pendente:** amadurecer a documentação acadêmica e revisar versões/requisitos somente quando necessário, sem ampliar o escopo nem tratar o projeto como Projeto Integrador.
 
-**Restante:**
+## Parte 2 — regras 12–18
 
-- mapear lacunas por requisito e risco;
-- ampliar testes de componentes para dashboard, alertas, buscas e falhas;
-- adicionar E2E com Playwright para produto, estoque, alertas e offline quando a etapa autorizar dependências;
-- testar service worker/PWA em ambiente de build;
-- decidir coverage realista e documentar resultados;
-- não criar testes de sync/auth antes de essas funcionalidades existirem.
-
-## Parte 9 — PWA e operação offline endurecida
-
-**Objetivo:** transformar a PWA básica em experiência offline comprovada e segura, conforme Fase 6.
-
-**Status:** iniciada.
-
-**Já implementado/comprovado:**
-
-- manifesto, ícone, service worker e registro;
-- cache inicial e indicador online/offline;
-- operações de dados locais independentes de backend.
-
-**Restante:**
-
-- restringir cache dinâmico e respostas elegíveis;
-- validar app shell e navegação offline no build;
-- implementar atualização segura com aviso;
-- revisar texto do banner para não prometer sincronização inexistente;
-- estudar persistência, instalação, backup/exportação e riscos do IndexedDB;
-- criar testes offline.
-
-## Parte 10 — Documentação técnica, acadêmica e ADRs
-
-**Objetivo:** manter arquitetura, requisitos, decisões e entrega acadêmica rastreáveis.
+**Objetivo real:** orientar estrutura de diretórios, modelo de domínio, UUIDs, datas, IndexedDB/Dexie, mutações locais atômicas e regras essenciais de negócio.
 
 **Status:** avançada.
 
-**Já implementado/comprovado:**
+**Progresso comprovado:** Product, Category e Movement usam UUID; datas seguem estratégia consistente; Dexie está na versão 10; valores monetários usam centavos; soft delete, snapshots, histórico e transação atômica de entrada/saída estão cobertos por testes.
 
-- Prompt Mestre;
-- auditoria histórica;
-- cinco arquivos de ADR;
-- documentos de estado, arquitetura, roadmap e continuidade criados nesta etapa;
-- README inicial.
+**Pendente:** entidades de usuário/estabelecimento/sincronização pertencem à evolução futura. As validações defensivas de nome e estoque mínimo no `productService` foram consolidadas sem alterar o schema.
 
-**Restante:**
+## Parte 3 — regras 19–29
 
-- corrigir inconsistências documentais de raiz, numeração de ADR e README desatualizado em etapa autorizada;
-- requisitos funcionais/não funcionais e regras de negócio formais;
-- histórias, casos de uso e matriz de rastreabilidade;
-- diagramas coerentes com o código;
-- documentação e checklist da entrega PI2;
-- estrutura acadêmica do TCC sem inventar dados ou resultados.
+**Objetivo real:** consolidar repositories e services, experiência e layouts responsivos, design system, acessibilidade, páginas, busca, filtros, ordenação, dashboard e alertas com regras centralizadas.
 
-## Parte 11 — Supabase, PostgreSQL, Auth e RLS
+**Status:** concluída.
 
-**Objetivo:** introduzir backend, autenticação e isolamento por estabelecimento com migrations seguras.
+**Progresso comprovado:** fluxo `UI → Service → Repository → Dexie`, domínio puro, páginas principais, layouts desktop/mobile, componentes reutilizáveis, busca e filtros combináveis, ordenação, dashboard com dados reais, alertas e distinção textual/visual entre estoque normal, baixo e zerado. As validações defensivas no `productService`, a troca de consulta no `useDexieQuery` e a apresentação de low-stock/out-of-stock foram consolidadas e cobertas por testes.
 
-**Status:** não iniciada.
+**Pendências conhecidas neste recorte:** nenhuma. Pendências transversais ou de partes posteriores permanecem registradas em seus próprios blocos.
 
-**Já implementado/comprovado:**
+## Parte 4 — regras 30–35
 
-- apenas decisões locais que facilitam evolução: UUID, timestamps, soft delete e `syncStatus`.
+**Objetivo real:** consolidar funcionamento offline-first, detecção de conectividade, PWA, atualização segura da PWA, persistência do IndexedDB e backup/exportação.
 
-**Restante:**
+**Status:** concluída; regras 30–35 implementadas.
 
-- client/configuração/env;
-- schema PostgreSQL e migrations;
-- Auth, sessão, onboarding, perfis, estabelecimentos e memberships;
-- proteção de rotas;
-- RLS e testes de isolamento;
-- nenhuma credencial deve ser inventada ou versionada.
+**Progresso comprovado:** operações locais continuam usando IndexedDB; o estado inicial e os eventos de conectividade possuem testes e cleanup; a mensagem offline não promete sincronização; o service worker distingue navegações e caminhos estáticos conhecidos de APIs, rotas privadas, recursos externos e métodos mutáveis; o build injeta identificador determinístico e isola caches por versão; caches antigos do StockFlow são removidos por prefixo somente na ativação; o registro ocorre somente em produção; uma nova versão aguardando pode ser aplicada por ação do usuário com reload único controlado; o lifecycle do IndexedDB trata `versionchange`, upgrade bloqueado, cleanup e aviso entre abas sem compartilhar dados de domínio; e a página Dados exporta backup JSON versionado e CSVs de produtos/movimentações, offline, sem modificar o banco ou enviar dados para servidor. O primeiro reload offline e o ciclo real de atualização A → B com preservação do IndexedDB foram validados manualmente.
 
-## Parte 12 — Sincronização bidirecional e outbox
+**Pendente neste recorte:** nenhuma. Importação/restauração não integra a entrega segura atual e permanece futura; a coordenação de múltiplas abas deve ser novamente validada em navegador com o upgrade legítimo v10 da outbox.
 
-**Objetivo:** implementar fila persistente, push, pull, confirmação, retry e status real.
+## Parte 5 — regras 36–42
 
-**Status:** não iniciada.
+**Objetivo real:** implementar autenticação, comportamento de sessão offline, Supabase, PostgreSQL, colunas de sincronização, estratégia de `updated_at` e Row Level Security.
 
-**Já implementado/comprovado:**
+**Status:** em andamento; regras 36–42 implementadas em código e SQL, pendentes de validação manual em projeto Supabase real.
 
-- `syncStatus` nas entidades;
-- `syncPendingData()` lista produtos e movimentos pendentes, sem efeito remoto.
+**Progresso comprovado:** cliente Supabase opcional via env pública, cadastro/login/logout, sessão inicial, listener com cleanup, funcionamento local sem login e página Conta carregada sob demanda. Migration versionada prepara perfis, estabelecimentos, memberships, categorias, produtos e movimentações com `business_id`, trigger de `updated_at`, índices, RLS e policies baseadas em `auth.uid()`.
 
-Esses itens são preparação, não sincronização.
+**Pendente operacional:** configurar projeto real, aplicar/revisar as migrations no PostgreSQL e validar Auth/RLS entre dois usuários. A Parte 5 está concluída no escopo de código/SQL; essas validações não autorizam associação automática de dados.
 
-**Restante:**
+## Parte 6 — regras 43–54
 
-- entidade/store de outbox;
-- escrita atômica de entidade + item da fila;
-- engine de push/pull, cursores e confirmação;
-- retry/backoff e estados;
-- categorias e demais entidades no fluxo;
-- UX de última sincronização e erros;
-- testes unitários, integração e offline.
+**Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-## Parte 13 — Qualidade, segurança e CI
+**Status:** em andamento pelas fatias 6A, 6B e 6C; existe push parcial/manual, não sincronização bidirecional.
 
-**Objetivo:** formalizar os critérios de pronto e automatizar lint, typecheck, testes e build.
+**Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
+
+**Progresso da fatia 6B:** o processador local, chamado apenas de forma explícita com executor injetado, faz claim transacional de `pending` e `error` vencido, usa ordem `createdAt`/`id`, lote limitado, transição para `processing`, remoção após sucesso do executor, falha com erro sanitizado e backoff de 1/5/15/30/60 minutos, além de reset manual de `processing` travado. O indicador distingue fila, processamento, erro e conflito previsto sem prometer nuvem.
+
+**Progresso da fatia 6C:** a Conta permite carregar/validar business, selecionar contexto, associar eventos antigos sem envio e disparar push manual. Categorias/produtos usam RPCs com RLS, ledger idempotente e `version`; updates de produto preservam `current_quantity`. Movimentos, eventos sem contexto e updates sem versão-base não são enviados. Não há gatilhos automáticos.
+
+**Pendente:** pull/cursor, retry automático, RPC atômica de movimentação, conflitos reais, concorrência de estoque, central de conflitos e validação das migrations em Supabase real.
+
+## Parte 7 — regras 55–69
+
+**Objetivo real:** consolidar hooks e reatividade, estratégia de estado, formulários, moeda, confirmações, feedback, erros, loading/empty states, responsividade, performance, segurança e privacidade.
+
+**Status:** avançada.
+
+**Progresso comprovado:** hooks de consulta/conectividade, `liveQuery`, formulários validados, moeda centralizada, proteção contra duplo envio, feedback, estados reutilizáveis e layouts responsivos.
+
+**Pendente:** completar acessibilidade, Error Boundary, taxonomia de erros, revisão responsiva sistemática, `SECURITY.md` e requisitos futuros de segurança/privacidade. O `useDexieQuery` já recria a assinatura quando dependências explícitas mudam.
+
+## Parte 8 — regras 70–79
+
+**Objetivo real:** estruturar testes unitários, de banco, componentes e E2E, coverage, scripts, typecheck, ESLint, formatação e `.gitignore`.
+
+**Status:** avançada.
+
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 43 arquivos com 406 testes aprovados na validação de 19/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry, push manual, contexto, mapeamento, SQL/RLS/idempotência, ausência de automatismo, conectividade, PWA, lifecycle, backup e Auth.
+
+**Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
+
+## Parte 9 — regras 80–86
+
+**Objetivo real:** organizar CI no GitHub, templates, política de commits e branches, releases, roadmap e README.
 
 **Status:** iniciada.
 
-**Já implementado/comprovado:**
+**Progresso comprovado:** branch `develop`, scripts de qualidade, roadmap oficial consolidado e README alinhado ao estado funcional, à arquitetura, às migrations, às limitações e às 15 partes.
 
-- TypeScript estrito;
-- ESLint;
-- scripts `lint`, `typecheck`, `test` e `build`;
-- uso desses comandos como protocolo de conclusão.
+**Pendente:** GitHub Actions, templates, documentação formal do fluxo e releases baseadas em critérios reais. O roadmap de milestones citado dentro do Prompt Mestre não substitui as 15 partes oficiais.
 
-**Restante:**
+## Parte 10 — regras 87–98
 
-- executar e registrar a suíte completa em cada etapa de código;
-- configurar GitHub Actions/CI;
-- avaliar Prettier sem conflito ou formatação massiva;
-- Error Boundary, acessibilidade e testes responsivos;
-- revisão de segurança do service worker e futura camada remota;
-- templates de issue/PR quando úteis.
+**Objetivo real:** produzir documentação acadêmica, requisitos, histórias, casos de uso, rastreabilidade, diagramas, ADRs e instrumentos/planos de pesquisa, usabilidade e testes.
 
-## Parte 14 — Concorrência e conflitos
+**Status:** iniciada.
 
-**Objetivo:** detectar, armazenar e resolver conflitos relevantes após existir sincronização real.
+**Progresso comprovado:** Prompt Mestre, documentos de continuidade e cinco ADRs; tema, problema e objetivos preliminares estão registrados.
 
-**Status:** não iniciada.
+**Pendente:** requisitos formais, histórias, casos de uso, matriz, diagramas coerentes, documentação acadêmica completa e instrumentos de pesquisa/usabilidade sem inventar resultados.
 
-**Já implementado/comprovado:**
+## Parte 11 — regras 99–106
 
-- snapshots e UUIDs fornecem contexto local útil, mas não são mecanismo de conflito.
+**Objetivo real:** disciplinar dados de demonstração, configuração e experiência de desenvolvimento, VS Code, dívida técnica, transparência de erros, comandos destrutivos e fluxo incremental de implementação.
 
-**Restante:**
+**Status:** avançada.
 
-- versionamento remoto e precondições;
-- função atômica de movimentação no PostgreSQL;
-- detecção e registro de conflito;
-- política por entidade;
-- central de conflitos e resolução;
-- testes de concorrência.
+**Progresso comprovado:** npm/lockfile, comandos de qualidade, registro de dívidas e protocolo de raiz/branch/worktree e de execução incremental estão documentados.
 
-## Parte 15 — Validação acadêmica, estabilização e releases
+**Pendente:** dados demo somente se forem necessários em etapa autorizada; manter dívida técnica rastreável e nunca mascarar resultados.
 
-**Objetivo:** validar o sistema com público-alvo, analisar resultados e preparar entregas PI2/TCC reproduzíveis.
+## Parte 12 — regras 107–118
 
-**Status:** não iniciada.
+**Objetivo real:** definir as fases internas de execução, da auditoria à validação acadêmica, incluindo fundação, produtos, movimentações, dashboard, estabilização do núcleo do TCC, PWA/offline, nuvem, sincronização, conflitos, testes e pesquisa.
 
-**Já implementado/comprovado:**
+**Status:** avançada no núcleo local; fases futuras não iniciadas.
 
-- contexto, tema, objetivo e público-alvo preliminares estão no Prompt Mestre/README.
+**Progresso comprovado:** auditoria, fundação, produtos/categorias, movimentações e parte de dashboard/alertas foram implementados; existe PWA básica antecipada.
 
-**Restante:**
+**Pendente:** validação real de Auth/RLS, sincronização, conflitos, E2E/CI e validação acadêmica permanecem futuros.
 
-- instrumentos de entrevista/questionário e consentimento revisados;
-- plano de testes de usabilidade;
-- coleta real, sem respostas inventadas;
-- análise dos resultados e limitações;
-- documentação final, screenshots e demonstração;
-- release/tag PI2 estável e release 1.0 do TCC após critérios reais.
+## Parte 13 — regras 119–128
 
-# Próximas etapas planejadas
+**Objetivo real:** aplicar critérios de aceite e definição de pronto, registrar saídas verificáveis, priorizar integridade e simplicidade, documentar decisões, manter nomenclatura/textos claros e logs seguros.
 
-1. Concluir a **Parte 8** com uma análise de lacunas de testes baseada nos fluxos reais, ampliando primeiro componentes e preparando E2E/offline; não iniciar testes de funcionalidades futuras inexistentes.
-2. Revisar o encerramento da **Parte 7**, especialmente código de produto, alteração direta de estoque e tratamento de falhas restantes.
-3. Avançar a **Parte 9**: restringir e testar a PWA/offline, corrigindo mensagens que hoje prometem sincronização.
-4. Completar progressivamente a **Parte 10** para a entrega PI2: requisitos, rastreabilidade, diagramas e checklist, sem substituir o Prompt Mestre.
-5. Somente depois da base local/PI2 estabilizada, iniciar **Parte 11**; Supabase/Auth/RLS devem preceder sincronização real.
-6. Seguir então por **Parte 12**, **Parte 13**, **Parte 14** e **Parte 15**, respeitando dependências e critérios de pronto.
+**Status:** avançada como prática transversal.
 
-O próximo passo recomendado não é Supabase nem sincronização: é fechar a estratégia formal de testes do núcleo local e preparar o endurecimento offline/PWA.
+**Progresso comprovado:** integridade local, testes, lint, typecheck e build são usados como critérios; arquitetura e ADRs privilegiam simplicidade e clareza.
+
+**Pendente:** manter os critérios por etapa, completar acessibilidade/erros/logs quando aplicável e não declarar prontas funcionalidades futuras.
+
+## Parte 14 — regras 129–138
+
+**Objetivo real:** tratar auditoria, versionamento de schemas, migrations Supabase, seed, build e documentação de arquitetura offline/sincronização, além de trabalhos futuros e checklist técnico final.
+
+**Status:** iniciada.
+
+**Progresso comprovado:** histórico de movimentações, Dexie versionado até v10, migrations locais testadas, build usado na validação e arquitetura local documentada.
+
+**Pendente:** audit log administrativo somente se necessário, aplicação/validação da migration Supabase, seed se autorizado, documentação e diagramas da sincronização real e checklist final do TCC.
+
+## Parte 15 — regras 139–143
+
+**Objetivo real:** impor auditoria inicial, continuidade incremental, explicabilidade, independência de IA e tratamento do StockFlow como produto acadêmico real e base do TCC.
+
+**Status:** em aplicação contínua.
+
+**Progresso comprovado:** raiz e estado são verificados antes das etapas; decisões, limitações e continuidade são documentadas; trabalho existente e histórico são preservados.
+
+**Pendente:** manter essas regras em todas as próximas etapas e tratar o StockFlow exclusivamente como TCC, salvo decisão futura explícita do responsável.
+
+## Próximo passo oficial
+
+Revisar a implementação da fatia 6C e aplicar/validar as migrations em um projeto Supabase de teste com usuários/businesses separados. Não iniciar pull, movimentos remotos ou conflitos sem autorização explícita para nova fatia.

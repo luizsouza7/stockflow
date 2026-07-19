@@ -6,6 +6,8 @@ import { categoryRepository } from '../repositories/categoryRepository';
 import { productRepository } from '../repositories/productRepository';
 import type { Category } from '../types/Category';
 import { generateUuid } from '../utils/id';
+import { localDb } from './db/localDb';
+import { outboxService } from './outboxService';
 
 export const categoryService = {
   async listActive(): Promise<Category[]> {
@@ -22,12 +24,24 @@ export const categoryService = {
     await ensureUniqueActiveName(sanitizedName);
     const now = new Date().toISOString();
 
-    return categoryRepository.create({
+    const category: Category = {
       id: generateUuid(),
       name: sanitizedName,
       createdAt: now,
       updatedAt: now,
       syncStatus: 'pending',
+    };
+
+    return localDb.transaction('rw', localDb.categories, localDb.outbox, async () => {
+      const id = await categoryRepository.create(category);
+      await outboxService.enqueue({
+        entityType: 'category',
+        entityId: id,
+        operation: 'category.created',
+        payload: category,
+        occurredAt: now,
+      });
+      return id;
     });
   },
 
@@ -40,10 +54,25 @@ export const categoryService = {
 
     const sanitizedName = validateCategoryName(name);
     await ensureUniqueActiveName(sanitizedName, id);
-    await categoryRepository.update(id, {
+    const now = new Date().toISOString();
+    const changes: Partial<Category> = {
       name: sanitizedName,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
       syncStatus: 'pending',
+    };
+
+    await localDb.transaction('rw', localDb.categories, localDb.outbox, async () => {
+      const changed = await categoryRepository.update(id, changes);
+      if (!changed) throw new Error('Categoria nao encontrada.');
+      const updatedCategory = await categoryRepository.findById(id);
+      if (!updatedCategory) throw new Error('Categoria nao encontrada.');
+      await outboxService.enqueue({
+        entityType: 'category',
+        entityId: id,
+        operation: 'category.updated',
+        payload: updatedCategory,
+        occurredAt: now,
+      });
     });
   },
 
@@ -62,10 +91,24 @@ export const categoryService = {
       );
     }
 
-    await categoryRepository.update(id, {
-      deletedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      syncStatus: 'pending',
+    const now = new Date().toISOString();
+
+    await localDb.transaction('rw', localDb.categories, localDb.outbox, async () => {
+      const changed = await categoryRepository.update(id, {
+        deletedAt: now,
+        updatedAt: now,
+        syncStatus: 'pending',
+      });
+      if (!changed) throw new Error('Categoria nao encontrada.');
+      const deletedCategory = await categoryRepository.findById(id);
+      if (!deletedCategory) throw new Error('Categoria nao encontrada.');
+      await outboxService.enqueue({
+        entityType: 'category',
+        entityId: id,
+        operation: 'category.deleted',
+        payload: deletedCategory,
+        occurredAt: now,
+      });
     });
   },
 };

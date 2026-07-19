@@ -1,6 +1,8 @@
 # Como Continuar o Desenvolvimento do StockFlow
 
-> Guia de retomada atualizado em 14/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
+> Guia de retomada consolidado em 17/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
+
+O StockFlow é o TCC real. Não o trate, planeje ou adapte como Projeto Integrador sem uma nova solicitação explícita do responsável.
 
 ## Ordem obrigatória de leitura
 
@@ -16,12 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Commit de código de referência: `928d124`.
-- Schema Dexie atual: versão 9.
-- Estado de testes comprovado: 11 arquivos, 90 testes aprovados em 14/07/2026.
-- Última etapa de código: robustez de consultas, formulários e rotas de produtos.
-- Parte principal atual: **Parte 8 — Estratégia formal de testes**, avançada e ainda não concluída.
-- Próximo passo recomendado: mapear lacunas e ampliar testes do núcleo local; em seguida endurecer PWA/offline. Não antecipar Supabase ou sincronização.
+- Etapa funcional atual: Parte 6C com push manual/controlado de categorias e produtos; não existe pull, movimento remoto ou sincronização automática.
+- Schema Dexie atual: versão 10.
+- Estado de testes comprovado: 43 arquivos, 406 testes aprovados em 19/07/2026.
+- Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6C; regras 43–54 permanecem parcialmente atendidas**.
+- Pendências conhecidas das regras 19–29: nenhuma.
+- Próximo passo recomendado: revisar a 6C e validar as migrations em projeto Supabase de teste; não iniciar pull, movimentos remotos ou conflitos sem autorização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -67,13 +70,13 @@ Depois:
 - Usar `Domain` para regras puras, sem React ou Dexie.
 - Manter a transação de movimento atômica.
 - Evitar overengineering, camadas genéricas e dependências sem necessidade comprovada.
-- Não tratar `syncStatus` ou `syncPendingData()` como sincronização funcional.
-- Não afirmar que Supabase, Auth, PostgreSQL, RLS, outbox, conflitos ou multiusuário existem antes do código e dos testes correspondentes.
+- Não tratar `syncStatus`, outbox ou `getLocalSyncPreparationStatus()` como sincronização funcional.
+- Não afirmar que push, pull, retry com rede/automático, conflitos reais ou multiusuário existem antes do código e dos testes correspondentes.
 - Não inventar credenciais, resultados acadêmicos, estatísticas, testes executados ou funcionalidades concluídas.
 
 ## Como escolher a próxima mudança
 
-1. Comece pelo próximo item da parte principal atual no roadmap.
+1. Comece pelo próximo item da parte principal atual no roadmap oficial de 15 partes.
 2. Priorize integridade de dados, regras de estoque, funcionamento local, estabilidade, usabilidade e testes.
 3. Se uma prática transversal for necessária — teste, ADR ou critério de qualidade — use-a sem declarar a parte posterior como concluída.
 4. Se a mudança depender de decisão acadêmica, credencial ou requisito não verificável, documente o bloqueio e peça direção.
@@ -91,7 +94,7 @@ Antes de qualquer mudança persistida:
 - nunca invente snapshot, associação ou valor histórico;
 - documente contexto, decisão e consequências em ADR quando a mudança for arquitetural.
 
-A versão atual é 9. Uma mudança futura de schema deve começar em versão superior e preservar a sequência existente.
+A versão atual é 10. Uma mudança futura de schema deve começar em versão superior e preservar a sequência v1 → v10 existente.
 
 ## Regras específicas para estoque
 
@@ -101,7 +104,16 @@ A versão atual é 9. Uma mudança futura de schema deve começar em versão sup
 - Quantidade deve ser inteira e positiva.
 - Produto excluído não recebe nova movimentação.
 - Correção de estoque deve preferir uma nova movimentação de ajuste quando esse requisito for formalmente introduzido.
-- Evite alterar `currentQuantity` por caminhos que não preservem auditabilidade; o formulário atual permite isso e a questão deve ser tratada em etapa própria.
+- Saldo inicial é permitido somente na criação; edição comum não altera `currentQuantity`.
+- Alterações posteriores passam pelo `stockMovementService` e pela operação explícita `productRepository.updateStock()` dentro da transação.
+
+## Regras específicas para código do produto
+
+- `code` é referência interna opcional, não código de barras;
+- ausência é persistida como string vazia;
+- o valor salvo recebe trim externo sem conversão obrigatória para maiúsculas;
+- códigos não vazios são logicamente únicos entre produtos ativos, com comparação case-insensitive;
+- produto excluído não bloqueia reutilização e duplicidades legadas não são reescritas automaticamente.
 
 ## Regras específicas para sync e nuvem futura
 
@@ -121,7 +133,9 @@ Ao chegar às partes autorizadas:
 - conflitos devem ser detectados e armazenados, não sobrescritos silenciosamente;
 - o service worker não deve cachear respostas privadas indiscriminadamente.
 
-Até lá, não transformar o stub atual em sincronização simulada apresentada como pronta.
+A 6B fornece claim/retry local. A 6C liga um executor remoto somente ao botão da Conta, após reconfirmar sessão, business e membership. Eventos device-scoped precisam de ação separada para receber `userId`/`businessId`. Categorias/produtos usam RPC idempotente/versionada; movimentos e updates sem versão-base ficam em erro. Não ligar push ao boot, Auth, eventos online/offline, timer ou Service Worker. `conflict` continua somente previsto; não há resolução.
+
+Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
 ## Validação ao final de cada etapa
 
@@ -171,12 +185,13 @@ O relatório de entrega deve informar:
 ## Sinais de documentação desatualizada já conhecidos
 
 - `docs/auditoria-fase-0.md` contém uma raiz anterior e retrata lacunas de 12/07/2026, algumas já resolvidas.
-- O primeiro arquivo de ADR chama-se `ADR-001...`, mas o título interno diz “ADR-006”.
-- O README ainda representa principalmente a Etapa 1 inicial e não detalha schema v9, UUIDs, migrations e a suíte atual.
-- O banner offline promete sincronização ao reconectar, embora a sincronização não exista.
+- O ADR-001 teve sua numeração interna corrigida na consolidação documental de 15/07/2026.
+- O README representa o estado funcional, schema v10, migrations, arquitetura, limitações, suíte e roadmap atuais.
+- O primeiro reload offline e o ciclo de atualização A → B já foram validados manualmente; a coordenação de abas deve ser conferida novamente quando houver um upgrade de schema legítimo.
+- O identificador de build é derivado automaticamente dos artefatos gerados; não deve ser substituído por incremento manual de cache.
 
 Essas divergências devem ser consideradas ao retomar. Não corrija todas automaticamente em uma tarefa de escopo diferente.
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. Considere o Prompt Mestre como planejamento oficial e os documentos de continuidade como fotografia verificável do StockFlow. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirme raiz, branch e mudanças locais. Continue exatamente da próxima etapa indicada — atualmente a Parte 8, estratégia formal de testes — sem recriar o projeto, desfazer decisões consolidadas ou antecipar Supabase, Auth, sincronização e conflitos. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura `UI → Service → Repository → Dexie`, usando `Domain` para regras puras. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, confirme raiz, branch e worktree. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída no escopo de Auth/SQL, ainda exigindo validação operacional em Supabase real. A Parte 6 avançou até a 6C: outbox v10, retry local e push manual de categorias/produtos com sessão, business, RLS, idempotência e versão. Movimentos, pull, conflitos e automação não existem. Preserve schema/dados, soft delete, centavos, snapshots, UUIDs e arquitetura. Não avance sem autorização, commit ou push automático.

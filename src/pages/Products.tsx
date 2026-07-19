@@ -4,23 +4,35 @@ import { useDexieQuery } from '../hooks/useDexieQuery';
 import { productService } from '../services/productService';
 import { formatCentsToBRL, formatDate } from '../utils/formatters';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { needsRestock } from '../domain/stockStatus';
+import { getStockStatus, type StockStatus } from '../domain/stockStatus';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { getUserFacingError } from '../utils/errors';
+import { categoryService } from '../services/categoryService';
+import {
+  DEFAULT_PRODUCT_FILTERS,
+  filterAndSortProducts,
+  hasActiveProductFilters,
+  UNCATEGORIZED_FILTER,
+  type ProductFilters,
+  type ProductSort,
+  type ProductStockFilter,
+} from '../domain/productFilters';
 
 export function Products() {
-  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<ProductFilters>(DEFAULT_PRODUCT_FILTERS);
   const location = useLocation();
   const navigate = useNavigate();
   const [operationError, setOperationError] = useState('');
   const [success, setSuccess] = useState(() => readSuccessMessage(location.state));
   const [deletingId, setDeletingId] = useState<string>();
   const deletionInProgress = useRef(false);
-  const { data: products, isLoading, error, refetch } = useDexieQuery(
+  const productsQuery = useDexieQuery(
     () => productService.listActive(),
     [],
   );
+  const categoriesQuery = useDexieQuery(() => categoryService.listActive(), []);
+  const products = productsQuery.data;
 
   useEffect(() => {
     if (readSuccessMessage(location.state)) {
@@ -29,18 +41,13 @@ export function Products() {
   }, [location.pathname, location.state, navigate]);
 
   const filteredProducts = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    return filterAndSortProducts(products, filters);
+  }, [filters, products]);
+  const hasActiveFilters = hasActiveProductFilters(filters);
 
-    if (!normalizedSearch) {
-      return products;
-    }
-
-    return products.filter(
-      (product) =>
-        product.name.toLowerCase().includes(normalizedSearch) ||
-        product.code.toLowerCase().includes(normalizedSearch),
-    );
-  }, [products, search]);
+  function updateFilter<K extends keyof ProductFilters>(key: K, value: ProductFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
 
   async function handleDelete(id: string) {
     if (deletionInProgress.current) {
@@ -101,30 +108,106 @@ export function Products() {
         </p>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="text-sm font-medium text-slate-700" htmlFor="product-search">
-          Buscar por nome ou codigo
-        </label>
-        <input
-          id="product-search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none transition focus:border-brand-700 focus:ring-2 focus:ring-brand-100"
-          placeholder="Ex.: Arroz ou COD-001"
-        />
-      </div>
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,2fr)_repeat(3,minmax(10rem,1fr))]">
+          <label className="block text-sm font-medium text-slate-700" htmlFor="product-search">
+            Buscar por nome ou codigo
+            <input
+              id="product-search"
+              value={filters.search}
+              onChange={(event) => updateFilter('search', event.target.value)}
+              className="input mt-2"
+              placeholder="Ex.: Arroz ou COD-001"
+            />
+          </label>
 
-      {isLoading ? (
+          <label className="block text-sm font-medium text-slate-700" htmlFor="product-category-filter">
+            Categoria
+            <select
+              id="product-category-filter"
+              value={filters.category}
+              onChange={(event) => updateFilter('category', event.target.value)}
+              className="input mt-2"
+            >
+              <option value="all">Todas as categorias</option>
+              <option value={UNCATEGORIZED_FILTER}>Sem categoria</option>
+              {categoriesQuery.data.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium text-slate-700" htmlFor="product-stock-filter">
+            Situacao do estoque
+            <select
+              id="product-stock-filter"
+              value={filters.stockStatus}
+              onChange={(event) =>
+                updateFilter('stockStatus', event.target.value as ProductStockFilter)
+              }
+              className="input mt-2"
+            >
+              <option value="all">Todos</option>
+              <option value="normal">Normal</option>
+              <option value="low-stock">Estoque baixo</option>
+              <option value="out-of-stock">Sem estoque</option>
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium text-slate-700" htmlFor="product-sort">
+            Ordenar por
+            <select
+              id="product-sort"
+              value={filters.sort}
+              onChange={(event) => updateFilter('sort', event.target.value as ProductSort)}
+              className="input mt-2"
+            >
+              <option value="name-asc">Nome A-Z</option>
+              <option value="name-desc">Nome Z-A</option>
+              <option value="stock-asc">Estoque menor primeiro</option>
+              <option value="stock-desc">Estoque maior primeiro</option>
+              <option value="price-asc">Preco menor primeiro</option>
+              <option value="price-desc">Preco maior primeiro</option>
+              <option value="updated-desc">Atualizacao mais recente</option>
+              <option value="updated-asc">Atualizacao mais antiga</option>
+            </select>
+          </label>
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => setFilters(DEFAULT_PRODUCT_FILTERS)}
+            className="mt-4 min-h-10 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          >
+            Limpar filtros
+          </button>
+        )}
+      </section>
+
+      {productsQuery.isLoading || categoriesQuery.isLoading ? (
         <LoadingState message="Carregando produtos..." />
-      ) : error ? (
-        <ErrorState message="Nao foi possivel carregar os produtos." onRetry={refetch} />
+      ) : productsQuery.error || categoriesQuery.error ? (
+        <ErrorState
+          message="Nao foi possivel carregar os produtos."
+          onRetry={() => {
+            productsQuery.refetch();
+            categoriesQuery.refetch();
+          }}
+        />
       ) : filteredProducts.length === 0 ? (
         <EmptyState
-          title={products.length === 0 ? 'Nenhum produto cadastrado' : 'Nenhum produto encontrado'}
+          title={
+            products.length === 0
+              ? 'Nenhum produto cadastrado.'
+              : 'Nenhum produto encontrado com os filtros atuais.'
+          }
           description={
             products.length === 0
               ? 'Crie o primeiro produto para comecar o controle de estoque.'
-              : 'Tente buscar por outro nome ou codigo.'
+              : 'Ajuste ou limpe os filtros para consultar outros produtos.'
           }
         />
       ) : (
@@ -138,7 +221,8 @@ export function Products() {
           </div>
           <div className="divide-y divide-slate-100">
             {filteredProducts.map((product) => {
-              const isLowStock = needsRestock(product);
+              const stockStatus = getStockStatus(product);
+              const statusPresentation = STOCK_STATUS_PRESENTATION[stockStatus];
 
               return (
                 <article
@@ -148,7 +232,7 @@ export function Products() {
                   <div>
                     <h2 className="font-semibold text-slate-950">{product.name}</h2>
                     <p className="text-sm text-slate-500">
-                      {product.code} • Atualizado em {formatDate(product.updatedAt)}
+                      {product.code || 'Sem codigo'} • Atualizado em {formatDate(product.updatedAt)}
                     </p>
                   </div>
                   <p className="text-sm text-slate-700">{product.categoryName}</p>
@@ -158,12 +242,10 @@ export function Products() {
                   <div>
                     <span
                       className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                        isLowStock
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-emerald-100 text-emerald-700'
+                        statusPresentation.className
                       }`}
                     >
-                      {product.currentQuantity} un.
+                      {product.currentQuantity} un. · {statusPresentation.label}
                     </span>
                     <p className="mt-1 text-xs text-slate-500">Min. {product.minimumStock}</p>
                   </div>
@@ -192,6 +274,15 @@ export function Products() {
     </div>
   );
 }
+
+const STOCK_STATUS_PRESENTATION: Record<
+  StockStatus,
+  { label: string; className: string }
+> = {
+  normal: { label: 'Normal', className: 'bg-emerald-100 text-emerald-700' },
+  'low-stock': { label: 'Estoque baixo', className: 'bg-amber-100 text-amber-800' },
+  'out-of-stock': { label: 'Sem estoque', className: 'bg-rose-100 text-rose-700' },
+};
 
 function readSuccessMessage(state: unknown): string {
   if (typeof state !== 'object' || state === null || !('successMessage' in state)) {

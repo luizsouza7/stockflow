@@ -1,5 +1,7 @@
 # Auditoria da Fase 0 — 12/07/2026
 
+> Registro histórico preservado. As referências a Projeto Integrador 2 abaixo descrevem o contexto existente na data da auditoria e não orientam o estado atual. O StockFlow é hoje tratado exclusivamente como TCC, conforme decisão posterior do responsável e os documentos permanentes de continuidade.
+
 ## Ambiente e repositório
 
 - Raiz do projeto e do Git: `C:/Users/lufel/Desktop/sistema-controledeestoque`.

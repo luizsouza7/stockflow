@@ -5,6 +5,15 @@ import { StockFlowDatabase } from './localDb';
 
 const databaseNames: string[] = [];
 
+function createVersionOneDatabase(name: string) {
+  const database = new Dexie(name);
+  database.version(1).stores({
+    products: '++id, name, code, category, currentQuantity, minimumStock, syncStatus, updatedAt',
+    movements: '++id, productId, type, date, syncStatus',
+  });
+  return database;
+}
+
 function createVersionTwoDatabase(name: string) {
   const database = new Dexie(name);
   database.version(1).stores({
@@ -50,6 +59,17 @@ function createVersionFiveDatabase(name: string) {
   return database;
 }
 
+function createVersionNineDatabase(name: string) {
+  const database = new Dexie(name);
+  database.version(9).stores({
+    products:
+      'id, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+    movements: 'id, productId, type, date, syncStatus',
+    categories: 'id, name, updatedAt, deletedAt, syncStatus',
+  });
+  return database;
+}
+
 function schemaSignature(database: Dexie) {
   return database.tables
     .map((table) => ({
@@ -63,6 +83,88 @@ function schemaSignature(database: Dexie) {
 describe('migracoes do banco local', () => {
   afterEach(async () => {
     await Promise.all(databaseNames.splice(0).map((name) => Dexie.delete(name)));
+  });
+
+  it('migra dados historicos diretamente da versao 1 ate o schema atual v10', async () => {
+    const databaseName = `stockflow-v1-to-v10-${crypto.randomUUID()}`;
+    databaseNames.push(databaseName);
+    const legacyDatabase = createVersionOneDatabase(databaseName);
+    const createdAt = '2025-01-10T09:00:00.000Z';
+    const updatedAt = '2025-01-11T10:30:00.000Z';
+
+    await legacyDatabase.open();
+    expect(legacyDatabase.verno).toBe(1);
+
+    const legacyProductId = await legacyDatabase
+      .table<Record<string, unknown>, number>('products')
+      .add({
+        name: 'Cafe historico',
+        code: 'CAFE-V1',
+        category: 'Bebidas',
+        price: 19.9,
+        currentQuantity: 7,
+        minimumStock: 2,
+        createdAt,
+        updatedAt,
+        syncStatus: 'pending',
+      });
+    await legacyDatabase.table('movements').add({
+      productId: legacyProductId,
+      type: 'entrada',
+      quantity: 2,
+      note: 'Carga historica',
+      date: updatedAt,
+      syncStatus: 'pending',
+    });
+    legacyDatabase.close();
+
+    const migratedDatabase = new StockFlowDatabase(databaseName);
+    await migratedDatabase.open();
+
+    const products = await migratedDatabase.products.toArray();
+    const movements = await migratedDatabase.movements.toArray();
+    const categories = await migratedDatabase.categories.toArray();
+    const product = products[0];
+    const movement = movements[0];
+
+    expect(migratedDatabase.verno).toBe(10);
+    expect(migratedDatabase.tables.map((table) => table.name).sort()).toEqual([
+      'categories',
+      'movements',
+      'outbox',
+      'products',
+    ]);
+    expect(products).toHaveLength(1);
+    expect(movements).toHaveLength(1);
+    expect(categories).toHaveLength(1);
+    expect(await migratedDatabase.outbox.count()).toBe(0);
+    expect(product).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+      name: 'Cafe historico',
+      code: 'CAFE-V1',
+      salePriceInCents: 1990,
+      currentQuantity: 7,
+      minimumStock: 2,
+      createdAt,
+      updatedAt,
+      syncStatus: 'pending',
+    });
+    expect(product).not.toHaveProperty('price');
+    expect(categories[0]).toMatchObject({ id: product?.categoryId, name: 'Bebidas' });
+    expect(movement).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+      productId: product?.id,
+      type: 'entrada',
+      quantity: 2,
+      note: 'Carga historica',
+      date: updatedAt,
+      syncStatus: 'pending',
+      isLegacy: true,
+    });
+    expect(movement).not.toHaveProperty('previousQuantity');
+    expect(movement).not.toHaveProperty('resultingQuantity');
+
+    migratedDatabase.close();
   });
 
   it.each([
@@ -517,10 +619,11 @@ describe('migracoes do banco local', () => {
       reopenedMovements.map((movement) => [movement.note, movement]),
     );
 
-    expect(reopenedDatabase.verno).toBe(9);
+    expect(reopenedDatabase.verno).toBe(10);
     expect(reopenedDatabase.tables.map((table) => table.name).sort()).toEqual([
       'categories',
       'movements',
+      'outbox',
       'products',
     ]);
     expect(reopenedProductByCode.get('CAFE')?.id).toBe(cafe?.id);
@@ -613,6 +716,82 @@ describe('migracoes do banco local', () => {
     unchangedV5.close();
   });
 
+  it('adiciona outbox vazia no upgrade v9 para v10 e preserva os dados existentes', async () => {
+    const databaseName = `stockflow-v9-to-v10-${crypto.randomUUID()}`;
+    databaseNames.push(databaseName);
+    const versionNineDatabase = createVersionNineDatabase(databaseName);
+    const categoryId = crypto.randomUUID();
+    const productId = crypto.randomUUID();
+    const movementId = crypto.randomUUID();
+    const now = '2026-07-17T12:00:00.000Z';
+
+    await versionNineDatabase.open();
+    await versionNineDatabase.table('categories').add({
+      id: categoryId,
+      name: 'Preservada',
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+    });
+    await versionNineDatabase.table('products').add({
+      id: productId,
+      name: 'Produto preservado',
+      code: 'PRESERVADO',
+      categoryId,
+      salePriceInCents: 1234,
+      currentQuantity: 5,
+      minimumStock: 1,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+    });
+    await versionNineDatabase.table('movements').add({
+      id: movementId,
+      productId,
+      type: 'entrada',
+      quantity: 5,
+      note: 'Inicial',
+      date: now,
+      previousQuantity: 0,
+      resultingQuantity: 5,
+      isLegacy: false,
+      syncStatus: 'pending',
+    });
+    versionNineDatabase.close();
+
+    const migratedDatabase = new StockFlowDatabase(databaseName);
+    await migratedDatabase.open();
+
+    expect(migratedDatabase.verno).toBe(10);
+    expect(await migratedDatabase.categories.get(categoryId)).toMatchObject({ name: 'Preservada' });
+    expect(await migratedDatabase.products.get(productId)).toMatchObject({
+      salePriceInCents: 1234,
+      currentQuantity: 5,
+    });
+    expect(await migratedDatabase.movements.get(movementId)).toMatchObject({
+      productId,
+      previousQuantity: 0,
+      resultingQuantity: 5,
+    });
+    expect(await migratedDatabase.outbox.count()).toBe(0);
+    expect(migratedDatabase.outbox.schema.primKey).toMatchObject({
+      keyPath: 'id',
+      auto: false,
+    });
+    expect(migratedDatabase.outbox.schema.indexes.map((index) => index.src).sort()).toEqual([
+      '&idempotencyKey',
+      '[entityType+entityId]',
+      'businessId',
+      'createdAt',
+      'nextAttemptAt',
+      'operation',
+      'status',
+      'updatedAt',
+      'userId',
+    ].sort());
+    migratedDatabase.close();
+  });
+
   it('produz o mesmo schema final em fresh install e upgrade direto da v5', async () => {
     const freshDatabaseName = `stockflow-fresh-schema-${crypto.randomUUID()}`;
     const migratedDatabaseName = `stockflow-migrated-schema-${crypto.randomUUID()}`;
@@ -626,8 +805,8 @@ describe('migracoes do banco local', () => {
     await freshDatabase.open();
     await migratedDatabase.open();
 
-    expect(freshDatabase.verno).toBe(9);
-    expect(migratedDatabase.verno).toBe(9);
+    expect(freshDatabase.verno).toBe(10);
+    expect(migratedDatabase.verno).toBe(10);
     expect(schemaSignature(migratedDatabase)).toEqual(schemaSignature(freshDatabase));
     expect(schemaSignature(freshDatabase)).toEqual([
       {
@@ -639,6 +818,21 @@ describe('migracoes do banco local', () => {
         name: 'movements',
         primaryKey: 'id',
         indexes: ['date', 'productId', 'syncStatus', 'type'],
+      },
+      {
+        name: 'outbox',
+        primaryKey: 'id',
+        indexes: [
+          '&idempotencyKey',
+          '[entityType+entityId]',
+          'businessId',
+          'createdAt',
+          'nextAttemptAt',
+          'operation',
+          'status',
+          'updatedAt',
+          'userId',
+        ].sort(),
       },
       {
         name: 'products',

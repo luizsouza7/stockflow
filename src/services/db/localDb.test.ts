@@ -7,12 +7,12 @@ import { localDb } from './localDb';
 import { formatCentsForInput, parseCurrencyToCents } from '../../utils/formatters';
 import { categoryService } from '../categoryService';
 
-async function createTestProduct(quantity = 5) {
+async function createTestProduct(quantity = 5, code = crypto.randomUUID()) {
   const now = new Date().toISOString();
 
   return productService.create({
     name: 'Arroz',
-    code: 'ARROZ-001',
+    code,
     salePriceInCents: 1990,
     currentQuantity: quantity,
     minimumStock: 2,
@@ -93,10 +93,11 @@ describe('regras locais de estoque', () => {
   });
 
   it('cria banco novo diretamente no schema final e persiste UUIDs apos reabertura', async () => {
-    expect(localDb.verno).toBe(9);
+    expect(localDb.verno).toBe(10);
     expect(localDb.tables.map((table) => table.name).sort()).toEqual([
       'categories',
       'movements',
+      'outbox',
       'products',
     ]);
 
@@ -130,7 +131,7 @@ describe('regras locais de estoque', () => {
     localDb.close();
     await localDb.open();
 
-    expect(localDb.verno).toBe(9);
+    expect(localDb.verno).toBe(10);
     expect((await localDb.products.get(productId))?.id).toBe(productId);
     expect((await localDb.categories.get(categoryId))?.id).toBe(categoryId);
     expect(await localDb.movements.get(movementId ?? '')).toMatchObject({

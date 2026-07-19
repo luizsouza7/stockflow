@@ -6,6 +6,7 @@ import { Movements } from './pages/Movements';
 import { ProductForm } from './pages/ProductForm';
 import { Products } from './pages/Products';
 import { Categories } from './pages/Categories';
+import { DataExport } from './pages/DataExport';
 
 const router = createBrowserRouter([
   {
@@ -19,6 +20,11 @@ const router = createBrowserRouter([
       { path: 'categorias', element: <Categories /> },
       { path: 'movimentacoes', element: <Movements /> },
       { path: 'alertas', element: <Alerts /> },
+      { path: 'dados', element: <DataExport /> },
+      {
+        path: 'conta',
+        lazy: async () => ({ Component: (await import('./pages/Account')).Account }),
+      },
     ],
   },
 ]);

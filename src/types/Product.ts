@@ -16,6 +16,10 @@ export interface Product {
 
 export type CreateProductInput = Omit<Product, 'id'>;
 
+export type UpdateProductInput = Partial<
+  Pick<Product, 'name' | 'code' | 'categoryId' | 'salePriceInCents' | 'minimumStock'>
+>;
+
 export interface ProductFormData
   extends Pick<Product, 'name' | 'code' | 'currentQuantity' | 'minimumStock'> {
   categoryId: string;
