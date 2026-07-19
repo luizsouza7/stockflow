@@ -72,11 +72,13 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** não iniciada.
+**Status:** em andamento pelas fatias locais 6A e 6B; a sincronização remota ainda não foi iniciada.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
-**Pendente:** engine de push/pull, confirmação, cursor, backoff ativo, conflitos, concorrência, função PostgreSQL e central de sincronização. Nenhum dado é enviado ou buscado nesta fatia.
+**Progresso da fatia 6B:** o processador local, chamado apenas de forma explícita com executor injetado, faz claim transacional de `pending` e `error` vencido, usa ordem `createdAt`/`id`, lote limitado, transição para `processing`, remoção após sucesso do executor, falha com erro sanitizado e backoff de 1/5/15/30/60 minutos, além de reset manual de `processing` travado. O indicador distingue fila, processamento, erro e conflito previsto sem prometer nuvem.
+
+**Pendente:** executor remoto, engine de push/pull, confirmação remota, retry com rede, cursor, conflitos reais, concorrência remota, função PostgreSQL e central de sincronização. Nenhum dado é enviado ou buscado nas fatias 6A/6B; não há processamento automático.
 
 ## Parte 7 — regras 55–69
 
@@ -94,7 +96,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 37 arquivos com 307 testes aprovados na validação de 17/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, conectividade, PWA, lifecycle do IndexedDB, backup/exportação, Auth opcional e SQL/RLS.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 38 arquivos com 348 testes aprovados na validação de 19/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry local, ausência de sync real, conectividade, PWA, lifecycle do IndexedDB, backup/exportação, Auth opcional e SQL/RLS.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -170,4 +172,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Revisar a implementação da fatia 6A e validar manualmente o upgrade v9 → v10 entre abas. Não iniciar push, pull ou outra fatia da Parte 6 sem autorização explícita.
+Revisar a implementação da fatia 6B e validar manualmente o upgrade v9 → v10 e o claim concorrente entre abas. Não iniciar push remoto, pull ou conflitos sem autorização explícita para uma nova fatia.

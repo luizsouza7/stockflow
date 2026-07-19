@@ -18,13 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa funcional atual: Parte 6A com outbox local transacional; não existe sincronização remota.
+- Etapa funcional atual: Parte 6B com processamento local manual/testável da outbox; não existe sincronização remota.
 - Schema Dexie atual: versão 10.
-- Estado de testes comprovado: 37 arquivos, 307 testes aprovados em 17/07/2026.
+- Estado de testes comprovado: 38 arquivos, 348 testes aprovados em 19/07/2026.
 - Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
-- Parte principal atual: **Parte 6 iniciada somente na fatia 6A; regras 43–54 permanecem parcialmente atendidas**.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A e 6B; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: revisar a 6A e validar o upgrade v9 → v10 entre abas; não iniciar push, pull ou conflitos sem autorização.
+- Próximo passo recomendado: revisar a 6B e validar o upgrade v9 → v10 e o claim concorrente entre abas; não iniciar push, pull ou conflitos sem autorização.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -71,7 +71,7 @@ Depois:
 - Manter a transação de movimento atômica.
 - Evitar overengineering, camadas genéricas e dependências sem necessidade comprovada.
 - Não tratar `syncStatus`, outbox ou `getLocalSyncPreparationStatus()` como sincronização funcional.
-- Não afirmar que push, pull, retry ativo, conflitos ou multiusuário existem antes do código e dos testes correspondentes.
+- Não afirmar que push, pull, retry com rede/automático, conflitos reais ou multiusuário existem antes do código e dos testes correspondentes.
 - Não inventar credenciais, resultados acadêmicos, estatísticas, testes executados ou funcionalidades concluídas.
 
 ## Como escolher a próxima mudança
@@ -133,6 +133,8 @@ Ao chegar às partes autorizadas:
 - conflitos devem ser detectados e armazenados, não sobrescritos silenciosamente;
 - o service worker não deve cachear respostas privadas indiscriminadamente.
 
+A fatia 6B já fornece apenas a mecânica local: claim transacional, ordem determinística, lote limitado, executor injetado, erro sanitizado, backoff de 1/5/15/30/60 minutos e reset explícito de `processing` antigo. Não ligar essas funções ao boot, Auth, eventos online/offline, timer ou UI até uma fatia remota ser autorizada e possuir confirmação real. `conflict` continua somente previsto; não há resolução.
+
 Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
 ## Validação ao final de cada etapa
@@ -192,4 +194,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. As Partes 3 e 4 estão concluídas. A Parte 5 possui Auth opcional e migration PostgreSQL/RLS preparada, mas precisa de validação manual em projeto Supabase real; os dados IndexedDB continuam device-scoped. A Parte 6 foi iniciada somente pela 6A: a outbox local v10 registra intenções transacionais, mas nada é enviado ou baixado. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura local. Não implemente push, pull, retry ativo ou conflitos sem autorização explícita. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, execute `git status`, `git branch --show-current` e `git rev-parse --show-toplevel`, confirmando raiz, branch e mudanças locais. As Partes 3 e 4 estão concluídas. A Parte 5 possui Auth opcional e migration PostgreSQL/RLS preparada, mas precisa de validação manual em projeto Supabase real; os dados IndexedDB continuam device-scoped. A Parte 6 avançou pelas fatias 6A e 6B: a outbox local v10 registra intenções transacionais e possui processamento manual/testável com retry/backoff local, mas nada é enviado ou baixado. Preserve schema/dados, soft delete, histórico, centavos, snapshots, UUIDs e a arquitetura local. Não implemente push, pull, retry com rede/automático ou conflitos reais sem autorização explícita. Execute uma evolução principal por vez, valide-a, não faça commit nem push e devolva o controle ao usuário antes da etapa seguinte.

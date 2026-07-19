@@ -9,26 +9,41 @@ import type { DatabaseLifecycleState } from '../services/db/databaseLifecycle';
 
 afterEach(cleanup);
 
-function summary(pending: number): SyncStatusSummary {
+function summary({
+  pending = 0,
+  processing = 0,
+  error = 0,
+  conflict = 0,
+}: Partial<SyncStatusSummary> = {}): SyncStatusSummary {
   return {
     pending,
-    processing: 0,
-    error: 0,
-    conflict: 0,
-    totalAwaitingAction: pending,
+    processing,
+    error,
+    conflict,
+    totalAwaitingAction: pending + processing + error + conflict,
   };
 }
 
 function renderIndicator({
   pending = 0,
+  processing = 0,
+  error = 0,
+  conflict = 0,
   isOnline = true,
   lifecycle = 'normal',
 }: {
   pending?: number;
+  processing?: number;
+  error?: number;
+  conflict?: number;
   isOnline?: boolean;
   lifecycle?: DatabaseLifecycleState['status'];
 } = {}) {
-  const service = { getStatusSummary: vi.fn().mockResolvedValue(summary(pending)) };
+  const service = {
+    getStatusSummary: vi
+      .fn()
+      .mockResolvedValue(summary({ pending, processing, error, conflict })),
+  };
   render(
     <SyncStatusIndicator
       isOnline={isOnline}
@@ -42,7 +57,22 @@ function renderIndicator({
 describe('indicador local de sincronizacao futura', () => {
   it('mostra a quantidade de alteracoes pendentes', async () => {
     renderIndicator({ pending: 4 });
-    expect(await screen.findByText(/4 alteracoes locais pendentes/)).toBeTruthy();
+    expect(await screen.findByText(/4 alteracoes aguardando processamento futuro/)).toBeTruthy();
+  });
+
+  it('mostra processing com texto amigavel e local', async () => {
+    renderIndicator({ processing: 2 });
+    expect(await screen.findByText(/2 alteracoes em processamento local/)).toBeTruthy();
+  });
+
+  it('mostra error como espera por nova tentativa local', async () => {
+    renderIndicator({ error: 1 });
+    expect(await screen.findByText(/1 alteracao com erro aguardando nova tentativa local/)).toBeTruthy();
+  });
+
+  it('mostra conflict previsto sem prometer resolucao', async () => {
+    renderIndicator({ conflict: 1 });
+    expect(await screen.findByText(/1 alteracao marcada como conflito/)).toBeTruthy();
   });
 
   it('mantem mensagem honesta sem depender de login ou Supabase configurado', async () => {
@@ -58,7 +88,9 @@ describe('indicador local de sincronizacao futura', () => {
 
   it('mostra estado adequado quando a outbox esta vazia', async () => {
     renderIndicator();
-    expect(await screen.findByText(/Nenhuma alteracao local pendente na outbox/)).toBeTruthy();
+    expect(await screen.findByText(/Nenhuma alteracao local pendente/)).toBeTruthy();
+    expect(screen.getByText(/Sincronizacao remota ainda nao esta disponivel/)).toBeTruthy();
+    expect(screen.queryByText(/Tudo sincronizado/i)).toBeNull();
   });
 
   it('nao consulta o banco quando o lifecycle exige reload', async () => {

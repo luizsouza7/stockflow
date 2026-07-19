@@ -10,6 +10,23 @@ const LOCAL_MUTATION_FILES = [
 ].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8'));
 
 const SYNC_FOUNDATION_SOURCE = readFileSync(new URL('./syncService.ts', import.meta.url), 'utf8');
+const APP_BOOT_SOURCE = [
+  '../../main.tsx',
+  '../../App.tsx',
+  '../../components/Layout.tsx',
+].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
+const AUTH_SOURCE = [
+  '../authService.ts',
+  '../../hooks/useAuthSession.ts',
+].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
+const CONNECTIVITY_SOURCE = [
+  '../../hooks/useOnlineStatus.ts',
+  '../../components/Layout.tsx',
+].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
+const SERVICE_WORKER_SOURCE = readFileSync(
+  new URL('../../../public/sw.js', import.meta.url),
+  'utf8',
+);
 
 describe('limites da fundacao local de sync', () => {
   it('nao acessa Supabase, fetch ou tabelas remotas nas mutacoes locais', () => {
@@ -22,5 +39,33 @@ describe('limites da fundacao local de sync', () => {
       /supabase|fetch\s*\(|setInterval\s*\(|push\s*\(|pull\s*\(|onAuthStateChange/i,
     );
     expect(SYNC_FOUNDATION_SOURCE).toContain('getLocalSyncPreparationStatus');
+  });
+
+  it('processador local nao importa Supabase nem usa APIs de rede', () => {
+    expect(SYNC_FOUNDATION_SOURCE).not.toMatch(
+      /supabase|fetch\s*\(|XMLHttpRequest|\.from\s*\(/i,
+    );
+  });
+
+  it('app nao chama o processador automaticamente no boot', () => {
+    expect(APP_BOOT_SOURCE).not.toMatch(/processOutboxBatch|resetStaleProcessing/);
+  });
+
+  it('login e mudancas de sessao nao disparam processamento', () => {
+    expect(AUTH_SOURCE).not.toMatch(/processOutboxBatch|resetStaleProcessing/);
+  });
+
+  it('eventos online e offline nao disparam processamento', () => {
+    expect(CONNECTIVITY_SOURCE).not.toMatch(/processOutboxBatch|resetStaleProcessing/);
+  });
+
+  it('nao cria setInterval para sincronizacao', () => {
+    expect(`${SYNC_FOUNDATION_SOURCE}\n${APP_BOOT_SOURCE}`).not.toMatch(/setInterval\s*\(/);
+  });
+
+  it('service worker nao registra background sync', () => {
+    expect(SERVICE_WORKER_SOURCE).not.toMatch(
+      /addEventListener\s*\(\s*['"](?:sync|periodicsync)['"]/i,
+    );
   });
 });

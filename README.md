@@ -11,8 +11,8 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 10**, com outbox local persistente.
 - Parte 5 iniciada com Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 iniciada somente na fatia 6A: fundação local da sincronização, sem push ou pull.
-- Suíte atual: **307 testes em 37 arquivos**.
+- Parte 6 avançou pelas fatias 6A e 6B: outbox transacional e processamento local manual/testável, sem rede, push ou pull.
+- Suíte atual: **348 testes em 38 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -71,13 +71,19 @@ A rota **Conta** é carregada sob demanda e usa o cliente oficial Supabase quand
 
 A migration versionada em `supabase/migrations` prepara perfis, estabelecimentos, memberships, categorias, produtos e movimentações. As tabelas de negócio usam `business_id`, RLS e policies baseadas em membership ativa e `auth.uid()`. O SQL não é executado pelo frontend e ainda precisa ser aplicado e validado em um projeto Supabase real.
 
+## Processamento local da outbox — Parte 6B
+
+O processador local recebe um executor injetado e não é chamado pela UI, pelo boot, pelo login nem por eventos de conectividade. Em uma transação Dexie, ele seleciona `pending` e `error` cujo `nextAttemptAt` venceu, ordena por `createdAt` e `id`, limita o lote a 25 itens por padrão (máximo de 100) e marca o lote como `processing` antes do executor. O claim transacional impede que duas execuções concorrentes obtenham o mesmo evento; `updatedAt` também atua como token simples para não finalizar um claim que já tenha sido recuperado.
+
+Sucesso confirmado pelo executor injetado remove o evento da outbox. Essa confirmação é apenas a semântica do executor fornecido em teste ou integração futura: nenhum executor remoto existe na aplicação atual e a UI não apresenta sucesso em nuvem. Falhas viram `error`, incrementam `attemptCount`, guardam `lastError` sanitizado e calculam `nextAttemptAt` em 1, 5, 15, 30 e, depois, no máximo 60 minutos. Não há retry automático; uma função manual permite recolocar `processing` antigo em `pending` após interrupção. `conflict` está previsto no contrato e no indicador, mas não é processado nem resolvido.
+
 Auth e SQL preparado não constituem sincronização: nenhum dado IndexedDB é enviado ou baixado automaticamente.
 
 ## Limitações atuais
 
 - Auth depende de configuração e de um projeto Supabase real; a migration PostgreSQL ainda não foi aplicada por esta etapa;
-- existe outbox somente local, mas não há sincronização real, push, pull, retry de rede ou resolução de conflitos;
-- `getLocalSyncPreparationStatus()` consulta somente o resumo local e não envia dados;
+- existe outbox somente local, com retry/backoff persistido como fundação, mas não há sincronização real, push, pull, retry de rede ou resolução de conflitos;
+- `getLocalSyncPreparationStatus()`, `processOutboxBatch()` e `resetStaleProcessing()` operam somente sobre o IndexedDB e não enviam dados;
 - não há importação/restauração, backup automático ou backup em nuvem;
 - não há testes E2E nem automação de navegador para instalação/offline da PWA, coverage configurada ou CI;
 - os dados permanecem no navegador e no dispositivo utilizados.
@@ -126,7 +132,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v10.
 
-Estado validado nesta etapa: **307 testes aprovados em 37 arquivos**.
+Estado validado nesta etapa: **348 testes aprovados em 38 arquivos**.
 
 ## Banco local e migrations
 
@@ -175,7 +181,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 foi iniciada com as regras 36–42 implementadas em código e SQL, pendente de validação manual em projeto Supabase real. A Parte 6 foi iniciada somente na fatia 6A: mutações locais geram eventos transacionais na outbox, e a interface informa pendências sem prometer nuvem. Push, pull, retry ativo, conflitos e concorrência remota continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 foi iniciada com as regras 36–42 implementadas em código e SQL, pendente de validação manual em projeto Supabase real. A Parte 6 avançou pelas fatias 6A e 6B: mutações locais geram eventos transacionais, o processador local testável controla claim, estados, falha, retry/backoff e recuperação de itens travados, e a interface informa cada estado sem prometer nuvem. Push, pull, retry com rede, conflitos reais e concorrência remota continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 
