@@ -27,6 +27,11 @@ const SERVICE_WORKER_SOURCE = readFileSync(
   new URL('../../../public/sw.js', import.meta.url),
   'utf8',
 );
+const MANUAL_PUSH_SOURCE = [
+  './manualPushService.ts',
+  './syncRemoteGateway.ts',
+  '../../components/ManualCloudPushPanel.tsx',
+].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
 
 describe('limites da fundacao local de sync', () => {
   it('nao acessa Supabase, fetch ou tabelas remotas nas mutacoes locais', () => {
@@ -66,6 +71,18 @@ describe('limites da fundacao local de sync', () => {
   it('service worker nao registra background sync', () => {
     expect(SERVICE_WORKER_SOURCE).not.toMatch(
       /addEventListener\s*\(\s*['"](?:sync|periodicsync)['"]/i,
+    );
+  });
+
+  it('push remoto nao possui timer, listener de Auth ou listener de conectividade', () => {
+    expect(MANUAL_PUSH_SOURCE).not.toMatch(
+      /setInterval\s*\(|onAuthStateChange|addEventListener\s*\(\s*['"]online['"]/i,
+    );
+  });
+
+  it('boot, Auth e conectividade nao chamam push manual', () => {
+    expect(`${APP_BOOT_SOURCE}\n${AUTH_SOURCE}\n${CONNECTIVITY_SOURCE}`).not.toMatch(
+      /manualPushService\.push|processOutboxBatch|pushCompatibleEvents/,
     );
   });
 });

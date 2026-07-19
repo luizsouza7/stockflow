@@ -7,14 +7,23 @@ import {
   type AuthOperation,
   type AuthService,
 } from '../services/authService';
+import {
+  businessContextService,
+  type BusinessContextService,
+} from '../services/businessContextService';
+import { ManualCloudPushPanel } from '../components/ManualCloudPushPanel';
 
 type AuthMode = 'sign-in' | 'sign-up';
 
 interface AccountProps {
   service?: AuthService;
+  contextService?: BusinessContextService;
 }
 
-export function Account({ service = authService }: AccountProps) {
+export function Account({
+  service = authService,
+  contextService = businessContextService,
+}: AccountProps) {
   const sessionState = useAuthSession(service);
   const isOnline = useOnlineStatus();
   const [mode, setMode] = useState<AuthMode>('sign-in');
@@ -120,18 +129,28 @@ export function Account({ service = authService }: AccountProps) {
           <p className="mt-2 text-sm text-slate-600">
             Conectado como <strong>{sessionState.session.user.email ?? 'usuario autenticado'}</strong>.
           </p>
-          <p className="mt-2 text-sm text-slate-600">
-            A sincronizacao de dados ainda nao esta disponivel.
-          </p>
           <button
             type="button"
-            onClick={() => void runOperation('sign-out', () => service.signOut())}
+            onClick={() =>
+              void runOperation('sign-out', async () => {
+                await service.signOut();
+                contextService.clearSelected(sessionState.session.user.id);
+              })
+            }
             disabled={isSubmitting}
             className="mt-4 inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? 'Saindo...' : 'Sair da conta'}
           </button>
         </section>
+      )}
+
+      {sessionState.status === 'authenticated' && (
+        <ManualCloudPushPanel
+          session={sessionState.session}
+          isOnline={isOnline}
+          contextService={contextService}
+        />
       )}
 
       {sessionState.status === 'unauthenticated' && (

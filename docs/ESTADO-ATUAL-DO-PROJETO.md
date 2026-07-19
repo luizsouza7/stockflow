@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa funcional atual: Parte 6B com processamento local manual/testável da outbox; Auth e SQL PostgreSQL/RLS da Parte 5 permanecem preservados, sem sincronização remota.
+- Etapa funcional atual: Parte 6C com push remoto manual/controlado de categorias e produtos; Auth e SQL PostgreSQL/RLS da Parte 5 permanecem preservados, sem pull ou sincronização automática.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -86,7 +86,7 @@ Existe uma **PWA parcial com cache e atualização controlados**:
 | `Movement` | `string`, UUID v4 gerado no cliente | `productId: string`; pode ser rastreável com snapshots ou legada sem snapshots. |
 | `Category` | `string`, UUID v4 gerado no cliente | Soft delete; produtos sem categoria usam `categoryId` ausente. |
 
-Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. Existe uma outbox local, mas não existem entidades locais para estabelecimento, perfil, associação de usuário ou conflito. `userId` e `businessId` são opcionais na outbox e não são preenchidos sem vínculo seguro. O SQL futuro modela estabelecimentos e memberships sem associar automaticamente os dados device-scoped atuais.
+Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. Não existem entidades Dexie para estabelecimento, perfil, membership ou conflito. `userId` e `businessId` continuam opcionais na outbox e só são preenchidos por ação explícita após sessão e membership remotas serem validadas; dados antigos não são associados nem enviados automaticamente.
 
 ## Migrations existentes
 
@@ -168,7 +168,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - backup JSON versionado e exportação CSV local de produtos e movimentações, com validação e snapshot somente leitura;
 - Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
 - migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
-- suíte atual de 348 testes em 38 arquivos aprovada.
+- suíte atual de 406 testes em 43 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -181,16 +181,16 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - **Dashboard:** usa dados reais e exibe separadamente produtos com estoque baixo e sem estoque; entradas/saídas por período permanecem futuras.
 - **Feedback e erros:** melhorados nas páginas principais, mas não há Error Boundary nem uma taxonomia completa por origem.
 - **Testes:** há boa cobertura local e alguns testes de componente, porém faltam E2E, offline/PWA, coverage e CI.
-- **Preparação para sync:** entidades têm UUID e `syncStatus`; a outbox recebe categorias, produtos e movimentações; o claim transacional seleciona `pending` e `error` vencido em ordem determinística e lote limitado; o executor injetado controla sucesso/falha; backoff e reset de `processing` travado são locais e manuais.
+- **Push controlado:** a outbox recebe categorias, produtos e movimentações; apenas eventos vinculados ao usuário/business ativo entram no claim manual. Categorias/produtos usam RPC idempotente e versão otimista; movimentos e updates sem versão-base segura ficam em erro/backoff sem escrita remota.
 - **Documentação:** Prompt Mestre, auditoria, ADRs e estes arquivos existem; a documentação acadêmica, requisitos, rastreabilidade, diagramas e resultados ainda não estão completos.
 
 ### Pendente / não implementado
 
 - aplicação e validação da migration em um projeto Supabase real;
-- associação dos dados locais a uma conta/estabelecimento;
-- sincronização real, bidirecional, push e pull;
-- processamento remoto da outbox persistente;
-- retry com rede, confirmação remota de envio e cursor de pull;
+- associação automática dos dados locais a uma conta/estabelecimento;
+- sincronização bidirecional e pull;
+- envio remoto de movimentações e RPC atômica de estoque;
+- retry automático com rede e cursor de pull;
 - detecção, persistência e resolução de conflitos;
 - central/status real de sincronização;
 - importação/restauração de backup;
@@ -209,8 +209,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - Duplicidades legadas de código são preservadas; a regra impede novas duplicidades ativas, mas não corrige dados históricos automaticamente.
 - A unicidade local por código é validada no service e não cobre concorrência futura com nuvem ou múltiplos dispositivos.
 - Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
-- `getLocalSyncPreparationStatus()`, `processOutboxBatch()` e `resetStaleProcessing()` não enviam nem recebem registros; o sucesso do executor injetado não é apresentado como sucesso em nuvem.
-- `syncStatus` e a outbox sustentam a fundação local com estados, tentativa, erro sanitizado, backoff de 1/5/15/30/60 minutos e recuperação manual, mas ainda não existem retry de rede, confirmação remota ou semântica de sincronização completa.
+- O executor remoto só é criado pelo serviço manual e usa a sessão atual e RLS; o processador local genérico continua testável sem Supabase.
+- Sucesso remoto de categoria/produto arquiva o evento como `synced` com `remoteVersion`; isso confirma apenas o push daquela operação, não pull, convergência ou sincronização completa.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
 - O README foi atualizado para representar o núcleo local, a arquitetura, as migrations, a suíte atual, as limitações e o roadmap oficial.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
@@ -225,8 +225,8 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
-- Parte 5: **em andamento**; regras 36–42 implementadas em código e SQL, aguardando validação manual em projeto Supabase real.
-- Parte 6: **em andamento pelas fatias 6A e 6B**; outbox local, contratos, claim, processamento por executor injetado, retry/backoff local, reset manual, status honesto e testes implementados. Push, pull, retry de rede, conflitos reais, concorrência remota e RPC não foram implementados.
-- Próximo passo recomendado: revisar a 6B e validar o upgrade v9 → v10 e o claim concorrente entre abas em navegador real; qualquer fatia remota posterior exige autorização separada.
+- Parte 5: **concluída no escopo de código/SQL**; aplicação das migrations e validação entre usuários em Supabase real continuam pendências operacionais.
+- Parte 6: **em andamento pelas fatias 6A–6C**; push manual de categorias/produtos foi implementado com contexto, idempotência, RLS e versão. Pull, movimentos remotos, conflitos reais e automação não foram implementados.
+- Próximo passo recomendado: revisar a 6C e aplicar/validar manualmente as migrations em projeto Supabase de teste antes de autorizar qualquer fatia de pull.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

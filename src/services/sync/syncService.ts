@@ -19,12 +19,20 @@ const SENSITIVE_ERROR =
   'Falha no executor local; detalhes sensiveis foram omitidos.';
 const UNKNOWN_ERROR = 'Falha desconhecida no executor local.';
 
-export type OutboxExecutor = (entry: Readonly<OutboxEntry>) => Promise<void>;
+export interface ArchivedOutboxSuccess {
+  archiveAsSynced: true;
+  remoteVersion: number;
+}
+
+export type OutboxExecutor = (
+  entry: Readonly<OutboxEntry>,
+) => Promise<void | ArchivedOutboxSuccess>;
 
 interface ProcessOutboxBatchInput {
   executor: OutboxExecutor;
   now?: () => Date;
   batchSize?: number;
+  canProcess?: (entry: Readonly<OutboxEntry>) => boolean;
 }
 
 export interface ProcessOutboxBatchResult {
@@ -46,10 +54,15 @@ export async function processOutboxBatch({
   executor,
   now = () => new Date(),
   batchSize = DEFAULT_OUTBOX_BATCH_SIZE,
+  canProcess,
 }: ProcessOutboxBatchInput): Promise<ProcessOutboxBatchResult> {
   validateBatchSize(batchSize);
   const claimedAt = toValidIsoString(now());
-  const entries = await outboxRepository.claimEligible({ now: claimedAt, batchSize });
+  const entries = await outboxRepository.claimEligible({
+    now: claimedAt,
+    batchSize,
+    canClaim: canProcess,
+  });
   let succeeded = 0;
   let failed = 0;
 
@@ -57,8 +70,17 @@ export async function processOutboxBatch({
     const claimToken = entry.updatedAt;
 
     try {
-      await executor(entry);
-      if (await outboxRepository.removeClaimed(entry.id, claimToken)) {
+      const executionResult = await executor(entry);
+      const completed = executionResult?.archiveAsSynced
+        ? await outboxRepository.markClaimedSynced({
+            id: entry.id,
+            claimedAt: claimToken,
+            completedAt: toValidIsoString(now()),
+            remoteVersion: executionResult.remoteVersion,
+          })
+        : await outboxRepository.removeClaimed(entry.id, claimToken);
+
+      if (completed) {
         succeeded += 1;
       }
     } catch (error) {

@@ -10,9 +10,9 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Parte 4 (regras 30–35) concluída no escopo local.
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 10**, com outbox local persistente.
-- Parte 5 iniciada com Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 avançou pelas fatias 6A e 6B: outbox transacional e processamento local manual/testável, sem rede, push ou pull.
-- Suíte atual: **348 testes em 38 arquivos**.
+- Parte 5 concluída no escopo de Auth opcional e SQL PostgreSQL/RLS preparado.
+- Parte 6 avançou pelas fatias 6A, 6B e 6C: outbox, processamento local e push remoto manual/controlado de categorias e produtos; pull e movimentações remotas não existem.
+- Suíte atual: **406 testes em 43 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -75,20 +75,26 @@ A migration versionada em `supabase/migrations` prepara perfis, estabelecimentos
 
 O processador local recebe um executor injetado e não é chamado pela UI, pelo boot, pelo login nem por eventos de conectividade. Em uma transação Dexie, ele seleciona `pending` e `error` cujo `nextAttemptAt` venceu, ordena por `createdAt` e `id`, limita o lote a 25 itens por padrão (máximo de 100) e marca o lote como `processing` antes do executor. O claim transacional impede que duas execuções concorrentes obtenham o mesmo evento; `updatedAt` também atua como token simples para não finalizar um claim que já tenha sido recuperado.
 
-Sucesso confirmado pelo executor injetado remove o evento da outbox. Essa confirmação é apenas a semântica do executor fornecido em teste ou integração futura: nenhum executor remoto existe na aplicação atual e a UI não apresenta sucesso em nuvem. Falhas viram `error`, incrementam `attemptCount`, guardam `lastError` sanitizado e calculam `nextAttemptAt` em 1, 5, 15, 30 e, depois, no máximo 60 minutos. Não há retry automático; uma função manual permite recolocar `processing` antigo em `pending` após interrupção. `conflict` está previsto no contrato e no indicador, mas não é processado nem resolvido.
+Sucesso de executor local/testável remove o evento. O executor remoto da 6C solicita arquivamento como `synced` e guarda somente `remoteVersion`, necessária para updates otimistas posteriores. Falhas viram `error`, incrementam `attemptCount`, guardam `lastError` sanitizado e calculam `nextAttemptAt` em 1, 5, 15, 30 e, depois, no máximo 60 minutos. Não há retry automático; uma função manual permite recolocar `processing` antigo em `pending` após interrupção. `conflict` está previsto no contrato e no indicador, mas não é processado nem resolvido.
 
-Auth e SQL preparado não constituem sincronização: nenhum dado IndexedDB é enviado ou baixado automaticamente.
+## Push remoto manual — Parte 6C
+
+A página **Conta** oferece um fluxo deliberadamente separado: carregar estabelecimentos permitidos pela RLS, validar e selecionar um contexto, associar eventos device-scoped ainda sem contexto e, em outra ação, enviar alterações compatíveis. A seleção armazena localmente apenas o `businessId` em chave isolada pelo UUID do usuário. Associar pendências atualiza somente `userId`/`businessId` e metadados da outbox, em transação, sem enviar ou alterar entidades de negócio.
+
+O push exige Supabase configurado, sessão reconfirmada no clique, usuário correspondente, conexão indicada como online, membership ativa e evento vinculado ao mesmo usuário/estabelecimento. Categorias e produtos usam RPCs PostgreSQL específicas, um ledger remoto por `business_id + idempotency_key`, RLS e `version` otimista. Updates de produto não escrevem `current_quantity`; somente `product.created` envia o saldo inicial. `movement.created` é mantido com erro/backoff amigável e nenhuma chamada remota, pois ainda depende de RPC atômica de estoque.
+
+O envio só ocorre pelo botão **Enviar alterações compatíveis**. Não há chamada no boot, login, `onAuthStateChange`, evento online/offline, timer ou Service Worker. Não há pull, reconciliação, resolução de conflitos ou sincronização completa. As migrations precisam ser aplicadas e validadas em um projeto Supabase real antes do uso fora de mocks/testes.
 
 ## Limitações atuais
 
-- Auth depende de configuração e de um projeto Supabase real; a migration PostgreSQL ainda não foi aplicada por esta etapa;
-- existe outbox somente local, com retry/backoff persistido como fundação, mas não há sincronização real, push, pull, retry de rede ou resolução de conflitos;
-- `getLocalSyncPreparationStatus()`, `processOutboxBatch()` e `resetStaleProcessing()` operam somente sobre o IndexedDB e não enviam dados;
+- Auth e o push dependem de configuração, aplicação das migrations e validação em um projeto Supabase real;
+- o push é parcial e manual: suporta categorias/produtos vinculados; não há pull, envio de movimentações, retry automático ou resolução de conflitos;
+- eventos antigos sem `businessId` nunca são enviados automaticamente, e updates sem versão remota segura permanecem em erro;
 - não há importação/restauração, backup automático ou backup em nuvem;
 - não há testes E2E nem automação de navegador para instalação/offline da PWA, coverage configurada ou CI;
 - os dados permanecem no navegador e no dispositivo utilizados.
 
-O cliente Supabase e Auth foram preparados, mas sincronização e persistência remota dos dados de estoque continuam futuras.
+Persistência remota de categorias/produtos está preparada pelo fluxo manual controlado; sincronização bidirecional e estoque remoto continuam futuros.
 
 ## Estrutura resumida
 
@@ -132,7 +138,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v10.
 
-Estado validado nesta etapa: **348 testes aprovados em 38 arquivos**.
+Estado validado nesta etapa: **406 testes aprovados em 43 arquivos**.
 
 ## Banco local e migrations
 
@@ -181,7 +187,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 foi iniciada com as regras 36–42 implementadas em código e SQL, pendente de validação manual em projeto Supabase real. A Parte 6 avançou pelas fatias 6A e 6B: mutações locais geram eventos transacionais, o processador local testável controla claim, estados, falha, retry/backoff e recuperação de itens travados, e a interface informa cada estado sem prometer nuvem. Push, pull, retry com rede, conflitos reais e concorrência remota continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 está concluída no escopo de código e SQL, embora a aplicação/validação em projeto Supabase real continue operacionalmente necessária. A Parte 6 avançou pelas fatias 6A, 6B e 6C: outbox transacional, processamento/retry local e push manual protegido para categorias/produtos. Pull, movimentos remotos, conflitos reais, sincronização automática e concorrência remota continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

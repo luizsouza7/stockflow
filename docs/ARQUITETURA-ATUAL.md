@@ -64,7 +64,7 @@ Os services representam os casos de uso e coordenam repositories:
 - `categoryService`: regras de nome, unicidade lógica e exclusão condicionada a produtos ativos;
 - `stockMovementService`: transação atômica de estoque e montagem do histórico;
 - `dashboardService`: cálculo dos indicadores reais;
-- `outboxService`: cria eventos locais e resume estados da outbox; `syncService` processa lotes somente quando chamado explicitamente com executor injetado, calcula retry/backoff e recupera `processing` travado, sem rede ou integração com Supabase.
+- `outboxService`: cria eventos e resume estados; `syncService` mantém claim/retry genérico; `manualPushService` valida sessão/business e compõe o executor; `syncRemoteGateway` mapeia categorias/produtos e chama apenas as RPCs permitidas.
 
 O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa garantir atomicidade entre atualização do produto e criação da movimentação.
 
@@ -205,7 +205,7 @@ Categoria possui identidade, timestamps, soft delete e `syncStatus`. Produto gua
 
 ## Offline-first atual
 
-O IndexedDB é a fonte de verdade operacional. O usuário consegue trabalhar com dados locais sem aguardar rede. As entidades novas recebem `syncStatus: "pending"` e as mutações sincronizáveis geram uma intenção na outbox dentro da mesma transação. A outbox permanece local; seu processador controla apenas estados persistidos e chama um executor injetado, sem possuir executor remoto na aplicação.
+O IndexedDB continua sendo a fonte de verdade operacional. A outbox registra a intenção na mesma transação. O push remoto é uma ação manual adicional: não bloqueia o trabalho local, não altera entidades ao vincular contexto e não executa pull.
 
 O `OfflineBanner` comunica que a aplicação continua usando os dados armazenados no dispositivo. Ele não promete sincronização, nuvem ou compartilhamento entre dispositivos.
 
@@ -250,19 +250,19 @@ Está implementada em memória nos fluxos de:
 
 Cada fluxo combina `useRef` como trava imediata, estado `isSubmitting`/ID em exclusão e botões desabilitados. Isso protege a sessão atual da UI, mas não é idempotência persistente ou distribuída.
 
-## Arquitetura futura — apenas planejamento
+## Arquitetura de sincronização parcial
 
 ```text
 React / PWA
     ↓
 IndexedDB / Dexie + outbox local
-    ↓
-futura sincronização bidirecional
-    ↓
+    ↓ ação manual, sessão e business validados
+manualPushService → syncRemoteGateway
+    ↓ RPC idempotente/versionada
 Supabase / PostgreSQL / Auth / RLS
 ```
 
-A escrita continua local e a outbox persistente registra intenção, ordem, idempotência e tentativas. O claim ocorre em transação Dexie, seleciona `pending` e `error` vencido, ordena por `createdAt`/`id`, limita o lote e grava `processing` antes do executor. Sucesso do executor remove o evento; falha grava `error`, incrementa `attemptCount`, sanitiza `lastError` e agenda `nextAttemptAt` em 1, 5, 15, 30 ou no máximo 60 minutos. Um reset explícito recupera `processing` antigo sem loop automático. Push e confirmação remota ainda deverão fornecer um executor real; pull deverá trazer mudanças remotas validadas para uma transação local. Auth e o SQL com RLS já preparam identidade e isolamento por estabelecimento, mas não transferem entidades locais.
+A escrita continua local. O claim remoto filtra `userId`/`businessId`; eventos sem contexto não viram `processing`. O gateway aceita somente categorias/produtos. A migration 6C cria `sync_operations` com chave `(business_id, idempotency_key)` e RPCs para create/update/soft delete. Updates exigem a `remoteVersion` arquivada pelo último evento `synced`; divergência vira erro amigável, não overwrite. Produtos atualizados nunca escrevem `current_quantity`; movimentos aguardam RPC atômica futura.
 
 O claim transacional serializa execuções concorrentes no IndexedDB, inclusive entre conexões/abas, e evita a duplicação óbvia. `updatedAt` é usado como token simples para que sucesso ou falha não finalize um item recuperado concorrentemente. Isso não substitui idempotência no servidor nem um lock distribuído futuro; a validação manual entre abas permanece recomendada.
 
@@ -276,24 +276,24 @@ Implementado como preparação da Parte 5:
 
 Ainda não existem:
 
-- aplicação/validação da migration em um projeto remoto real;
-- associação dos registros IndexedDB a usuário ou estabelecimento;
-- processamento remoto da outbox;
-- push, pull, retry com rede ou cursor;
+- aplicação/validação das migrations em um projeto remoto real;
+- associação automática dos registros IndexedDB;
+- pull, cursor ou retry automático;
+- push de movimentações;
 - armazenamento/resolução de conflitos;
 - multiusuário ou multiestabelecimento.
 
-O arquivo `syncService.ts` não muda esse estado remoto: ele expõe o resumo local e funções manuais/testáveis de processamento, backoff e recuperação. Nada o chama no boot, no Auth, ao voltar online ou em timer; não há `fetch`, acesso a tabelas Supabase ou Service Worker Sync.
+Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorno online ou timer. Somente o botão da Conta inicia o fluxo. A consulta de businesses também exige clique explícito. Não há `fetch` próprio, Service Worker Sync ou background sync.
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas no escopo implementado; testes, documentação/ADRs e critérios de qualidade são transversais. A Parte 5 foi iniciada com Auth opcional e SQL/RLS preparado. A Parte 6 avançou pelas fundações locais 6A e 6B, sem sincronização remota. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída no escopo de código/SQL. A Parte 6 avançou até a 6C com push parcial/manual, mas continua incompleta. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 
 O fluxo da conta é `Account → useAuthSession → authService → cliente Supabase`. A rota é lazy; abrir as páginas locais não inicializa o módulo Supabase. Se as variáveis estiverem ausentes ou inválidas, a página explica a indisponibilidade e não bloqueia o restante do sistema. Uma sessão previamente persistida pelo cliente oficial pode ser restaurada offline; novos logins/cadastros exigem conectividade e logout usa escopo local para remover a sessão deste navegador.
 
-Os dados IndexedDB continuam device-scoped e não pertencem a uma conta nesta parte. O SQL remoto usa estabelecimentos e memberships para isolar dados futuros, mas nenhum mapper, upload, download ou vínculo local foi implementado.
+Dados IndexedDB continuam device-scoped até uma ação consciente de associação da outbox. A seleção é isolada por usuário e revalidada por membership; logout limpa o contexto ativo. Eventos vinculados permanecem vinculados ao usuário/business original e não são reutilizados por outra conta.
 
 ## Backup e exportação
 

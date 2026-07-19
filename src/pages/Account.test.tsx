@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import type { AuthService } from '../services/authService';
+import type { BusinessContextService } from '../services/businessContextService';
 import { Account } from './Account';
 
 const onlineStatus = vi.hoisted(() => ({ value: true }));
@@ -66,12 +67,22 @@ describe('pagina Conta', () => {
 
   it('sessao presente mostra usuario e logout chama o service', async () => {
     const service = createService(createSession('conectado@stockflow.test'));
-    render(<Account service={service} />);
+    const contextService = createContextService();
+    render(<Account service={service} contextService={contextService} />);
 
     await waitFor(() => expect(screen.getByText(/conectado@stockflow.test/)).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Sair da conta' }));
 
     await waitFor(() => expect(service.signOut).toHaveBeenCalledTimes(1));
+    expect(contextService.clearSelected).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+    );
+  });
+
+  it('usuario nao autenticado nao ve acao de push', async () => {
+    render(<Account service={createService()} />);
+    await screen.findByRole('button', { name: 'Entrar' });
+    expect(screen.queryByText(/Envio manual para a nuvem/)).toBeNull();
   });
 
   it('erro tecnico de Auth vira mensagem amigavel', async () => {
@@ -111,6 +122,17 @@ function createService(initialSession: Session | null = null) {
     signUp: vi.fn<AuthService['signUp']>().mockResolvedValue(undefined),
     signOut: vi.fn<AuthService['signOut']>().mockResolvedValue(undefined),
     subscribe: vi.fn<AuthService['subscribe']>().mockReturnValue(() => undefined),
+  };
+}
+
+function createContextService() {
+  return {
+    isConfigured: vi.fn<BusinessContextService['isConfigured']>().mockReturnValue(false),
+    listAvailable: vi.fn<BusinessContextService['listAvailable']>().mockResolvedValue([]),
+    validateMembership: vi.fn<BusinessContextService['validateMembership']>().mockResolvedValue(false),
+    select: vi.fn<BusinessContextService['select']>().mockResolvedValue(undefined),
+    getSelected: vi.fn<BusinessContextService['getSelected']>(),
+    clearSelected: vi.fn<BusinessContextService['clearSelected']>(),
   };
 }
 

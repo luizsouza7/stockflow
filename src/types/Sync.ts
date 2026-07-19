@@ -32,6 +32,7 @@ export interface OutboxEntry {
   userId?: string;
   businessId?: string;
   idempotencyKey: string;
+  remoteVersion?: number;
 }
 
 export interface SyncStatusSummary {

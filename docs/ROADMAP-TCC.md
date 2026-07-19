@@ -66,19 +66,21 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** cliente Supabase opcional via env pública, cadastro/login/logout, sessão inicial, listener com cleanup, funcionamento local sem login e página Conta carregada sob demanda. Migration versionada prepara perfis, estabelecimentos, memberships, categorias, produtos e movimentações com `business_id`, trigger de `updated_at`, índices, RLS e policies baseadas em `auth.uid()`.
 
-**Pendente:** configurar projeto real, aplicar/revisar a migration no PostgreSQL e validar Auth/RLS entre dois usuários. Dados locais não estão associados a contas e nenhuma sincronização foi iniciada.
+**Pendente operacional:** configurar projeto real, aplicar/revisar as migrations no PostgreSQL e validar Auth/RLS entre dois usuários. A Parte 5 está concluída no escopo de código/SQL; essas validações não autorizam associação automática de dados.
 
 ## Parte 6 — regras 43–54
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento pelas fatias locais 6A e 6B; a sincronização remota ainda não foi iniciada.
+**Status:** em andamento pelas fatias 6A, 6B e 6C; existe push parcial/manual, não sincronização bidirecional.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
 **Progresso da fatia 6B:** o processador local, chamado apenas de forma explícita com executor injetado, faz claim transacional de `pending` e `error` vencido, usa ordem `createdAt`/`id`, lote limitado, transição para `processing`, remoção após sucesso do executor, falha com erro sanitizado e backoff de 1/5/15/30/60 minutos, além de reset manual de `processing` travado. O indicador distingue fila, processamento, erro e conflito previsto sem prometer nuvem.
 
-**Pendente:** executor remoto, engine de push/pull, confirmação remota, retry com rede, cursor, conflitos reais, concorrência remota, função PostgreSQL e central de sincronização. Nenhum dado é enviado ou buscado nas fatias 6A/6B; não há processamento automático.
+**Progresso da fatia 6C:** a Conta permite carregar/validar business, selecionar contexto, associar eventos antigos sem envio e disparar push manual. Categorias/produtos usam RPCs com RLS, ledger idempotente e `version`; updates de produto preservam `current_quantity`. Movimentos, eventos sem contexto e updates sem versão-base não são enviados. Não há gatilhos automáticos.
+
+**Pendente:** pull/cursor, retry automático, RPC atômica de movimentação, conflitos reais, concorrência de estoque, central de conflitos e validação das migrations em Supabase real.
 
 ## Parte 7 — regras 55–69
 
@@ -96,7 +98,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 38 arquivos com 348 testes aprovados na validação de 19/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry local, ausência de sync real, conectividade, PWA, lifecycle do IndexedDB, backup/exportação, Auth opcional e SQL/RLS.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 43 arquivos com 406 testes aprovados na validação de 19/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry, push manual, contexto, mapeamento, SQL/RLS/idempotência, ausência de automatismo, conectividade, PWA, lifecycle, backup e Auth.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -172,4 +174,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Revisar a implementação da fatia 6B e validar manualmente o upgrade v9 → v10 e o claim concorrente entre abas. Não iniciar push remoto, pull ou conflitos sem autorização explícita para uma nova fatia.
+Revisar a implementação da fatia 6C e aplicar/validar as migrations em um projeto Supabase de teste com usuários/businesses separados. Não iniciar pull, movimentos remotos ou conflitos sem autorização explícita para nova fatia.
