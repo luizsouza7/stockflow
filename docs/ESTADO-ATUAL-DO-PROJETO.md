@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa funcional atual: Parte 6C com push remoto manual/controlado de categorias e produtos; Auth e SQL PostgreSQL/RLS da Parte 5 permanecem preservados, sem pull ou sincronização automática.
+- Etapa funcional atual: Parte 6D validada operacionalmente em Supabase real; push manual/controlado de categorias e produtos confirmado, sem pull ou sincronização automática.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -186,7 +186,6 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ### Pendente / não implementado
 
-- aplicação e validação da migration em um projeto Supabase real;
 - associação automática dos dados locais a uma conta/estabelecimento;
 - sincronização bidirecional e pull;
 - envio remoto de movimentações e RPC atômica de estoque;
@@ -225,8 +224,9 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
-- Parte 5: **concluída no escopo de código/SQL**; aplicação das migrations e validação entre usuários em Supabase real continuam pendências operacionais.
-- Parte 6: **em andamento pelas fatias 6A–6C**; push manual de categorias/produtos foi implementado com contexto, idempotência, RLS e versão. Pull, movimentos remotos, conflitos reais e automação não foram implementados.
-- Próximo passo recomendado: revisar a 6C e aplicar/validar manualmente as migrations em projeto Supabase de teste antes de autorizar qualquer fatia de pull.
+- Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
+- Parte 6: **em andamento pelas fatias 6A–6D**; push manual de categorias/produtos, idempotência e bloqueio de movimentos foram validados em ambiente real. Pull, movimentos remotos, conflitos reais e automação não foram implementados.
+- Evidência operacional: `docs/VALIDACAO-SUPABASE-6D.md`.
+- Próximo passo recomendado: planejar separadamente pull remoto ou RPC atômica de movimentações; não iniciar conflitos sem decisão explícita.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

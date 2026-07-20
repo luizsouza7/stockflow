@@ -18,13 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa funcional atual: Parte 6C com push manual/controlado de categorias e produtos; não existe pull, movimento remoto ou sincronização automática.
+- Etapa funcional atual: Parte 6D validada operacionalmente em Supabase real; não existe pull, movimento remoto ou sincronização automática.
 - Schema Dexie atual: versão 10.
 - Estado de testes comprovado: 43 arquivos, 406 testes aprovados em 19/07/2026.
 - Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
-- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6C; regras 43–54 permanecem parcialmente atendidas**.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6D; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: revisar a 6C e validar as migrations em projeto Supabase de teste; não iniciar pull, movimentos remotos ou conflitos sem autorização.
+- Próximo passo recomendado: preservar `docs/VALIDACAO-SUPABASE-6D.md` e planejar pull remoto ou RPC atômica de movimentações; não iniciar conflitos sem autorização explícita.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -135,6 +135,8 @@ Ao chegar às partes autorizadas:
 
 A 6B fornece claim/retry local. A 6C liga um executor remoto somente ao botão da Conta, após reconfirmar sessão, business e membership. Eventos device-scoped precisam de ação separada para receber `userId`/`businessId`. Categorias/produtos usam RPC idempotente/versionada; movimentos e updates sem versão-base ficam em erro. Não ligar push ao boot, Auth, eventos online/offline, timer ou Service Worker. `conflict` continua somente previsto; não há resolução.
 
+A 6D comprovou esse fluxo em Supabase real de teste, incluindo migrations, Auth, business/membership, push de categorias/produtos, `sync_operations` e bloqueio de movimentos. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6D.md`. Antes de conflitos, escolher e autorizar explicitamente a próxima frente: pull remoto ou RPC atômica de movimentações.
+
 Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
 ## Validação ao final de cada etapa
@@ -194,4 +196,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes por intervalos de regras, é o plano oficial. Antes de alterar qualquer arquivo, confirme raiz, branch e worktree. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída no escopo de Auth/SQL, ainda exigindo validação operacional em Supabase real. A Parte 6 avançou até a 6C: outbox v10, retry local e push manual de categorias/produtos com sessão, business, RLS, idempotência e versão. Movimentos, pull, conflitos e automação não existem. Preserve schema/dados, soft delete, centavos, snapshots, UUIDs e arquitetura. Não avance sem autorização, commit ou push automático.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes, é o plano oficial. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas; a Parte 5 e o push da 6C foram validados em Supabase real pela 6D. A Parte 6 continua incompleta: movimentos, pull, conflitos e automação não existem. Preserve schema, dados e arquitetura. Escolha explicitamente entre pull e RPC atômica de movimentações antes de avançar; não faça commit ou push automático.

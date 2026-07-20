@@ -62,17 +62,17 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar autenticação, comportamento de sessão offline, Supabase, PostgreSQL, colunas de sincronização, estratégia de `updated_at` e Row Level Security.
 
-**Status:** em andamento; regras 36–42 implementadas em código e SQL, pendentes de validação manual em projeto Supabase real.
+**Status:** concluída e validada operacionalmente em projeto Supabase real de teste.
 
 **Progresso comprovado:** cliente Supabase opcional via env pública, cadastro/login/logout, sessão inicial, listener com cleanup, funcionamento local sem login e página Conta carregada sob demanda. Migration versionada prepara perfis, estabelecimentos, memberships, categorias, produtos e movimentações com `business_id`, trigger de `updated_at`, índices, RLS e policies baseadas em `auth.uid()`.
 
-**Pendente operacional:** configurar projeto real, aplicar/revisar as migrations no PostgreSQL e validar Auth/RLS entre dois usuários. A Parte 5 está concluída no escopo de código/SQL; essas validações não autorizam associação automática de dados.
+**Validação operacional:** migrations aplicadas, Auth exercitado, business/membership confirmados e RLS utilizada no fluxo real. A evidência sanitizada está em `docs/VALIDACAO-SUPABASE-6D.md`.
 
 ## Parte 6 — regras 43–54
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento pelas fatias 6A, 6B e 6C; existe push parcial/manual, não sincronização bidirecional.
+**Status:** em andamento. 6A, 6B e 6C estão concluídas; a validação operacional 6D também foi concluída. Existe push parcial/manual, não sincronização bidirecional.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
@@ -80,7 +80,9 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso da fatia 6C:** a Conta permite carregar/validar business, selecionar contexto, associar eventos antigos sem envio e disparar push manual. Categorias/produtos usam RPCs com RLS, ledger idempotente e `version`; updates de produto preservam `current_quantity`. Movimentos, eventos sem contexto e updates sem versão-base não são enviados. Não há gatilhos automáticos.
 
-**Pendente:** pull/cursor, retry automático, RPC atômica de movimentação, conflitos reais, concorrência de estoque, central de conflitos e validação das migrations em Supabase real.
+**Validação da fatia 6D:** as migrations das Partes 5 e 6C foram aplicadas em Supabase real de teste; login, business/membership, seleção de estabelecimento, associação sem envio, push manual de categorias/produtos, `sync_operations` e bloqueio de `movement.created` foram confirmados operacionalmente.
+
+**Pendente:** pull/cursor, retry automático, RPC atômica de movimentação, conflitos reais, concorrência de estoque e central de conflitos.
 
 ## Parte 7 — regras 55–69
 
@@ -140,7 +142,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** auditoria, fundação, produtos/categorias, movimentações e parte de dashboard/alertas foram implementados; existe PWA básica antecipada.
 
-**Pendente:** validação real de Auth/RLS, sincronização, conflitos, E2E/CI e validação acadêmica permanecem futuros.
+**Pendente:** pull, movimentações remotas, conflitos, E2E/CI e validação acadêmica complementar permanecem futuros.
 
 ## Parte 13 — regras 119–128
 
@@ -160,7 +162,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** histórico de movimentações, Dexie versionado até v10, migrations locais testadas, build usado na validação e arquitetura local documentada.
 
-**Pendente:** audit log administrativo somente se necessário, aplicação/validação da migration Supabase, seed se autorizado, documentação e diagramas da sincronização real e checklist final do TCC.
+**Pendente:** audit log administrativo somente se necessário, seed se autorizado, documentação e diagramas das próximas etapas de sincronização e checklist final do TCC.
 
 ## Parte 15 — regras 139–143
 
@@ -174,4 +176,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Revisar a implementação da fatia 6C e aplicar/validar as migrations em um projeto Supabase de teste com usuários/businesses separados. Não iniciar pull, movimentos remotos ou conflitos sem autorização explícita para nova fatia.
+Preservar o registro da validação 6D. A próxima fatia deve escolher explicitamente entre planejar pull remoto ou RPC atômica de movimentações; não iniciar conflitos sem decisão separada.
