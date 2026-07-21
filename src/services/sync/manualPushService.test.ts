@@ -205,20 +205,74 @@ describe('push remoto manual e controlado', () => {
     });
   });
 
-  it('bloqueia movement.created sem chamada remota e aplica backoff', async () => {
+  it('envia movement.created rastreado e arquiva sucesso com productVersion', async () => {
     const movement = movementEntry();
     await localDb.outbox.add(movement);
-    const before = Date.now();
     const gateway = createGateway();
+    gateway.push.mockResolvedValue({ remoteVersion: 4, productVersion: 4, wasDuplicate: false });
     const service = createTestService(gateway, createContext());
 
     const result = await service.push({ userId: USER_ID, businessId: BUSINESS_ID, isOnline: true });
 
     const persisted = await localDb.outbox.get(movement.id);
+    expect(result).toMatchObject({ succeeded: 1, failed: 0 });
+    expect(gateway.push).toHaveBeenCalledWith(expect.objectContaining({ id: movement.id }), undefined);
+    expect(persisted).toMatchObject({ status: 'synced', remoteVersion: 4 });
+    expect(await localDb.outbox.where('operation').equals('product.updated').count()).toBe(0);
+  });
+
+  it('movimento legado permanece em erro amigavel sem chamada remota', async () => {
+    const movement = movementEntry();
+    movement.payload = {
+      id: movement.entityId,
+      productId: '44444444-4444-4444-8444-444444444444',
+      type: 'entrada',
+      quantity: 2,
+      note: '',
+      date: movement.createdAt,
+      isLegacy: true,
+      syncStatus: 'pending',
+    };
+    await localDb.outbox.add(movement);
+    const gateway = createGateway();
+    gateway.push.mockImplementation(async (entry) => {
+      if (entry.entityType === 'movement') {
+        throw new Error('Movimentacao legada sem snapshots nao e compativel com o push remoto seguro.');
+      }
+      return { remoteVersion: 1, wasDuplicate: false };
+    });
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({ userId: USER_ID, businessId: BUSINESS_ID, isOnline: true });
+
     expect(result.failed).toBe(1);
-    expect(gateway.push).not.toHaveBeenCalled();
-    expect(persisted).toMatchObject({ status: 'error', attemptCount: 1 });
-    expect(Date.parse(persisted?.nextAttemptAt ?? '')).toBeGreaterThan(before);
+    expect(await localDb.outbox.get(movement.id)).toMatchObject({
+      status: 'error',
+      attemptCount: 1,
+      lastError: expect.stringMatching(/legada sem snapshots/),
+    });
+  });
+
+  it.each([
+    'O produto remoto nao existe ou nao esta ativo neste estabelecimento.',
+    'O servidor recusou a saida porque o estoque remoto e insuficiente.',
+    'O estoque remoto mudou desde o snapshot local; a movimentacao exige atencao futura.',
+  ])('falha da RPC preserva movimento na outbox com backoff: %s', async (message) => {
+    const movement = movementEntry();
+    await localDb.outbox.add(movement);
+    const gateway = createGateway();
+    gateway.push.mockRejectedValue(new Error(message));
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({ userId: USER_ID, businessId: BUSINESS_ID, isOnline: true });
+
+    expect(result.failed).toBe(1);
+    expect(await localDb.outbox.get(movement.id)).toMatchObject({
+      status: 'error',
+      attemptCount: 1,
+      lastError: message,
+      nextAttemptAt: expect.any(String),
+    });
   });
 
   it('falha remota usa backoff e remove segredo de lastError', async () => {
@@ -250,6 +304,47 @@ describe('push remoto manual e controlado', () => {
 
     await service.push({ userId: USER_ID, businessId: BUSINESS_ID, isOnline: true });
     expect(order).toEqual(['a', 'b']);
+  });
+
+  it('preserva ordem entre product.created e movement.created posterior', async () => {
+    const product = productEntry();
+    const movement = movementEntry();
+    await localDb.outbox.bulkAdd([movement, product]);
+    const order: string[] = [];
+    const gateway = createGateway();
+    gateway.push.mockImplementation(async (entry) => {
+      order.push(entry.operation);
+      return entry.entityType === 'movement'
+        ? { remoteVersion: 2, productVersion: 2, wasDuplicate: false }
+        : { remoteVersion: 1, wasDuplicate: false };
+    });
+    const service = createTestService(gateway, createContext());
+
+    await service.push({ userId: USER_ID, businessId: BUSINESS_ID, isOnline: true });
+
+    expect(order).toEqual(['product.created', 'movement.created']);
+  });
+
+  it('nao reivindica movement.created sem businessId ou de outro business', async () => {
+    const unscoped = movementEntry({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      userId: undefined,
+      businessId: undefined,
+    });
+    const foreign = movementEntry({
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      businessId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    });
+    await localDb.outbox.bulkAdd([unscoped, foreign]);
+    const gateway = createGateway();
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({ userId: USER_ID, businessId: BUSINESS_ID, isOnline: true });
+
+    expect(result.claimed).toBe(0);
+    expect(gateway.push).not.toHaveBeenCalled();
+    expect(await localDb.outbox.get(unscoped.id)).toMatchObject({ status: 'pending' });
+    expect(await localDb.outbox.get(foreign.id)).toMatchObject({ status: 'pending' });
   });
 
   it('nao reivindica evento vinculado a outra conta ou estabelecimento', async () => {
@@ -343,7 +438,35 @@ function categoryEntry(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
   };
 }
 
-function movementEntry(): OutboxEntry {
+function productEntry(): OutboxEntry {
+  const createdAt = '2026-07-19T09:00:00.000Z';
+  return {
+    id: '77777777-7777-4777-8777-777777777777',
+    entityType: 'product',
+    entityId: '44444444-4444-4444-8444-444444444444',
+    operation: 'product.created',
+    payload: {
+      id: '44444444-4444-4444-8444-444444444444',
+      name: 'Cafe',
+      code: 'CAFE-1',
+      salePriceInCents: 1599,
+      currentQuantity: 5,
+      minimumStock: 2,
+      createdAt,
+      updatedAt: createdAt,
+      syncStatus: 'pending',
+    },
+    status: 'pending',
+    attemptCount: 0,
+    createdAt,
+    updatedAt: createdAt,
+    userId: USER_ID,
+    businessId: BUSINESS_ID,
+    idempotencyKey: 'product-event',
+  };
+}
+
+function movementEntry(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
   const createdAt = '2026-07-19T10:00:00.000Z';
   return {
     id: crypto.randomUUID(),
@@ -369,5 +492,6 @@ function movementEntry(): OutboxEntry {
     userId: USER_ID,
     businessId: BUSINESS_ID,
     idempotencyKey: `event:${crypto.randomUUID()}`,
+    ...overrides,
   };
 }

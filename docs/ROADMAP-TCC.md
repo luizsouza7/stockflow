@@ -72,7 +72,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento. 6A, 6B e 6C estão concluídas; a validação operacional 6D também foi concluída. Existe push parcial/manual, não sincronização bidirecional.
+**Status:** em andamento. 6A, 6B, 6C e 6E estão concluídas em código/testes; a validação operacional 6D também foi concluída para a base anterior. Existe push parcial/manual, não sincronização bidirecional.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
@@ -82,7 +82,9 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Validação da fatia 6D:** as migrations das Partes 5 e 6C foram aplicadas em Supabase real de teste; login, business/membership, seleção de estabelecimento, associação sem envio, push manual de categorias/produtos, `sync_operations` e bloqueio de `movement.created` foram confirmados operacionalmente.
 
-**Pendente:** pull/cursor, retry automático, RPC atômica de movimentação, conflitos reais, concorrência de estoque e central de conflitos.
+**Progresso da fatia 6E:** uma migration nova amplia `sync_operations` para movimentos e cria `register_stock_movement` como `SECURITY INVOKER`. A RPC valida Auth/membership/business/produto, usa lock de linha, impede estoque negativo, compara snapshots, insere o movimento e atualiza saldo/versão atomicamente. O gateway libera somente movimentos rastreados válidos; legado e falhas permanecem em erro/backoff. O disparo continua exclusivamente manual.
+
+**Pendente:** aplicar/validar a 6E em Supabase real, executar cenários multi-dispositivo, implementar pull/cursor, retry automático, conflitos reais e central de conflitos.
 
 ## Parte 7 — regras 55–69
 
@@ -100,7 +102,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 43 arquivos com 406 testes aprovados na validação de 19/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry, push manual, contexto, mapeamento, SQL/RLS/idempotência, ausência de automatismo, conectividade, PWA, lifecycle, backup e Auth.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 44 arquivos com 439 testes aprovados na validação de 20/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry, push manual, RPC atômica de estoque, contexto, mapeamento, SQL/RLS/idempotência, ausência de automatismo, conectividade, PWA, lifecycle, backup e Auth.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -176,4 +178,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Preservar o registro da validação 6D. A próxima fatia deve escolher explicitamente entre planejar pull remoto ou RPC atômica de movimentações; não iniciar conflitos sem decisão separada.
+Preservar o registro da validação 6D. O próximo passo seguro é aplicar a migration 6E em Supabase real de teste e validar movimentos, idempotência e concorrência. Pull e conflitos exigem etapas posteriores separadas.

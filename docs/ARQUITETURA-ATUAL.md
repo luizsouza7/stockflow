@@ -64,7 +64,7 @@ Os services representam os casos de uso e coordenam repositories:
 - `categoryService`: regras de nome, unicidade lógica e exclusão condicionada a produtos ativos;
 - `stockMovementService`: transação atômica de estoque e montagem do histórico;
 - `dashboardService`: cálculo dos indicadores reais;
-- `outboxService`: cria eventos e resume estados; `syncService` mantém claim/retry genérico; `manualPushService` valida sessão/business e compõe o executor; `syncRemoteGateway` mapeia categorias/produtos e chama apenas as RPCs permitidas.
+- `outboxService`: cria eventos e resume estados; `syncService` mantém claim/retry genérico; `manualPushService` valida sessão/business e compõe o executor; `syncRemoteGateway` mapeia categorias, produtos e movimentos rastreados e chama apenas as RPCs permitidas.
 
 O `stockMovementService` usa `localDb.transaction('rw', ...)` porque precisa garantir atomicidade entre atualização do produto e criação da movimentação.
 
@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 37 arquivos e 307 testes aprovados:
+A arquitetura é verificada por 44 arquivos e 439 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -258,11 +258,13 @@ React / PWA
 IndexedDB / Dexie + outbox local
     ↓ ação manual, sessão e business validados
 manualPushService → syncRemoteGateway
-    ↓ RPC idempotente/versionada
+    ↓ RPC idempotente/versionada ou RPC atômica de estoque
 Supabase / PostgreSQL / Auth / RLS
 ```
 
-A escrita continua local. O claim remoto filtra `userId`/`businessId`; eventos sem contexto não viram `processing`. O gateway aceita somente categorias/produtos. A migration 6C cria `sync_operations` com chave `(business_id, idempotency_key)` e RPCs para create/update/soft delete. Updates exigem a `remoteVersion` arquivada pelo último evento `synced`; divergência vira erro amigável, não overwrite. Produtos atualizados nunca escrevem `current_quantity`; movimentos aguardam RPC atômica futura.
+A escrita continua local. O claim remoto filtra `userId`/`businessId`; eventos sem contexto não viram `processing`. A migration 6C cria `sync_operations` com chave `(business_id, idempotency_key)` e RPCs para create/update/soft delete de categorias/produtos. Updates exigem a `remoteVersion` arquivada pelo último evento `synced`; divergência vira erro amigável, não overwrite. Produtos atualizados nunca escrevem `current_quantity`.
+
+A migration 6E amplia o ledger para `movement.created` e cria `register_stock_movement`. O gateway bloqueia movimentos legados/invalidos antes da rede. Na RPC, `auth.uid()` e membership são verificados explicitamente sob `SECURITY INVOKER`; a linha do produto no mesmo business é lida com `FOR UPDATE`; o saldo remoto precisa coincidir com `previousQuantity`; o servidor calcula e compara `resultingQuantity`; saída negativa é recusada; movimento, saldo, versão do produto e ledger são gravados atomicamente. Repetição de chave/payload retorna o resultado anterior; chave divergente falha. O app não altera o saldo local após o sucesso e não gera `product.updated` extra.
 
 O claim transacional serializa execuções concorrentes no IndexedDB, inclusive entre conexões/abas, e evita a duplicação óbvia. `updatedAt` é usado como token simples para que sucesso ou falha não finalize um item recuperado concorrentemente. Isso não substitui idempotência no servidor nem um lock distribuído futuro; a validação manual entre abas permanece recomendada.
 
@@ -279,7 +281,7 @@ Ainda não existem:
 - aplicação/validação das migrations em um projeto remoto real;
 - associação automática dos registros IndexedDB;
 - pull, cursor ou retry automático;
-- push de movimentações;
+- validação operacional da migration 6E e concorrência real entre dispositivos;
 - armazenamento/resolução de conflitos;
 - multiusuário ou multiestabelecimento.
 
@@ -287,7 +289,7 @@ Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorn
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída no escopo de código/SQL. A Parte 6 avançou até a 6C com push parcial/manual, mas continua incompleta. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6E com push parcial/manual e continua incompleta sem pull, conflitos reais ou automação. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 

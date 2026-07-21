@@ -4,6 +4,7 @@ import type { OutboxEntry, SyncOperation } from '../../types/Sync';
 import {
   createSyncRemoteGateway,
   mapCategoryToRemoteParameters,
+  mapMovementToRemoteParameters,
   mapOutboxEntryToRemoteCall,
   mapProductToRemoteParameters,
   type SyncRemoteApi,
@@ -12,6 +13,7 @@ import {
 const BUSINESS_ID = '22222222-2222-4222-8222-222222222222';
 const CATEGORY_ID = '33333333-3333-4333-8333-333333333333';
 const PRODUCT_ID = '44444444-4444-4444-8444-444444444444';
+const MOVEMENT_ID = '88888888-8888-4888-8888-888888888888';
 
 describe('mapeamento local para PostgreSQL', () => {
   it('mapeia categoria com UUID, business, timestamps e soft delete', () => {
@@ -60,14 +62,54 @@ describe('mapeamento local para PostgreSQL', () => {
     expect(mapProductToRemoteParameters(entry, 1).p_category_id).toBeNull();
   });
 
-  it('bloqueia movement.created antes de mapear chamada remota', () => {
-    const movement = {
-      ...productEntry('product.created'),
-      entityType: 'movement',
-      operation: 'movement.created',
-    } as OutboxEntry;
+  it('mapeia movement.created rastreado para a RPC atomica', () => {
+    expect(mapOutboxEntryToRemoteCall(movementEntry())).toEqual({
+      functionName: 'register_stock_movement',
+      parameters: {
+        p_business_id: BUSINESS_ID,
+        p_idempotency_key: 'movement-event',
+        p_movement_id: MOVEMENT_ID,
+        p_product_id: PRODUCT_ID,
+        p_type: 'saida',
+        p_quantity: 2,
+        p_note: 'Venda no balcao',
+        p_occurred_at: '2026-07-19T11:00:00.000Z',
+        p_previous_quantity: 7,
+        p_resulting_quantity: 5,
+        p_client_created_at: '2026-07-19T11:00:00.000Z',
+      },
+    });
+  });
 
-    expect(() => mapOutboxEntryToRemoteCall(movement)).toThrow(/RPC atomica/);
+  it('bloqueia movimento legado antes da chamada remota sem inventar snapshots', () => {
+    const entry = movementEntry();
+    entry.payload = {
+      id: MOVEMENT_ID,
+      productId: PRODUCT_ID,
+      type: 'entrada',
+      quantity: 2,
+      note: '',
+      date: '2026-07-19T11:00:00.000Z',
+      isLegacy: true,
+      syncStatus: 'pending',
+    };
+
+    expect(() => mapMovementToRemoteParameters(entry)).toThrow(/legada sem snapshots/);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN])(
+    'bloqueia quantity invalida (%s) antes da chamada remota',
+    (quantity) => {
+      const entry = movementEntry();
+      entry.payload = { ...entry.payload, quantity } as typeof entry.payload;
+      expect(() => mapMovementToRemoteParameters(entry)).toThrow(/quantidade invalida/);
+    },
+  );
+
+  it('bloqueia snapshot invalido antes da chamada remota', () => {
+    const entry = movementEntry();
+    entry.payload = { ...entry.payload, previousQuantity: -1 } as typeof entry.payload;
+    expect(() => mapMovementToRemoteParameters(entry)).toThrow(/snapshots invalidos/);
   });
 });
 
@@ -112,6 +154,45 @@ describe('gateway Supabase de push', () => {
     });
   });
 
+  it('movement.created chama a RPC e retorna productVersion', async () => {
+    const api = successfulMovementApi(6, false);
+    const gateway = createSyncRemoteGateway(api);
+
+    await expect(gateway.push(movementEntry())).resolves.toEqual({
+      remoteVersion: 6,
+      productVersion: 6,
+      wasDuplicate: false,
+    });
+    expect(api.call).toHaveBeenCalledWith(
+      'register_stock_movement',
+      expect.objectContaining({
+        p_business_id: BUSINESS_ID,
+        p_idempotency_key: 'movement-event',
+        p_movement_id: MOVEMENT_ID,
+        p_product_id: PRODUCT_ID,
+      }),
+    );
+  });
+
+  it('movimento legado falha antes de chamar a API remota', async () => {
+    const api = successfulMovementApi();
+    const gateway = createSyncRemoteGateway(api);
+    const entry = movementEntry();
+    entry.payload = {
+      id: MOVEMENT_ID,
+      productId: PRODUCT_ID,
+      type: 'entrada',
+      quantity: 1,
+      note: '',
+      date: entry.createdAt,
+      isLegacy: true,
+      syncStatus: 'pending',
+    };
+
+    await expect(gateway.push(entry)).rejects.toThrow(/legada sem snapshots/);
+    expect(api.call).not.toHaveBeenCalled();
+  });
+
   it('converte RLS permission denied em erro amigavel', async () => {
     const api = errorApi({ code: '42501', message: 'permission denied token=segredo' });
     const gateway = createSyncRemoteGateway(api);
@@ -135,6 +216,23 @@ describe('gateway Supabase de push', () => {
     await expect(gateway.push(productEntry('product.updated'), 2)).rejects.toThrow(
       /tratamento de conflito em etapa futura/,
     );
+  });
+
+  it.each([
+    ['STOCK_INSUFFICIENT', /estoque remoto e insuficiente/],
+    ['STOCK_PREVIOUS_QUANTITY_CONFLICT', /estoque remoto mudou/],
+    ['STOCK_RESULTING_QUANTITY_CONFLICT', /saldo resultante local diverge/],
+    ['REMOTE_PRODUCT_NOT_FOUND', /produto remoto nao existe/],
+    ['REMOTE_PRODUCT_DELETED', /produto remoto nao existe/],
+    ['IDEMPOTENCY_KEY_REUSED payload=segredo', /chave idempotente/],
+  ])('sanitiza falha de movimento %s', async (remoteMessage, friendlyMessage) => {
+    const gateway = createSyncRemoteGateway(errorApi({ message: remoteMessage }));
+    await expect(gateway.push(movementEntry())).rejects.toThrow(friendlyMessage);
+  });
+
+  it('rejeita resposta de movimento sem productVersion', async () => {
+    const gateway = createSyncRemoteGateway(successfulApi(2));
+    await expect(gateway.push(movementEntry())).rejects.toThrow(/versao do produto/);
   });
 
   it('nao possui credencial ou uso de service_role', () => {
@@ -199,10 +297,47 @@ function productEntry(operation: SyncOperation): OutboxEntry {
   };
 }
 
+function movementEntry(): OutboxEntry {
+  return {
+    id: '77777777-7777-4777-8777-777777777777',
+    entityType: 'movement',
+    entityId: MOVEMENT_ID,
+    operation: 'movement.created',
+    payload: {
+      id: MOVEMENT_ID,
+      productId: PRODUCT_ID,
+      type: 'saida',
+      quantity: 2,
+      note: 'Venda no balcao',
+      date: '2026-07-19T11:00:00.000Z',
+      previousQuantity: 7,
+      resultingQuantity: 5,
+      isLegacy: false,
+      syncStatus: 'pending',
+    },
+    status: 'pending',
+    attemptCount: 0,
+    createdAt: '2026-07-19T11:00:00.000Z',
+    updatedAt: '2026-07-19T11:00:00.000Z',
+    businessId: BUSINESS_ID,
+    userId: '11111111-1111-4111-8111-111111111111',
+    idempotencyKey: 'movement-event',
+  };
+}
+
 function successfulApi(version = 1, duplicate = false) {
   return {
     call: vi.fn<SyncRemoteApi['call']>().mockResolvedValue({
       data: [{ applied_version: version, was_duplicate: duplicate }],
+      error: null,
+    }),
+  };
+}
+
+function successfulMovementApi(version = 1, duplicate = false) {
+  return {
+    call: vi.fn<SyncRemoteApi['call']>().mockResolvedValue({
+      data: [{ applied_version: version, product_version: version, was_duplicate: duplicate }],
       error: null,
     }),
   };

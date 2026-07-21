@@ -11,8 +11,8 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 10**, com outbox local persistente.
 - Parte 5 concluída no escopo de Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 avançou pelas fatias 6A, 6B e 6C: outbox, processamento local e push remoto manual/controlado de categorias e produtos; pull e movimentações remotas não existem.
-- Suíte atual: **406 testes em 43 arquivos**.
+- Parte 6 avançou pelas fatias 6A–6E: outbox, processamento local, push remoto manual de categorias/produtos e RPC atômica para movimentações rastreadas; a 6D validou operacionalmente a base anterior em Supabase real.
+- Suíte atual: **439 testes em 44 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -69,7 +69,7 @@ Também é possível exportar produtos e movimentações em CSV. Os arquivos sã
 
 A rota **Conta** é carregada sob demanda e usa o cliente oficial Supabase quando `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` estão configuradas. Ela oferece cadastro, login, restauração/escuta da sessão e logout local, com mensagens amigáveis e cleanup do listener. Sem configuração ou sem login, o núcleo local permanece disponível. Copie `.env.example` para `.env.local`; nunca use chave `service_role`, senha do banco ou segredo administrativo em variáveis `VITE_*`.
 
-A migration versionada em `supabase/migrations` prepara perfis, estabelecimentos, memberships, categorias, produtos e movimentações. As tabelas de negócio usam `business_id`, RLS e policies baseadas em membership ativa e `auth.uid()`. O SQL não é executado pelo frontend e ainda precisa ser aplicado e validado em um projeto Supabase real.
+As migrations versionadas em `supabase/migrations` preparam perfis, estabelecimentos, memberships, categorias, produtos, movimentações e o ledger idempotente. As tabelas de negócio usam `business_id`, RLS e policies baseadas em membership ativa e `auth.uid()`. As migrations das Partes 5 e 6C já foram validadas operacionalmente; a migration 6E ainda precisa ser aplicada e testada em um projeto Supabase real.
 
 ## Processamento local da outbox — Parte 6B
 
@@ -81,20 +81,27 @@ Sucesso de executor local/testável remove o evento. O executor remoto da 6C sol
 
 A página **Conta** oferece um fluxo deliberadamente separado: carregar estabelecimentos permitidos pela RLS, validar e selecionar um contexto, associar eventos device-scoped ainda sem contexto e, em outra ação, enviar alterações compatíveis. A seleção armazena localmente apenas o `businessId` em chave isolada pelo UUID do usuário. Associar pendências atualiza somente `userId`/`businessId` e metadados da outbox, em transação, sem enviar ou alterar entidades de negócio.
 
-O push exige Supabase configurado, sessão reconfirmada no clique, usuário correspondente, conexão indicada como online, membership ativa e evento vinculado ao mesmo usuário/estabelecimento. Categorias e produtos usam RPCs PostgreSQL específicas, um ledger remoto por `business_id + idempotency_key`, RLS e `version` otimista. Updates de produto não escrevem `current_quantity`; somente `product.created` envia o saldo inicial. `movement.created` é mantido com erro/backoff amigável e nenhuma chamada remota, pois ainda depende de RPC atômica de estoque.
+O push exige Supabase configurado, sessão reconfirmada no clique, usuário correspondente, conexão indicada como online, membership ativa e evento vinculado ao mesmo usuário/estabelecimento. Categorias e produtos usam RPCs PostgreSQL específicas, um ledger remoto por `business_id + idempotency_key`, RLS e `version` otimista. Updates de produto não escrevem `current_quantity`; somente `product.created` envia o saldo inicial.
 
-O envio só ocorre pelo botão **Enviar alterações compatíveis**. Não há chamada no boot, login, `onAuthStateChange`, evento online/offline, timer ou Service Worker. Não há pull, reconciliação, resolução de conflitos ou sincronização completa. As migrations precisam ser aplicadas e validadas em um projeto Supabase real antes do uso fora de mocks/testes.
+## RPC atômica de movimentações — Parte 6E
+
+`movement.created` rastreado usa exclusivamente a RPC `register_stock_movement`. A função roda como `SECURITY INVOKER`, valida `auth.uid()`, membership ativa, business e produto ativo; bloqueia a linha do produto com `SELECT ... FOR UPDATE`; compara `previousQuantity` com o saldo remoto; calcula o novo saldo no servidor; impede estoque negativo; compara `resultingQuantity`; insere `stock_movements`; atualiza `products.current_quantity` e `version`; e conclui `sync_operations` na mesma transação PostgreSQL.
+
+Repetir a mesma `idempotency_key` e o mesmo payload retorna o resultado anterior sem reaplicar o movimento. Reutilizar a chave com payload divergente é recusado. Movimentações legadas sem snapshots e dados locais inválidos são bloqueados antes da RPC. Falhas de saldo, snapshot, produto, permissão, rede ou idempotência permanecem na outbox como `error`, com mensagem sanitizada e backoff; sucesso é arquivado como `synced` com a versão remota do produto, sem alterar o saldo local nem criar `product.updated` adicional.
+
+O envio só ocorre pelo botão **Enviar alterações compatíveis**. Não há chamada no boot, login, `onAuthStateChange`, evento online/offline, timer ou Service Worker. Não há pull, reconciliação, central/resolução real de conflitos ou sincronização completa. A migration 6E precisa ser aplicada e validada em um projeto Supabase real antes do uso operacional de movimentos.
 
 ## Limitações atuais
 
 - Auth e o push dependem de configuração, aplicação das migrations e validação em um projeto Supabase real;
-- o push é parcial e manual: suporta categorias/produtos vinculados; não há pull, envio de movimentações, retry automático ou resolução de conflitos;
+- o push é parcial e manual: suporta categorias, produtos e movimentações rastreadas vinculadas; não há pull, retry automático ou resolução de conflitos;
+- movimentações legadas sem snapshots continuam bloqueadas, e divergências de estoque permanecem em erro/backoff até uma etapa futura de conflitos;
 - eventos antigos sem `businessId` nunca são enviados automaticamente, e updates sem versão remota segura permanecem em erro;
 - não há importação/restauração, backup automático ou backup em nuvem;
 - não há testes E2E nem automação de navegador para instalação/offline da PWA, coverage configurada ou CI;
 - os dados permanecem no navegador e no dispositivo utilizados.
 
-Persistência remota de categorias/produtos está preparada pelo fluxo manual controlado; sincronização bidirecional e estoque remoto continuam futuros.
+Persistência remota manual de categorias/produtos e push atômico de movimentações rastreadas estão preparados; sincronização bidirecional, central de conflitos e validação operacional da migration 6E continuam futuras.
 
 ## Estrutura resumida
 
@@ -138,7 +145,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v10.
 
-Estado validado nesta etapa: **406 testes aprovados em 43 arquivos**.
+Estado validado nesta etapa: **439 testes aprovados em 44 arquivos**.
 
 ## Banco local e migrations
 
@@ -187,7 +194,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 está concluída no escopo de código e SQL, embora a aplicação/validação em projeto Supabase real continue operacionalmente necessária. A Parte 6 avançou pelas fatias 6A, 6B e 6C: outbox transacional, processamento/retry local e push manual protegido para categorias/produtos. Pull, movimentos remotos, conflitos reais, sincronização automática e concorrência remota continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 está concluída e validada operacionalmente em Supabase real. A Parte 6 avançou pelas fatias 6A–6E: outbox transacional, processamento/retry local, push manual protegido para categorias/produtos e RPC atômica para movimentos rastreados. Pull, conflitos reais, central de conflitos, sincronização automática e validação operacional multi-dispositivo da 6E continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

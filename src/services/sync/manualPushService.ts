@@ -145,12 +145,6 @@ function createRemoteExecutor(
       throw new Error('A alteracao local pertence a outro contexto e nao pode ser enviada.');
     }
 
-    if (entry.entityType === 'movement') {
-      throw new Error(
-        'Movimentacoes aguardam uma RPC atomica de estoque e nao sao enviadas nesta etapa.',
-      );
-    }
-
     const isCreation = entry.operation.endsWith('.created');
     const expectedVersion = isCreation
       ? undefined
@@ -220,9 +214,9 @@ function toPushMessage(succeeded: number, failed: number): string {
     return 'Nenhuma alteracao compativel e vinculada estava pronta para envio.';
   }
   if (failed === 0) {
-    return `${succeeded} ${succeeded === 1 ? 'alteracao compativel foi enviada' : 'alteracoes compativeis foram enviadas'}. Pull e movimentacoes ainda nao estao disponiveis.`;
+    return `${succeeded} ${succeeded === 1 ? 'alteracao compativel foi enviada' : 'alteracoes compativeis foram enviadas'}. Categorias, produtos e movimentacoes rastreadas sao aceitos; pull ainda nao existe.`;
   }
-  return `${succeeded} enviada(s) e ${failed} mantida(s) com erro local. Pull e movimentacoes ainda nao estao disponiveis.`;
+  return `${succeeded} enviada(s) e ${failed} mantida(s) com erro local e backoff. Movimentacoes legadas ou divergentes exigem atencao; pull ainda nao existe.`;
 }
 
 function toIsoString(date: Date): string {

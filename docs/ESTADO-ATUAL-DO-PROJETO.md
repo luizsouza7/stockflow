@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa funcional atual: Parte 6D validada operacionalmente em Supabase real; push manual/controlado de categorias e produtos confirmado, sem pull ou sincronização automática.
+- Etapa funcional atual: Parte 6E implementada em código e testes; a 6D permanece como validação real das Partes 5/6C. O push manual aceita categorias, produtos e movimentos rastreados via RPC atômica, sem pull ou sincronização automática.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -137,8 +137,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **34**.
-- Testes aprovados em 17/07/2026: **307 de 307**.
+- Arquivos de teste atuais: **44**.
+- Testes aprovados em 20/07/2026: **439 de 439**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade, dos banners e do lifecycle do IndexedDB. Um teste com fake-indexeddb mantém uma conexão antiga aberta, observa o bloqueio real e confirma a liberação do upgrade após o fechamento. Testes de página comprovam cleanup em `pagehide`, reabertura explícita e preservação de dados após BFCache, ausência de listeners/canais duplicados, invalidação de `open()` pendente por estado terminal ou novo `pagehide` e proibição de conexão reaberta em `reload-required`. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
@@ -168,7 +168,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - backup JSON versionado e exportação CSV local de produtos e movimentações, com validação e snapshot somente leitura;
 - Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
 - migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
-- suíte atual de 406 testes em 43 arquivos aprovada.
+- suíte atual de 439 testes em 44 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -181,14 +181,14 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - **Dashboard:** usa dados reais e exibe separadamente produtos com estoque baixo e sem estoque; entradas/saídas por período permanecem futuras.
 - **Feedback e erros:** melhorados nas páginas principais, mas não há Error Boundary nem uma taxonomia completa por origem.
 - **Testes:** há boa cobertura local e alguns testes de componente, porém faltam E2E, offline/PWA, coverage e CI.
-- **Push controlado:** a outbox recebe categorias, produtos e movimentações; apenas eventos vinculados ao usuário/business ativo entram no claim manual. Categorias/produtos usam RPC idempotente e versão otimista; movimentos e updates sem versão-base segura ficam em erro/backoff sem escrita remota.
+- **Push controlado:** a outbox recebe categorias, produtos e movimentações; apenas eventos vinculados ao usuário/business ativo entram no claim manual. Categorias/produtos usam RPC idempotente e versão otimista. Movimentos rastreados usam `register_stock_movement`, lock do produto, snapshots e cálculo remoto; movimentos legados e updates sem versão-base segura ficam em erro/backoff.
 - **Documentação:** Prompt Mestre, auditoria, ADRs e estes arquivos existem; a documentação acadêmica, requisitos, rastreabilidade, diagramas e resultados ainda não estão completos.
 
 ### Pendente / não implementado
 
 - associação automática dos dados locais a uma conta/estabelecimento;
 - sincronização bidirecional e pull;
-- envio remoto de movimentações e RPC atômica de estoque;
+- aplicação e validação operacional da migration/RPC 6E em Supabase real, inclusive cenários concorrentes;
 - retry automático com rede e cursor de pull;
 - detecção, persistência e resolução de conflitos;
 - central/status real de sincronização;
@@ -209,7 +209,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - A unicidade local por código é validada no service e não cobre concorrência futura com nuvem ou múltiplos dispositivos.
 - Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
 - O executor remoto só é criado pelo serviço manual e usa a sessão atual e RLS; o processador local genérico continua testável sem Supabase.
-- Sucesso remoto de categoria/produto arquiva o evento como `synced` com `remoteVersion`; isso confirma apenas o push daquela operação, não pull, convergência ou sincronização completa.
+- Sucesso remoto de categoria/produto ou movimento arquiva o evento como `synced` com `remoteVersion`; para movimentos, a versão corresponde ao produto após a RPC. Isso confirma apenas o push daquela operação, não pull, convergência ou sincronização completa.
+- Divergência de `previousQuantity` ou `resultingQuantity` é recusada e preservada como erro/backoff amigável; ainda não existe entidade nem central de conflito.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
 - O README foi atualizado para representar o núcleo local, a arquitetura, as migrations, a suíte atual, as limitações e o roadmap oficial.
 - `docs/auditoria-fase-0.md` registra uma raiz antiga e lacunas que já foram resolvidas; deve ser lido como registro histórico, não como fotografia atual.
@@ -225,8 +226,8 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
-- Parte 6: **em andamento pelas fatias 6A–6D**; push manual de categorias/produtos, idempotência e bloqueio de movimentos foram validados em ambiente real. Pull, movimentos remotos, conflitos reais e automação não foram implementados.
+- Parte 6: **em andamento pelas fatias 6A–6E**; a 6D validou categorias/produtos em ambiente real, e a 6E adiciona em código a RPC atômica e o push manual de movimentos rastreados. Pull, conflitos reais, central de conflitos e automação não foram implementados.
 - Evidência operacional: `docs/VALIDACAO-SUPABASE-6D.md`.
-- Próximo passo recomendado: planejar separadamente pull remoto ou RPC atômica de movimentações; não iniciar conflitos sem decisão explícita.
+- Próximo passo recomendado: aplicar a migration 6E em Supabase real de teste e validar entrada, saída, retry idempotente, estoque insuficiente e concorrência; não iniciar pull ou conflitos nessa validação.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

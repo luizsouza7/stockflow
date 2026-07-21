@@ -80,6 +80,12 @@ describe('limites da fundacao local de sync', () => {
     );
   });
 
+  it('push manual nao implementa pull nem leitura direta de tabelas remotas', () => {
+    expect(MANUAL_PUSH_SOURCE).not.toMatch(
+      /function\s+[a-z_]*pull|\.from\s*\(|pullRemote|remotePull/i,
+    );
+  });
+
   it('boot, Auth e conectividade nao chamam push manual', () => {
     expect(`${APP_BOOT_SOURCE}\n${AUTH_SOURCE}\n${CONNECTIVITY_SOURCE}`).not.toMatch(
       /manualPushService\.push|processOutboxBatch|pushCompatibleEvents/,

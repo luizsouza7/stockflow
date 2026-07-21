@@ -146,8 +146,9 @@ export function ManualCloudPushPanel({
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <h3 className="text-lg font-semibold text-slate-950">Envio manual para a nuvem</h3>
       <p className="mt-2 text-sm text-slate-600">
-        Esta etapa envia somente categorias e produtos compativeis. Movimentacoes, pull e
-        resolucao de conflitos ainda nao estao disponiveis.
+        Esta etapa envia categorias, produtos e movimentacoes rastreadas compativeis. Movimentacoes
+        legadas sem snapshots permanecem bloqueadas. Pull e resolucao de conflitos ainda nao estao
+        disponiveis.
       </p>
 
       {!isOnline && (

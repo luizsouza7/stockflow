@@ -18,13 +18,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa funcional atual: Parte 6D validada operacionalmente em Supabase real; não existe pull, movimento remoto ou sincronização automática.
+- Etapa funcional atual: Parte 6E implementada em código/testes; a validação 6D da base anterior permanece preservada. Não existe pull, central de conflitos ou sincronização automática.
 - Schema Dexie atual: versão 10.
-- Estado de testes comprovado: 43 arquivos, 406 testes aprovados em 19/07/2026.
+- Estado de testes comprovado: 44 arquivos, 439 testes aprovados em 20/07/2026.
 - Última etapa funcional consolidada: encerramento da Parte 3, com validações defensivas, consultas reativas e distinção dos estados de estoque.
-- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6D; regras 43–54 permanecem parcialmente atendidas**.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6E; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: preservar `docs/VALIDACAO-SUPABASE-6D.md` e planejar pull remoto ou RPC atômica de movimentações; não iniciar conflitos sem autorização explícita.
+- Próximo passo recomendado: preservar `docs/VALIDACAO-SUPABASE-6D.md`, aplicar a migration 6E em Supabase real de teste e validar movimentos/idempotência/concorrência; não iniciar pull ou conflitos nessa validação.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -133,9 +133,11 @@ Ao chegar às partes autorizadas:
 - conflitos devem ser detectados e armazenados, não sobrescritos silenciosamente;
 - o service worker não deve cachear respostas privadas indiscriminadamente.
 
-A 6B fornece claim/retry local. A 6C liga um executor remoto somente ao botão da Conta, após reconfirmar sessão, business e membership. Eventos device-scoped precisam de ação separada para receber `userId`/`businessId`. Categorias/produtos usam RPC idempotente/versionada; movimentos e updates sem versão-base ficam em erro. Não ligar push ao boot, Auth, eventos online/offline, timer ou Service Worker. `conflict` continua somente previsto; não há resolução.
+A 6B fornece claim/retry local. A 6C liga um executor remoto somente ao botão da Conta, após reconfirmar sessão, business e membership. Eventos device-scoped precisam de ação separada para receber `userId`/`businessId`. Categorias/produtos usam RPC idempotente/versionada; updates sem versão-base ficam em erro. A 6E acrescenta a RPC exclusiva para movimentos rastreados. Não ligar push ao boot, Auth, eventos online/offline, timer ou Service Worker. `conflict` continua somente previsto; não há resolução.
 
-A 6D comprovou esse fluxo em Supabase real de teste, incluindo migrations, Auth, business/membership, push de categorias/produtos, `sync_operations` e bloqueio de movimentos. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6D.md`. Antes de conflitos, escolher e autorizar explicitamente a próxima frente: pull remoto ou RPC atômica de movimentações.
+A 6D comprovou esse fluxo em Supabase real de teste, incluindo migrations, Auth, business/membership, push de categorias/produtos, `sync_operations` e o bloqueio então vigente de movimentos. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6D.md` e não deve ser reescrito retroativamente.
+
+A 6E adiciona `register_stock_movement` em migration nova e libera somente `movement.created` rastreado no push manual. A RPC usa RLS/`SECURITY INVOKER`, Auth e membership explícitos, lock do produto, snapshots, cálculo remoto, proteção contra estoque negativo e ledger idempotente na mesma transação. Movimentos legados, snapshots inválidos e divergências permanecem na outbox com erro/backoff; isso não cria resolução real de conflitos. O próximo passo é a validação operacional real da 6E, sem avançar para pull.
 
 Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
@@ -196,4 +198,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes, é o plano oficial. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas; a Parte 5 e o push da 6C foram validados em Supabase real pela 6D. A Parte 6 continua incompleta: movimentos, pull, conflitos e automação não existem. Preserve schema, dados e arquitetura. Escolha explicitamente entre pull e RPC atômica de movimentações antes de avançar; não faça commit ou push automático.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes, é o plano oficial. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas; a Parte 5 e o push da 6C foram validados em Supabase real pela 6D. A 6E implementa em código a RPC atômica e o push manual de movimentos rastreados, ainda sem validação operacional real. A Parte 6 continua incompleta: pull, conflitos e automação não existem. Preserve schema, dados e arquitetura; o próximo passo é validar a 6E no Supabase real, sem avançar automaticamente; não faça commit ou push.

@@ -1,10 +1,12 @@
 import { supabaseConnection } from '../../lib/supabase';
 import type { Category } from '../../types/Category';
+import type { Movement } from '../../types/Movement';
 import type { Product } from '../../types/Product';
 import type { OutboxEntry } from '../../types/Sync';
 
 export interface RemotePushResult {
   remoteVersion: number;
+  productVersion?: number;
   wasDuplicate: boolean;
 }
 
@@ -32,7 +34,7 @@ export function createSyncRemoteGateway(api?: SyncRemoteApi): SyncRemoteGateway 
       const { data, error } = await api.call(functionName, parameters);
 
       if (error) throw toFriendlyRemoteError(error);
-      return parseRemotePushResult(data);
+      return parseRemotePushResult(data, entry.entityType === 'movement');
     },
   };
 }
@@ -46,9 +48,10 @@ export function mapOutboxEntryToRemoteCall(
   }
 
   if (entry.entityType === 'movement') {
-    throw new Error(
-      'Movimentacoes aguardam uma RPC atomica de estoque e nao sao enviadas nesta etapa.',
-    );
+    return {
+      functionName: 'register_stock_movement',
+      parameters: mapMovementToRemoteParameters(entry),
+    };
   }
 
   if (entry.entityType === 'category') {
@@ -61,6 +64,52 @@ export function mapOutboxEntryToRemoteCall(
   return {
     functionName: 'push_product_outbox_event',
     parameters: mapProductToRemoteParameters(entry, expectedVersion),
+  };
+}
+
+export function mapMovementToRemoteParameters(
+  entry: Readonly<OutboxEntry>,
+): Record<string, unknown> {
+  if (entry.entityType !== 'movement' || entry.operation !== 'movement.created') {
+    throw new Error('Evento de movimentacao invalido para envio remoto.');
+  }
+
+  const movement = entry.payload as Movement;
+  if (
+    movement.isLegacy === true ||
+    movement.previousQuantity === undefined ||
+    movement.resultingQuantity === undefined
+  ) {
+    throw new Error(
+      'Movimentacao legada sem snapshots nao e compativel com o push remoto seguro.',
+    );
+  }
+
+  if (!Number.isSafeInteger(movement.quantity) || movement.quantity <= 0) {
+    throw new Error('A movimentacao possui quantidade invalida para o push remoto seguro.');
+  }
+
+  if (
+    !Number.isSafeInteger(movement.previousQuantity) ||
+    movement.previousQuantity < 0 ||
+    !Number.isSafeInteger(movement.resultingQuantity) ||
+    movement.resultingQuantity < 0
+  ) {
+    throw new Error('A movimentacao possui snapshots invalidos para o push remoto seguro.');
+  }
+
+  return {
+    p_business_id: entry.businessId,
+    p_idempotency_key: entry.idempotencyKey,
+    p_movement_id: movement.id,
+    p_product_id: movement.productId,
+    p_type: movement.type,
+    p_quantity: movement.quantity,
+    p_note: movement.note,
+    p_occurred_at: movement.date,
+    p_previous_quantity: movement.previousQuantity,
+    p_resulting_quantity: movement.resultingQuantity,
+    p_client_created_at: entry.createdAt,
   };
 }
 
@@ -119,7 +168,7 @@ export function mapProductToRemoteParameters(
   };
 }
 
-function parseRemotePushResult(data: unknown): RemotePushResult {
+function parseRemotePushResult(data: unknown, requiresProductVersion: boolean): RemotePushResult {
   const value = Array.isArray(data) ? data[0] : data;
 
   if (
@@ -132,8 +181,18 @@ function parseRemotePushResult(data: unknown): RemotePushResult {
     throw new Error('O servidor nao confirmou uma versao valida para a alteracao.');
   }
 
+  if (
+    requiresProductVersion &&
+    (!('product_version' in value) ||
+      !Number.isSafeInteger(value.product_version) ||
+      Number(value.product_version) < 1)
+  ) {
+    throw new Error('O servidor nao confirmou a versao do produto apos a movimentacao.');
+  }
+
   return {
     remoteVersion: Number(value.applied_version),
+    productVersion: requiresProductVersion ? Number(value.product_version) : undefined,
     wasDuplicate: 'was_duplicate' in value && value.was_duplicate === true,
   };
 }
@@ -151,6 +210,36 @@ function toFriendlyRemoteError(error: { code?: string; message: string }): Error
 
   if (/BASE_VERSION_REQUIRED/i.test(error.message)) {
     return new Error('A alteracao local nao possui uma versao remota segura para atualizacao.');
+  }
+
+  if (/STOCK_INSUFFICIENT/i.test(error.message)) {
+    return new Error('O servidor recusou a saida porque o estoque remoto e insuficiente.');
+  }
+
+  if (/STOCK_PREVIOUS_QUANTITY_CONFLICT/i.test(error.message)) {
+    return new Error(
+      'O estoque remoto mudou desde o snapshot local; a movimentacao exige atencao futura.',
+    );
+  }
+
+  if (/STOCK_RESULTING_QUANTITY_CONFLICT/i.test(error.message)) {
+    return new Error(
+      'O saldo resultante local diverge do calculo seguro do servidor; a movimentacao nao foi aplicada.',
+    );
+  }
+
+  if (/REMOTE_PRODUCT_NOT_FOUND|REMOTE_PRODUCT_DELETED/i.test(error.message)) {
+    return new Error('O produto remoto nao existe ou nao esta ativo neste estabelecimento.');
+  }
+
+  if (/IDEMPOTENCY_KEY_REUSED|IDEMPOTENT_RESULT_NOT_FOUND/i.test(error.message)) {
+    return new Error(
+      'A chave idempotente desta movimentacao divergiu do registro remoto; nenhuma repeticao foi aplicada.',
+    );
+  }
+
+  if (/INVALID_MOVEMENT|SAFE_STOCK_SNAPSHOTS_REQUIRED|STOCK_QUANTITY_OVERFLOW/i.test(error.message)) {
+    return new Error('O servidor recusou os dados desta movimentacao por seguranca.');
   }
 
   return new Error('Nao foi possivel enviar esta alteracao ao servidor agora.');

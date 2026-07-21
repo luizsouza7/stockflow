@@ -97,18 +97,37 @@ describe('painel de push manual', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar alteracoes compativeis' })).toBeTruthy());
   });
 
-  it('mensagem de sucesso parcial preserva limites de pull e movimentos', async () => {
+  it('mensagem de sucesso inclui movimentos rastreados e preserva limite de pull', async () => {
     const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
     renderPanel({ push });
     fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
 
-    expect(await screen.findByText(/Pull e movimentacoes ainda nao estao disponiveis/)).toBeTruthy();
+    expect(await screen.findByText(/movimentacoes rastreadas sao aceitos; pull ainda nao existe/i)).toBeTruthy();
     expect(screen.queryByText(/sincronizado completamente|tudo sincronizado/i)).toBeNull();
   });
 
-  it('explica que conflitos ainda nao possuem resolucao', () => {
+  it('explica limites de movimentos legados, pull e conflitos', () => {
     renderPanel({});
+    expect(screen.getByText(/movimentacoes rastreadas compativeis/i)).toBeTruthy();
+    expect(screen.getByText(/legadas sem snapshots permanecem bloqueadas/i)).toBeTruthy();
+    expect(screen.getByText(/Pull e resolucao de conflitos ainda nao estao disponiveis/i)).toBeTruthy();
     expect(screen.getByText(/resolucao de conflitos ainda nao estao disponiveis/)).toBeTruthy();
+  });
+
+  it('mostra falha parcial amigavel sem prometer sincronizacao completa', async () => {
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    push.push.mockResolvedValue({
+      status: 'completed',
+      message: '0 enviada(s) e 1 mantida(s) com erro local e backoff. Movimentacoes legadas ou divergentes exigem atencao; pull ainda nao existe.',
+      claimed: 1,
+      succeeded: 0,
+      failed: 1,
+    });
+    renderPanel({ push });
+    fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
+
+    expect(await screen.findByText(/legadas ou divergentes exigem atencao/)).toBeTruthy();
+    expect(screen.queryByText(/sincronizacao completa|tudo sincronizado/i)).toBeNull();
   });
 });
 
@@ -152,7 +171,7 @@ function createPushService(summary: { unscoped: number; selectedBusiness: number
     }),
     push: vi.fn<ManualPushService['push']>().mockResolvedValue({
       status: 'completed',
-      message: '1 alteracao compativel foi enviada. Pull e movimentacoes ainda nao estao disponiveis.',
+      message: '1 alteracao compativel foi enviada. Categorias, produtos e movimentacoes rastreadas sao aceitos; pull ainda nao existe.',
       claimed: 1,
       succeeded: 1,
       failed: 0,
