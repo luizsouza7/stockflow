@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa funcional atual: Parte 6E implementada em código e testes; a 6D permanece como validação real das Partes 5/6C. O push manual aceita categorias, produtos e movimentos rastreados via RPC atômica, sem pull ou sincronização automática.
+- Etapa funcional atual: Parte 6E implementada em código e testes e 6F validada operacionalmente em Supabase real, com ressalva visual no botão “Enviando...”. O push manual aceita categorias, produtos e movimentos rastreados via RPC atômica, sem pull ou sincronização automática.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -188,7 +188,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 - associação automática dos dados locais a uma conta/estabelecimento;
 - sincronização bidirecional e pull;
-- aplicação e validação operacional da migration/RPC 6E em Supabase real, inclusive cenários concorrentes;
+- cenários concorrentes amplos e multi-dispositivo para a migration/RPC 6E;
 - retry automático com rede e cursor de pull;
 - detecção, persistência e resolução de conflitos;
 - central/status real de sincronização;
@@ -226,8 +226,8 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
-- Parte 6: **em andamento pelas fatias 6A–6E**; a 6D validou categorias/produtos em ambiente real, e a 6E adiciona em código a RPC atômica e o push manual de movimentos rastreados. Pull, conflitos reais, central de conflitos e automação não foram implementados.
-- Evidência operacional: `docs/VALIDACAO-SUPABASE-6D.md`.
-- Próximo passo recomendado: aplicar a migration 6E em Supabase real de teste e validar entrada, saída, retry idempotente, estoque insuficiente e concorrência; não iniciar pull ou conflitos nessa validação.
+- Parte 6: **em andamento pelas fatias 6A–6F**; a 6D validou categorias/produtos em ambiente real, a 6E adicionou em código a RPC atômica e o push manual de movimentos rastreados, e a 6F confirmou entrada, saída, atualização de `stock_movements`/`products.current_quantity`, idempotência em `sync_operations` e recusa de snapshot divergente. Há uma ressalva visual no botão “Enviando...”. Pull, conflitos reais, central de conflitos e automação não foram implementados.
+- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`.
+- Próximo passo recomendado: corrigir o estado visual de loading do envio manual e, depois, planejar a 6G — pull remoto com cursor seguro, em etapa separada.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.
