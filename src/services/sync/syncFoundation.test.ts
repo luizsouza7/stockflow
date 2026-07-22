@@ -30,6 +30,9 @@ const SERVICE_WORKER_SOURCE = readFileSync(
 const MANUAL_PUSH_SOURCE = [
   './manualPushService.ts',
   './syncRemoteGateway.ts',
+].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
+const MANUAL_PULL_GUARD_SOURCE = [
+  './manualPullService.ts',
   '../../components/ManualCloudPushPanel.tsx',
 ].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
 
@@ -89,6 +92,27 @@ describe('limites da fundacao local de sync', () => {
   it('boot, Auth e conectividade nao chamam push manual', () => {
     expect(`${APP_BOOT_SOURCE}\n${AUTH_SOURCE}\n${CONNECTIVITY_SOURCE}`).not.toMatch(
       /manualPushService\.push|processOutboxBatch|pushCompatibleEvents/,
+    );
+  });
+
+  it('pull bloqueado nao possui gateway remoto, cursor ou escrita local', () => {
+    expect(MANUAL_PULL_GUARD_SOURCE).not.toMatch(
+      /\.from\s*\(|\.rpc\s*\(|syncCursor|pullCursor|localDb|outboxRepository|service_role/i,
+    );
+  });
+
+  it('boot, login e conectividade nao chamam a verificacao manual de pull', () => {
+    expect(`${APP_BOOT_SOURCE}\n${AUTH_SOURCE}\n${CONNECTIVITY_SOURCE}`).not.toMatch(
+      /manualPullService|checkManualPull|\.check\s*\(/,
+    );
+  });
+
+  it('pull nao usa timer nem background sync', () => {
+    expect(MANUAL_PULL_GUARD_SOURCE).not.toMatch(
+      /setInterval\s*\(|onAuthStateChange|addEventListener\s*\(\s*['"]online['"]/i,
+    );
+    expect(SERVICE_WORKER_SOURCE).not.toMatch(
+      /addEventListener\s*\(\s*['"](?:sync|periodicsync)['"]/i,
     );
   });
 });

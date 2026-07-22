@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 44 arquivos e 439 testes aprovados:
+A arquitetura é verificada por 45 arquivos e 461 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -205,7 +205,7 @@ Categoria possui identidade, timestamps, soft delete e `syncStatus`. Produto gua
 
 ## Offline-first atual
 
-O IndexedDB continua sendo a fonte de verdade operacional. A outbox registra a intenção na mesma transação. O push remoto é uma ação manual adicional: não bloqueia o trabalho local, não altera entidades ao vincular contexto e não executa pull.
+O IndexedDB continua sendo a fonte de verdade operacional. A outbox registra a intenção na mesma transação. O push remoto é uma ação manual adicional: não bloqueia o trabalho local e não altera entidades ao vincular contexto. A 6G acrescenta somente uma guarda manual de pull; ela não consulta entidades remotas nem escreve localmente.
 
 O `OfflineBanner` comunica que a aplicação continua usando os dados armazenados no dispositivo. Ele não promete sincronização, nuvem ou compartilhamento entre dispositivos.
 
@@ -276,20 +276,19 @@ Implementado como preparação da Parte 5:
 - migration PostgreSQL versionada para perfis, estabelecimentos, memberships e entidades de estoque;
 - `business_id`, `version`, índices, trigger de `updated_at`, soft delete e RLS baseada em `auth.uid()`.
 
-Ainda não existem:
+As migrations das etapas 5, 6C e 6E foram aplicadas em Supabase real. A 6D validou Auth, business/membership, RLS e push de categorias/produtos; a 6F validou operacionalmente a RPC atômica de movimentações, seus efeitos no saldo/ledger e a recusa de snapshot divergente.
 
-- aplicação/validação das migrations em um projeto remoto real;
-- associação automática dos registros IndexedDB;
-- pull, cursor ou retry automático;
-- validação operacional da migration 6E e concorrência real entre dispositivos;
-- armazenamento/resolução de conflitos;
-- multiusuário ou multiestabelecimento.
+Continuam pendentes:
+
+- validação ampla de cenários multi-dispositivo e concorrência real;
+- pull funcional e cursor;
+- armazenamento e resolução real de conflitos.
 
 Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorno online ou timer. Somente o botão da Conta inicia o fluxo. A consulta de businesses também exige clique explícito. Não há `fetch` próprio, Service Worker Sync ou background sync.
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6E com push parcial/manual e continua incompleta sem pull, conflitos reais ou automação. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6G: o pull funcional foi bloqueado por segurança, e conflitos reais/automação continuam ausentes. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 
@@ -297,11 +296,13 @@ O fluxo da conta é `Account → useAuthSession → authService → cliente Supa
 
 Dados IndexedDB continuam device-scoped até uma ação consciente de associação da outbox. A seleção é isolada por usuário e revalidada por membership; logout limpa o contexto ativo. Eventos vinculados permanecem vinculados ao usuário/business original e não são reutilizados por outra conta.
 
+Esse vínculo da outbox não cria scoping nas entidades. `Category`, `Product` e `Movement` não possuem `businessId`; as stores, repositories e consultas da UI abrangem o banco inteiro do dispositivo. Portanto, a 6G não criou gateway de pull, cursor ou Dexie v11. `manualPullService.check()` é chamado apenas pelo botão da Conta, valida os pré-requisitos remotos e sempre termina em bloqueio explícito antes de qualquer leitura de categorias, produtos ou movimentos.
+
 ## Backup e exportação
 
 O fluxo é `UI → backupExportService → Dexie`. O acesso direto do service ao `localDb` é restrito à transação somente leitura que captura `categories`, `products` e `movements` como um único snapshot lógico; não foi criada uma abstração repository artificial para uma leitura atômica multi-tabela.
 
-O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 9`, inclui soft deletes e valida UUIDs, relações, tipos, inteiros, datas e movimentos legados antes do download. Produtos e movimentações também podem ser exportados em CSV. O fluxo é local/offline, não faz chamadas de rede e fica indisponível quando o lifecycle do banco não está normal. Importação/restauração não foi implementada e permanece futura até haver estratégia rigorosamente validada.
+O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 10`, inclui soft deletes e valida UUIDs, relações, tipos, inteiros, datas e movimentos legados antes do download. Produtos e movimentações também podem ser exportados em CSV. O fluxo é local/offline, não faz chamadas de rede e fica indisponível quando o lifecycle do banco não está normal. Importação/restauração não foi implementada e permanece futura até haver estratégia rigorosamente validada.
 
 ## Referências arquiteturais
 

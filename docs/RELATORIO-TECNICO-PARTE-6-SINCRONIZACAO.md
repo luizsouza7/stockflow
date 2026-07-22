@@ -4,7 +4,7 @@
 
 A Parte 6 trata da sincronização entre a base local offline-first, mantida em IndexedDB por meio do Dexie, e a base remota PostgreSQL disponibilizada pelo Supabase. Sua implementação foi dividida em etapas incrementais para preservar a integridade dos dados e tornar cada avanço verificável antes da introdução da etapa seguinte.
 
-Essa estratégia não cria nem apresenta uma sincronização simulada como se estivesse completa. A aplicação continua funcionando localmente e offline, e as operações de negócio são persistidas primeiro no dispositivo. No estado atual, dados elegíveis somente são enviados à nuvem por uma ação manual e controlada do usuário. Pull remoto, resolução real de conflitos, central de conflitos e sincronização automática ainda não existem.
+Essa estratégia não cria nem apresenta uma sincronização simulada como se estivesse completa. A aplicação continua funcionando localmente e offline, e as operações de negócio são persistidas primeiro no dispositivo. No estado atual, dados elegíveis somente são enviados à nuvem por uma ação manual e controlada do usuário. A 6G bloqueou o pull funcional após auditoria; resolução real de conflitos, central de conflitos e sincronização automática ainda não existem.
 
 ## 2. Relação com o Prompt Mestre
 
@@ -123,7 +123,15 @@ Foram confirmados:
 
 Foi observada uma ressalva visual: após o envio ser aplicado com sucesso no Supabase, o botão “Enviando...” pode permanecer nesse estado até a página ser recarregada. O comportamento foi classificado como bug de UI, não como falha da RPC, e ainda não foi corrigido.
 
-## 10. Segurança e privacidade
+## 10. Etapa 6G — auditoria e bloqueio planejado do pull
+
+A auditoria confirmou que `Category`, `Product` e `Movement` não possuem `businessId`; suas stores, repositories e consultas de UI são device-scoped. Existem dados criados desde versões anteriores à nuvem no mesmo banco. Apenas os eventos da outbox podem ser associados explicitamente a usuário/business, o que não altera o escopo das entidades.
+
+Assim, a opção C foi adotada. `manualPullService` exige ação do usuário e valida Supabase configurado, sessão atual, usuário, business selecionado, conectividade e membership. Mesmo com todos os pré-requisitos, termina no bloqueio `local-business-scope-required`. Nenhuma tabela de domínio remota é consultada, nenhum dado é aplicado, a outbox não é alterada e nenhum cursor avança.
+
+Não foi criada Dexie v11 porque não existe pull capaz de consumir um cursor com segurança. O schema permanece v10 e todas as migrations históricas foram preservadas. O próximo requisito arquitetural é separar entidades locais por business e definir o destino explícito dos dados legados device-scoped.
+
+## 11. Segurança e privacidade
 
 A integração segue os seguintes limites:
 
@@ -138,7 +146,7 @@ A integração segue os seguintes limites:
 
 Este relatório não contém credenciais, tokens, senhas, URLs reais, project refs completos, UUIDs reais completos, chaves de idempotência reais ou hashes reais.
 
-## 11. Tratamento de estoque e concorrência
+## 12. Tratamento de estoque e concorrência
 
 No StockFlow, alterações ordinárias de estoque são representadas por movimentações. O histórico de movimentos é append-only no fluxo implementado: uma entrada ou saída cria um novo registro em vez de reescrever um movimento anterior.
 
@@ -146,7 +154,7 @@ Localmente, o saldo do produto e o novo movimento são persistidos na mesma tran
 
 Se houver divergência, a movimentação não é gravada e o saldo remoto não é sobrescrito silenciosamente. Movimentos legados sem `previousQuantity` e `resultingQuantity` confiáveis não são enviados. Essa estratégia preserva evidência histórica e evita que uma decisão automática destrua informação necessária para o futuro tratamento de conflitos.
 
-## 12. Experiência do usuário
+## 13. Experiência do usuário
 
 A experiência atual comunica o estado parcial da sincronização por meio de:
 
@@ -155,11 +163,11 @@ A experiência atual comunica o estado parcial da sincronização por meio de:
 - push iniciado manualmente;
 - associação de pendências separada da ação de envio;
 - textos que não prometem sincronização completa;
-- ausência de pull mantida como limitação explícita.
+- bloqueio explícito da busca manual, com a confirmação de que nenhum dado foi baixado.
 
-A ressalva atual é o estado visual do botão “Enviando...”, que pode ficar preso mesmo após a aplicação remota bem-sucedida. Até sua correção, o resultado remoto e o estado visual podem divergir temporariamente.
+A ressalva visual observada na 6F foi corrigida em etapa posterior. O loading da verificação de pull é independente do push e impede duplo clique, sem prometer download.
 
-## 13. Testes e validações
+## 14. Testes e validações
 
 A evolução da Parte 6 foi apoiada por testes automatizados de:
 
@@ -169,16 +177,17 @@ A evolução da Parte 6 foi apoiada por testes automatizados de:
 - contexto de business e associação explícita;
 - gateway Supabase e RPCs com mocks;
 - movimentações rastreadas, snapshots, idempotência e atualização atômica esperada;
-- ausência de `service_role` no frontend, de pull indevido e de gatilhos automáticos de sincronização.
+- ausência de `service_role` no frontend, de gateway/cursor/aplicação de pull e de gatilhos automáticos de sincronização;
+- pré-requisitos e bloqueio por scoping local, preservação da outbox e feedback manual da 6G.
 
-Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados e a entrega 6E registrou 439 testes aprovados. Esses números pertencem aos relatórios daqueles momentos e não representam uma nova execução nesta tarefa documental.
+Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados e a entrega 6E registrou 439. A revisão da 6G aprovou 461 testes em 45 arquivos.
 
 Além da suíte automatizada, as etapas 6D e 6F foram validadas operacionalmente em Supabase real de teste. A 6D verificou a base remota, Auth, business/membership e push de categorias/produtos; a 6F verificou a RPC de estoque, seus efeitos transacionais e a recusa de snapshot divergente.
 
-## 14. Limitações atuais
+## 15. Limitações atuais
 
-- pull remoto ainda não existe;
-- cursor de pull ainda não existe;
+- pull remoto funcional está bloqueado até existir scoping local por business;
+- cursor de pull não foi criado porque não há aplicação segura que possa consumi-lo;
 - central de conflitos ainda não existe;
 - resolução real de conflitos ainda não existe;
 - sincronização automática ainda não existe;
@@ -188,18 +197,19 @@ Além da suíte automatizada, as etapas 6D e 6F foram validadas operacionalmente
 
 Por essas limitações, a Parte 6 permanece em andamento.
 
-## 15. Próximos passos recomendados
+## 16. Próximos passos recomendados
 
-1. Corrigir o bug visual do botão “Enviando...”.
-2. Planejar a etapa 6G — pull remoto com cursor seguro.
-3. Tratar conflitos básicos após a existência de um pull confiável.
-4. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
-5. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
+1. Projetar o scoping local por `businessId` para Category, Product e Movement.
+2. Definir e testar a associação, isolamento ou manutenção explícita dos dados legados device-scoped.
+3. Retomar o pull com cursor composto e aplicação conservadora somente após essa fundação.
+4. Tratar conflitos básicos após a existência de um pull confiável.
+5. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
+6. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
 
 Cada passo deve permanecer separado e receber testes e validação proporcionais ao risco antes do avanço seguinte.
 
-## 16. Conclusão
+## 17. Conclusão
 
-A Parte 6 avançou de maneira incremental, segura e testada: primeiro foi criada a outbox transacional; depois vieram processamento e retry; em seguida, o push manual protegido; sua validação em Supabase real; a RPC atômica de movimentações; e, por fim, a validação operacional dessa RPC.
+A Parte 6 avançou de maneira incremental, segura e testada: primeiro foi criada a outbox transacional; depois vieram processamento e retry; em seguida, o push manual protegido; sua validação em Supabase real; a RPC atômica de movimentações; a validação operacional dessa RPC; e, na 6G, o bloqueio consciente de um pull que misturaria escopos locais.
 
-A Parte 6 ainda não está integralmente concluída. Entretanto, a base de push remoto está madura e operacionalmente validada para categorias, produtos e movimentações rastreadas compatíveis. Pull remoto, cursor, conflitos reais, central de conflitos e sincronização automática permanecem como evoluções futuras explícitas.
+A Parte 6 ainda não está integralmente concluída. Entretanto, a base de push remoto está madura e operacionalmente validada para categorias, produtos e movimentações rastreadas compatíveis. Pull funcional, cursor, scoping local por business, conflitos reais, central de conflitos e sincronização automática permanecem como evoluções futuras explícitas.

@@ -5,10 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import type { BusinessContextService } from '../services/businessContextService';
 import type { ManualPushService } from '../services/sync/manualPushService';
+import type { ManualPullService } from '../services/sync/manualPullService';
 import { ManualCloudPushPanel } from './ManualCloudPushPanel';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const BUSINESS_ID = '22222222-2222-4222-8222-222222222222';
+const OTHER_BUSINESS_ID = '33333333-3333-4333-8333-333333333333';
 
 afterEach(cleanup);
 
@@ -19,6 +21,7 @@ describe('painel de push manual', () => {
     renderPanel({ context });
     expect(screen.getByText(/Supabase nao esta configurado/)).toBeTruthy();
     expect(screen.getByText(/dados locais continuam neste dispositivo/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Verificar busca manual/ })).toBeNull();
   });
 
   it('mostra offline e desabilita chamadas remotas', () => {
@@ -169,8 +172,150 @@ describe('painel de push manual', () => {
     renderPanel({});
     expect(screen.getByText(/movimentacoes rastreadas compativeis/i)).toBeTruthy();
     expect(screen.getByText(/legadas sem snapshots permanecem bloqueadas/i)).toBeTruthy();
-    expect(screen.getByText(/Pull e resolucao de conflitos ainda nao estao disponiveis/i)).toBeTruthy();
-    expect(screen.getByText(/resolucao de conflitos ainda nao estao disponiveis/)).toBeTruthy();
+    expect(screen.getByText(/busca remota e a resolucao de conflitos/i)).toBeTruthy();
+    expect(screen.getByText(/nao resolve conflitos automaticamente/i)).toBeTruthy();
+  });
+
+  it('mostra a verificacao de pull apenas como acao manual bloqueada', async () => {
+    const pull = createPullService();
+    renderPanel({ pull });
+    expect(pull.check).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
+
+    await waitFor(() => expect(pull.check).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/nao estao separados por estabelecimento/i)).toBeTruthy();
+    expect(screen.queryByText(/Tudo sincronizado|Conflitos resolvidos/i)).toBeNull();
+  });
+
+  it('desabilita a verificacao de pull offline', () => {
+    const pull = createPullService();
+    renderPanel({ pull, isOnline: false });
+
+    const button = screen.getByRole('button', { name: 'Verificar busca manual da nuvem' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(button);
+    expect(pull.check).not.toHaveBeenCalled();
+  });
+
+  it('mantem loading do pull separado do loading do push e bloqueia double-submit', async () => {
+    const pending = deferred<Awaited<ReturnType<ManualPullService['check']>>>();
+    const pull = createPullService();
+    const push = createPushService({ unscoped: 1, selectedBusiness: 1 });
+    const context = createContext();
+    pull.check.mockReturnValue(pending.promise);
+    renderPanel({ context, push, pull });
+
+    await screen.findByText(/1 alteracao\(oes\).*vinculada/);
+    expect((screen.getByRole('button', { name: 'Carregar meus estabelecimentos' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Enviar alteracoes compativeis' }) as HTMLButtonElement).disabled).toBe(false);
+
+    const button = screen.getByRole('button', { name: 'Verificar busca manual da nuvem' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(pull.check).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Verificando busca...' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Enviando...' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Carregar meus estabelecimentos' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Associar pendencias locais' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Enviar alteracoes compativeis' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Carregar meus estabelecimentos' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Associar pendencias locais' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar alteracoes compativeis' }));
+    expect(context.listAvailable).not.toHaveBeenCalled();
+    expect(push.bindLocalEvents).not.toHaveBeenCalled();
+    expect(push.push).not.toHaveBeenCalled();
+
+    pending.resolve(blockedPullResult());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' })).toBeTruthy());
+  });
+
+  it('limpa mensagem de pull ao trocar o estabelecimento selecionado', async () => {
+    const context = createContext();
+    context.listAvailable.mockResolvedValue([
+      { id: BUSINESS_ID, name: 'Loja Central' },
+      { id: OTHER_BUSINESS_ID, name: 'Loja Bairro' },
+    ]);
+    renderPanel({ context });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
+    expect(await screen.findByText(/nao estao separados por estabelecimento/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Carregar meus estabelecimentos' }));
+    const select = await screen.findByLabelText('Estabelecimento');
+    fireEvent.change(select, { target: { value: OTHER_BUSINESS_ID } });
+    fireEvent.click(screen.getByRole('button', { name: 'Usar estabelecimento' }));
+
+    await waitFor(() => expect(context.select).toHaveBeenCalledWith(USER_ID, OTHER_BUSINESS_ID));
+    await waitFor(() => expect(screen.queryByText(/nao estao separados por estabelecimento/i)).toBeNull());
+  });
+
+  it('limpa mensagem de pull ao mudar a conectividade', async () => {
+    const context = createContext();
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    const pull = createPullService();
+    const session = createSession();
+    const view = render(
+      <ManualCloudPushPanel
+        session={session}
+        isOnline
+        contextService={context}
+        pushService={push}
+        pullService={pull}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
+    expect(await screen.findByText(/nao estao separados por estabelecimento/i)).toBeTruthy();
+    view.rerender(
+      <ManualCloudPushPanel
+        session={session}
+        isOnline={false}
+        contextService={context}
+        pushService={push}
+        pullService={pull}
+      />,
+    );
+
+    await waitFor(() => expect(screen.queryByText(/nao estao separados por estabelecimento/i)).toBeNull());
+  });
+
+  it('ignora resultado antigo de pull depois da troca de contexto', async () => {
+    const pending = deferred<Awaited<ReturnType<ManualPullService['check']>>>();
+    const context = createContext();
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    const pull = createPullService();
+    const session = createSession();
+    pull.check.mockReturnValue(pending.promise);
+    const view = render(
+      <ManualCloudPushPanel
+        session={session}
+        isOnline
+        contextService={context}
+        pushService={push}
+        pullService={pull}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
+    expect(screen.getByRole('button', { name: 'Verificando busca...' })).toBeTruthy();
+    view.rerender(
+      <ManualCloudPushPanel
+        session={session}
+        isOnline={false}
+        contextService={context}
+        pushService={push}
+        pullService={pull}
+      />,
+    );
+    pending.resolve(blockedPullResult());
+
+    await act(async () => {
+      await pending.promise;
+    });
+    expect(screen.queryByText(/nao estao separados por estabelecimento/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Verificando busca...' })).toBeNull();
   });
 
   it('mostra falha parcial amigavel sem prometer sincronizacao completa', async () => {
@@ -220,10 +365,12 @@ describe('painel de push manual', () => {
 function renderPanel({
   context = createContext(),
   push = createPushService({ unscoped: 0, selectedBusiness: 1 }),
+  pull = createPullService(),
   isOnline = true,
 }: {
   context?: ReturnType<typeof createContext>;
   push?: ReturnType<typeof createPushService>;
+  pull?: ReturnType<typeof createPullService>;
   isOnline?: boolean;
 }) {
   return render(
@@ -232,8 +379,26 @@ function renderPanel({
       isOnline={isOnline}
       contextService={context}
       pushService={push}
+      pullService={pull}
     />,
   );
+}
+
+function createPullService() {
+  return {
+    check: vi.fn<ManualPullService['check']>().mockResolvedValue(blockedPullResult()),
+  };
+}
+
+function blockedPullResult() {
+  return {
+    status: 'blocked' as const,
+    reason: 'local-business-scope-required' as const,
+    message: 'Busca remota bloqueada com seguranca: os dados locais nao estao separados por estabelecimento. Nenhum dado remoto foi baixado.',
+    downloaded: 0 as const,
+    applied: 0 as const,
+    ignored: 0 as const,
+  };
 }
 
 function deferred<T>() {

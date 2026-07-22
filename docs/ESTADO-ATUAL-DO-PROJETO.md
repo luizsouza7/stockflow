@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa funcional atual: Parte 6E implementada em código e testes e 6F validada operacionalmente em Supabase real, com ressalva visual no botão “Enviando...”. O push manual aceita categorias, produtos e movimentos rastreados via RPC atômica, sem pull ou sincronização automática.
+- Etapa atual: a 6F validou a RPC em Supabase real, o bug visual do loading foi corrigido depois, e a 6G auditou e bloqueou o pull funcional porque as entidades locais continuam device-scoped, sem `businessId`. O push permanece manual e não existe sincronização automática.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -137,8 +137,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **44**.
-- Testes aprovados em 20/07/2026: **439 de 439**.
+- Arquivos de teste atuais: **45**.
+- Testes aprovados na revisão da 6G: **461 de 461**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade, dos banners e do lifecycle do IndexedDB. Um teste com fake-indexeddb mantém uma conexão antiga aberta, observa o bloqueio real e confirma a liberação do upgrade após o fechamento. Testes de página comprovam cleanup em `pagehide`, reabertura explícita e preservação de dados após BFCache, ausência de listeners/canais duplicados, invalidação de `open()` pendente por estado terminal ou novo `pagehide` e proibição de conexão reaberta em `reload-required`. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
@@ -168,7 +168,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - backup JSON versionado e exportação CSV local de produtos e movimentações, com validação e snapshot somente leitura;
 - Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
 - migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
-- suíte atual de 439 testes em 44 arquivos aprovada.
+- suíte atual de 461 testes em 45 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -220,14 +220,14 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalos de regras: Parte 1 (1–11), Parte 2 (12–18), Parte 3 (19–29), Parte 4 (30–35), Parte 5 (36–42), Parte 6 (43–54), Parte 7 (55–69), Parte 8 (70–79), Parte 9 (80–86), Parte 10 (87–98), Parte 11 (99–106), Parte 12 (107–118), Parte 13 (119–128), Parte 14 (129–138) e Parte 15 (139–143).
 
-- Última etapa funcional consolidada: distinção textual e visual entre estoque normal, baixo e zerado no dashboard, produtos e alertas, após as validações defensivas de produto e a troca reativa de consulta.
-- Parte principal atual: **Parte 3 concluída**.
+- Evolução mais recente consolidada: Parte 6G encerrada pela opção C, com verificação manual e bloqueio seguro do pull enquanto o domínio local permanecer device-scoped.
+- Parte principal atual: **Parte 6 em andamento**. A Parte 3 permanece concluída.
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
-- Parte 6: **em andamento pelas fatias 6A–6F**; a 6D validou categorias/produtos em ambiente real, a 6E adicionou em código a RPC atômica e o push manual de movimentos rastreados, e a 6F confirmou entrada, saída, atualização de `stock_movements`/`products.current_quantity`, idempotência em `sync_operations` e recusa de snapshot divergente. Há uma ressalva visual no botão “Enviando...”. Pull, conflitos reais, central de conflitos e automação não foram implementados.
-- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a evolução técnica de 6A a 6F está consolidada em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`.
-- Próximo passo recomendado: corrigir o estado visual de loading do envio manual e, depois, planejar a 6G — pull remoto com cursor seguro, em etapa separada.
+- Parte 6: **em andamento pelas fatias 6A–6G**; 6D/6F preservam as validações reais, o loading foi corrigido e a 6G escolheu a opção C. A guarda manual valida os pré-requisitos e bloqueia antes de qualquer leitura remota, pois entidades/stores/repositories/UI locais não separam business. Pull funcional, cursor, conflitos reais, central de conflitos e automação não foram implementados.
+- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a evolução técnica de 6A a 6G está consolidada em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`.
+- Próximo passo recomendado: projetar e migrar o scoping local por `businessId`, incluindo a decisão explícita sobre dados legados device-scoped, antes de retomar pull/cursor em etapa separada.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

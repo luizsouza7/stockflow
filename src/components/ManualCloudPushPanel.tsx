@@ -10,6 +10,10 @@ import {
   type LocalPushSummary,
   type ManualPushService,
 } from '../services/sync/manualPushService';
+import {
+  manualPullService,
+  type ManualPullService,
+} from '../services/sync/manualPullService';
 
 const EMPTY_SUMMARY: LocalPushSummary = { unscoped: 0, selectedBusiness: 0 };
 type ActiveAction = 'load-businesses' | 'select-business' | 'bind' | 'push' | null;
@@ -19,6 +23,7 @@ interface ManualCloudPushPanelProps {
   isOnline: boolean;
   contextService?: BusinessContextService;
   pushService?: ManualPushService;
+  pullService?: ManualPullService;
 }
 
 export function ManualCloudPushPanel({
@@ -26,6 +31,7 @@ export function ManualCloudPushPanel({
   isOnline,
   contextService = businessContextService,
   pushService = manualPushService,
+  pullService = manualPullService,
 }: ManualCloudPushPanelProps) {
   const userId = session.user.id;
   const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
@@ -35,7 +41,11 @@ export function ManualCloudPushPanel({
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pullMessage, setPullMessage] = useState('');
+  const [isCheckingPull, setIsCheckingPull] = useState(false);
   const actionInProgress = useRef(false);
+  const pullCheckInProgress = useRef(false);
+  const pullContextRevision = useRef(0);
   const isMounted = useRef(true);
   const isBusy = activeAction !== null;
 
@@ -53,6 +63,13 @@ export function ManualCloudPushPanel({
   }, [contextService, userId]);
 
   useEffect(() => {
+    pullContextRevision.current += 1;
+    pullCheckInProgress.current = false;
+    setIsCheckingPull(false);
+    setPullMessage('');
+  }, [userId, selectedId, isOnline]);
+
+  useEffect(() => {
     if (!contextService.isConfigured()) return;
     let active = true;
     void pushService.getLocalSummary(userId, selectedId || undefined).then((value) => {
@@ -64,7 +81,7 @@ export function ManualCloudPushPanel({
   }, [contextService, pushService, selectedId, userId]);
 
   async function runAction(actionName: Exclude<ActiveAction, null>, action: () => Promise<void>) {
-    if (actionInProgress.current) return;
+    if (actionInProgress.current || pullCheckInProgress.current) return;
     actionInProgress.current = true;
     setActiveAction(actionName);
     setMessage('');
@@ -160,6 +177,34 @@ export function ManualCloudPushPanel({
     });
   }
 
+  async function checkManualPull() {
+    if (pullCheckInProgress.current || actionInProgress.current) return;
+    const contextRevision = pullContextRevision.current;
+    pullCheckInProgress.current = true;
+    setIsCheckingPull(true);
+    setPullMessage('');
+
+    try {
+      const result = await pullService.check({
+        userId,
+        businessId: selectedId || undefined,
+        isOnline,
+      });
+      if (isMounted.current && contextRevision === pullContextRevision.current) {
+        setPullMessage(result.message);
+      }
+    } catch {
+      if (isMounted.current && contextRevision === pullContextRevision.current) {
+        setPullMessage('Nao foi possivel verificar a disponibilidade da busca remota agora.');
+      }
+    } finally {
+      if (contextRevision === pullContextRevision.current) {
+        pullCheckInProgress.current = false;
+        if (isMounted.current) setIsCheckingPull(false);
+      }
+    }
+  }
+
   if (!contextService.isConfigured()) {
     return (
       <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
@@ -176,8 +221,8 @@ export function ManualCloudPushPanel({
       <h3 className="text-lg font-semibold text-slate-950">Envio manual para a nuvem</h3>
       <p className="mt-2 text-sm text-slate-600">
         Esta etapa envia categorias, produtos e movimentacoes rastreadas compativeis. Movimentacoes
-        legadas sem snapshots permanecem bloqueadas. Pull e resolucao de conflitos ainda nao estao
-        disponiveis.
+        legadas sem snapshots permanecem bloqueadas. A busca remota e a resolucao de conflitos
+        ainda nao estao disponiveis.
       </p>
 
       {!isOnline && (
@@ -192,7 +237,7 @@ export function ManualCloudPushPanel({
         <button
           type="button"
           onClick={loadBusinesses}
-          disabled={isBusy || !isOnline}
+          disabled={isBusy || isCheckingPull || !isOnline}
           className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60"
         >
           {activeAction === 'load-businesses' ? 'Aguarde...' : 'Carregar meus estabelecimentos'}
@@ -206,7 +251,7 @@ export function ManualCloudPushPanel({
                 id="cloud-business"
                 value={candidateId}
                 onChange={(event) => setCandidateId(event.target.value)}
-                disabled={isBusy}
+                disabled={isBusy || isCheckingPull}
                 className="input mt-2"
               >
                 {businesses.map((business) => (
@@ -217,7 +262,7 @@ export function ManualCloudPushPanel({
             <button
               type="button"
               onClick={selectBusiness}
-              disabled={isBusy || !candidateId || !isOnline}
+              disabled={isBusy || isCheckingPull || !candidateId || !isOnline}
               className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60"
             >
               Usar estabelecimento
@@ -239,7 +284,7 @@ export function ManualCloudPushPanel({
         <button
           type="button"
           onClick={bindLocalEvents}
-          disabled={isBusy || !selectedId || !isOnline || summary.unscoped === 0}
+          disabled={isBusy || isCheckingPull || !selectedId || !isOnline || summary.unscoped === 0}
           className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60"
         >
           {activeAction === 'bind' ? 'Processando...' : 'Associar pendencias locais'}
@@ -247,7 +292,7 @@ export function ManualCloudPushPanel({
         <button
           type="button"
           onClick={pushCompatibleEvents}
-          disabled={isBusy || !selectedId || !isOnline || summary.selectedBusiness === 0}
+          disabled={isBusy || isCheckingPull || !selectedId || !isOnline || summary.selectedBusiness === 0}
           className="inline-flex min-h-11 items-center justify-center rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           {activeAction === 'push'
@@ -255,6 +300,28 @@ export function ManualCloudPushPanel({
             : summary.selectedBusiness === 0
               ? 'Nenhuma alteracao compativel para enviar'
               : 'Enviar alteracoes compativeis'}
+        </button>
+      </div>
+
+      <div className="mt-6 border-t border-slate-200 pt-5">
+        <h4 className="font-semibold text-slate-950">Busca manual da nuvem</h4>
+        <p className="mt-2 text-sm text-slate-600">
+          A busca permanece bloqueada ate que categorias, produtos e movimentacoes locais sejam
+          separados por estabelecimento. Esta verificacao e manual, nao baixa dados e nao resolve
+          conflitos automaticamente.
+        </p>
+        {pullMessage && (
+          <p role="status" className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {pullMessage}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void checkManualPull()}
+          disabled={isBusy || isCheckingPull || !selectedId || !isOnline}
+          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60"
+        >
+          {isCheckingPull ? 'Verificando busca...' : 'Verificar busca manual da nuvem'}
         </button>
       </div>
     </section>

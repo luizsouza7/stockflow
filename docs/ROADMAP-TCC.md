@@ -72,7 +72,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento. 6A, 6B, 6C e 6E estão concluídas em código/testes; as validações operacionais 6D e 6F foram concluídas, sendo a 6F encerrada com ressalva visual. Existe push parcial/manual, não sincronização bidirecional.
+**Status:** em andamento. 6A, 6B, 6C e 6E estão concluídas em código/testes; 6D e 6F foram validadas operacionalmente; o loading foi corrigido depois. A 6G foi concluída como bloqueio planejado (opção C), não como sincronização bidirecional.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
@@ -86,9 +86,11 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Validação da fatia 6F:** a migration 6E e a RPC foram validadas em Supabase real com entrada e saída, gravação em `stock_movements`, atualização de `products.current_quantity`, incremento de versão, registro em `sync_operations` e recusa de snapshot divergente. O botão permaneceu em “Enviando...” até recarregar a página, ressalva visual que não impediu a aplicação remota.
 
-**Pendente:** corrigir a ressalva visual, executar cenários multi-dispositivo amplos, implementar pull/cursor, retry automático, conflitos reais e central de conflitos.
+**Decisão da fatia 6G:** a auditoria comprovou que Category, Product e Movement não têm `businessId`; IndexedDB, repositories e UI são device-scoped. Por isso, o pull funcional foi bloqueado. Uma guarda acionada somente pelo usuário valida Supabase, sessão, business, conectividade e membership e informa que nenhum dado foi baixado. Não houve gateway de leitura, cursor ou Dexie v11.
 
-**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6F estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
+**Pendente:** criar scoping local seguro por business e estratégia explícita para dados legados antes do pull/cursor; executar cenários multi-dispositivo amplos; implementar retry automático, conflitos reais e central de conflitos.
+
+**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6G estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
 
 ## Parte 7 — regras 55–69
 
@@ -106,7 +108,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 44 arquivos com 439 testes aprovados na validação de 20/07/2026, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry, push manual, RPC atômica de estoque, contexto, mapeamento, SQL/RLS/idempotência, ausência de automatismo, conectividade, PWA, lifecycle, backup e Auth.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 45 arquivos com 461 testes aprovados na revisão da 6G, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry, push manual, RPC atômica, bloqueio seguro do pull, ausência de automatismo, conectividade, PWA, lifecycle, backup e Auth.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -182,4 +184,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Preservar os registros das validações 6D e 6F. O próximo passo seguro é corrigir o loading visual do envio manual e, depois, planejar a 6G — pull remoto com cursor seguro. Conflitos reais e central de conflitos exigem etapas posteriores separadas.
+Preservar os registros das validações 6D e 6F. O próximo passo seguro é uma etapa própria de scoping local por `businessId`, com migração e tratamento explícito dos dados legados device-scoped. Só depois o pull/cursor deve ser retomado. Conflitos reais e central de conflitos permanecem etapas separadas.
