@@ -10,7 +10,8 @@ O StockFlow é o TCC real. Não o trate, planeje ou adapte como Projeto Integrad
 2. `docs/ESTADO-ATUAL-DO-PROJETO.md`
 3. `docs/ROADMAP-TCC.md`
 4. `docs/ARQUITETURA-ATUAL.md`
-5. ADRs relevantes em `docs/arquitetura/adrs`
+5. `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`, quando a tarefa envolver sincronização
+6. ADRs relevantes em `docs/arquitetura/adrs`
 
 Depois, leia o código e os testes apenas da área que será alterada. O Prompt Mestre é a fonte oficial de direção; os documentos de continuidade registram a fotografia e a sequência operacional atual.
 

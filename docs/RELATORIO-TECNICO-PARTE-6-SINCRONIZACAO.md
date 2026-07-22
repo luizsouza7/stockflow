@@ -1,0 +1,205 @@
+# Relatório técnico — Parte 6: Sincronização
+
+## 1. Objetivo da Parte 6
+
+A Parte 6 trata da sincronização entre a base local offline-first, mantida em IndexedDB por meio do Dexie, e a base remota PostgreSQL disponibilizada pelo Supabase. Sua implementação foi dividida em etapas incrementais para preservar a integridade dos dados e tornar cada avanço verificável antes da introdução da etapa seguinte.
+
+Essa estratégia não cria nem apresenta uma sincronização simulada como se estivesse completa. A aplicação continua funcionando localmente e offline, e as operações de negócio são persistidas primeiro no dispositivo. No estado atual, dados elegíveis somente são enviados à nuvem por uma ação manual e controlada do usuário. Pull remoto, resolução real de conflitos, central de conflitos e sincronização automática ainda não existem.
+
+## 2. Relação com o Prompt Mestre
+
+A Parte 6 corresponde às regras 43–54 do Prompt Mestre. Sem reproduzir seu conteúdo integral, a relação temática é:
+
+- **Regra 43 — sincronização incremental:** evolução por etapas pequenas, verificáveis e compatíveis com o funcionamento local;
+- **Regra 44 — outbox local:** persistência dos eventos que representam mutações ainda não confirmadas remotamente;
+- **Regra 45 — estados de sincronização:** representação explícita do ciclo de processamento e das falhas;
+- **Regra 46 — push:** envio controlado das alterações locais elegíveis;
+- **Regra 47 — retry:** novas tentativas com controle de tempo, erro e quantidade de tentativas;
+- **Regra 48 — pull:** recebimento seguro de alterações remotas, ainda pendente;
+- **Regra 49 — soft delete:** preservação da semântica de exclusão lógica durante a futura convergência;
+- **Regra 50 — conflitos:** detecção e tratamento de divergências, ainda sem resolução real implementada;
+- **Regra 51 — movimentações e concorrência:** proteção especial para alterações de estoque;
+- **Regra 52 — função atômica no PostgreSQL:** execução remota indivisível das movimentações;
+- **Regra 53 — central de conflitos:** interface e persistência próprias, ainda pendentes;
+- **Regra 54 — experiência da sincronização:** comunicação honesta de estados, limites e ações disponíveis.
+
+O Prompt Mestre permanece a referência normativa do projeto e não foi alterado para a produção deste relatório.
+
+## 3. Visão geral da arquitetura de sincronização
+
+A arquitetura atual pode ser resumida em dois caminhos coordenados:
+
+```text
+Operação local:
+UI → Services → Repositories → Dexie/IndexedDB
+
+Envio manual:
+UI → manualPushService → syncService → syncRemoteGateway → Supabase/RPCs
+                              ↓
+                       outboxRepository
+```
+
+Os principais componentes são:
+
+- **IndexedDB/Dexie:** fonte de dados local e base do funcionamento offline-first;
+- **outbox local:** fila persistente de eventos criados junto das mutações de negócio;
+- **`outboxRepository`:** acesso persistente, consultas e transições da outbox;
+- **`outboxService`:** criação e preparação dos eventos locais;
+- **`syncService`:** coordenação do claim, processamento, sucesso, falha e retry;
+- **`manualPushService`:** entrada explícita do fluxo de envio iniciado pelo usuário;
+- **`syncRemoteGateway`:** fronteira de comunicação com as RPCs do Supabase;
+- **`businessContextService`:** validação e seleção do estabelecimento ativo e associação explícita das pendências;
+- **Supabase Auth:** identificação da sessão usada no acesso remoto;
+- **PostgreSQL/RLS:** persistência remota e isolamento por usuário e estabelecimento;
+- **RPCs:** operações remotas protegidas, idempotentes e, para estoque, atômicas;
+- **`sync_operations`:** ledger remoto de idempotência e versões aplicadas.
+
+O gateway remoto não substitui os repositories locais. Ele é acionado somente pelo fluxo manual autorizado, enquanto o Dexie permanece responsável pela persistência e experiência local.
+
+## 4. Etapa 6A — Fundação local da outbox
+
+A etapa 6A introduziu a store local `outbox` na versão 10 do schema Dexie. Mutações de categorias, produtos e movimentações passaram a produzir eventos com estado `pending`. A alteração da entidade e a criação do evento ocorrem na mesma transação local, com semântica de tudo-ou-nada.
+
+Cada evento recebe uma `idempotencyKey`, além das informações necessárias para seu processamento posterior. A interface passou a apresentar um estado honesto das pendências locais, sem declarar que os dados já estavam na nuvem.
+
+Nessa etapa não havia acesso de negócio ao Supabase, push, pull ou qualquer envio pela rede. Sua importância acadêmica está em impedir o cenário no qual uma alteração local é confirmada sem que exista o evento correspondente para sincronização. Isso preserva a abordagem offline-first e cria uma base segura para as etapas remotas posteriores.
+
+## 5. Etapa 6B — Processamento local e retry
+
+A etapa 6B implementou o ciclo local da outbox com os estados `pending`, `processing`, `synced`, `error` e `conflict`. O processamento utiliza claim transacional para evitar que o mesmo evento seja assumido simultaneamente por mais de um executor local.
+
+O executor é injetado no serviço, mantendo a lógica de processamento desacoplada do Supabase. Em caso de sucesso, o evento conclui seu ciclo conforme o contrato do processador. Em caso de falha, a outbox preserva o evento, incrementa as tentativas, registra `nextAttemptAt`, armazena `lastError` sanitizado e aplica backoff progressivo. Também foi criado um reset explícito para eventos que permaneceram em `processing` além do limite seguro.
+
+Não foram introduzidos `setInterval`, background sync, gatilho por login, retorno da rede ou push automático. O modelo evita loops agressivos, permite diagnóstico, conserva as pendências durante falhas e prepara o envio remoto sem comprometer o funcionamento local.
+
+## 6. Etapa 6C — Push remoto manual e protegido
+
+A etapa 6C conectou o processador ao Supabase por meio de gateway e RPCs para categorias e produtos. O push depende de ação manual, sessão autenticada, `businessId` selecionado e membership validada para o estabelecimento.
+
+Pendências antigas ou device-scoped precisam ser associadas explicitamente ao contexto ativo. A associação é uma ação separada e não realiza envio. Eventos sem `businessId` continuam bloqueados, evitando atribuição implícita de dados locais a uma conta ou estabelecimento. Naquele momento, `movement.created` também permanecia bloqueado por ainda não existir uma operação remota atômica adequada.
+
+A separação entre contexto, associação e envio reduz o risco de misturar usuários ou estabelecimentos. Também impede que um push parcial seja apresentado como sincronização completa: não havia pull nem sincronização automática.
+
+## 7. Etapa 6D — Validação operacional da base Supabase
+
+A etapa 6D validou a base preparada pelas etapas 5 e 6C em um ambiente Supabase real de teste. O registro detalhado e sanitizado está em [VALIDACAO-SUPABASE-6D.md](./VALIDACAO-SUPABASE-6D.md).
+
+Foram confirmados operacionalmente:
+
+- aplicação das migrations remotas;
+- autenticação pelo Supabase Auth;
+- business e membership;
+- seleção do estabelecimento;
+- associação explícita das pendências;
+- push manual de categorias e produtos;
+- registros de idempotência em `sync_operations`;
+- bloqueio de `movement.created`, compatível com o limite da etapa naquele momento.
+
+Essa validação demonstrou que o fluxo funcionava fora dos mocks, sem antecipar a sincronização de estoque nem os recursos de pull e conflitos.
+
+## 8. Etapa 6E — RPC atômica de movimentações
+
+A etapa 6E adicionou uma migration própria e a RPC `public.register_stock_movement`. O gateway passou a aceitar o push manual de `movement.created` somente para movimentações rastreadas e compatíveis.
+
+A RPC valida sessão, membership, business e produto. Durante a operação, executa `SELECT ... FOR UPDATE` sobre o produto, impedindo alterações concorrentes sobre o mesmo saldo enquanto a transação está em andamento. O servidor valida estoque negativo, compara `previousQuantity` e `resultingQuantity` com o estado remoto, insere o movimento, atualiza `products.current_quantity`, incrementa a versão e registra a idempotência em `sync_operations` na mesma transação.
+
+Movimentos legados sem snapshots seguros permanecem bloqueados. O frontend não atualiza diretamente o `current_quantity` remoto: movimentações compatíveis passam exclusivamente pela RPC. A etapa não introduziu pull, resolução real de conflitos ou central de conflitos.
+
+Essa decisão é relevante porque estoque não pode ser sincronizado com simples last-write-wins. Uma sobrescrita do saldo descartaria movimentações concorrentes. A função atômica cria a base necessária para múltiplos dispositivos, embora cenários concorrentes amplos ainda precisem de validação adicional.
+
+## 9. Etapa 6F — Validação operacional da RPC de movimentações
+
+A etapa 6F validou a migration e a RPC da 6E em um ambiente Supabase real de teste. O registro detalhado e sanitizado está em [VALIDACAO-SUPABASE-6F.md](./VALIDACAO-SUPABASE-6F.md).
+
+Foram confirmados:
+
+- envio de saída de estoque;
+- envio de entrada de estoque;
+- gravação dos registros em `stock_movements`;
+- atualização correta de `products.current_quantity`;
+- incremento de `products.version`;
+- registro de `movement.created` em `sync_operations`;
+- recusa de uma movimentação com snapshot divergente, sem sobrescrita silenciosa do saldo remoto.
+
+Foi observada uma ressalva visual: após o envio ser aplicado com sucesso no Supabase, o botão “Enviando...” pode permanecer nesse estado até a página ser recarregada. O comportamento foi classificado como bug de UI, não como falha da RPC, e ainda não foi corrigido.
+
+## 10. Segurança e privacidade
+
+A integração segue os seguintes limites:
+
+- `.env.local` permanece fora do versionamento;
+- a anon key pública pode ser utilizada pelo frontend dentro do modelo de segurança do Supabase, mas a credencial `service_role` nunca deve ser exposta na aplicação cliente;
+- Supabase Auth e RLS controlam autenticação e acesso às linhas;
+- a membership valida o vínculo do usuário com o business;
+- eventos sem `businessId` não são enviados;
+- mensagens persistidas em `lastError` são sanitizadas;
+- tokens e senhas não integram a outbox;
+- payloads sensíveis não devem ser registrados em logs.
+
+Este relatório não contém credenciais, tokens, senhas, URLs reais, project refs completos, UUIDs reais completos, chaves de idempotência reais ou hashes reais.
+
+## 11. Tratamento de estoque e concorrência
+
+No StockFlow, alterações ordinárias de estoque são representadas por movimentações. O histórico de movimentos é append-only no fluxo implementado: uma entrada ou saída cria um novo registro em vez de reescrever um movimento anterior.
+
+Localmente, o saldo do produto e o novo movimento são persistidos na mesma transação Dexie. Remotamente, a RPC atômica bloqueia o produto com `SELECT ... FOR UPDATE`, consulta o saldo atual, verifica estoque suficiente e compara os snapshots recebidos com o resultado calculado no servidor.
+
+Se houver divergência, a movimentação não é gravada e o saldo remoto não é sobrescrito silenciosamente. Movimentos legados sem `previousQuantity` e `resultingQuantity` confiáveis não são enviados. Essa estratégia preserva evidência histórica e evita que uma decisão automática destrua informação necessária para o futuro tratamento de conflitos.
+
+## 12. Experiência do usuário
+
+A experiência atual comunica o estado parcial da sincronização por meio de:
+
+- indicador de pendências locais;
+- mensagens que distinguem fila local, processamento, erro e conflito previsto;
+- push iniciado manualmente;
+- associação de pendências separada da ação de envio;
+- textos que não prometem sincronização completa;
+- ausência de pull mantida como limitação explícita.
+
+A ressalva atual é o estado visual do botão “Enviando...”, que pode ficar preso mesmo após a aplicação remota bem-sucedida. Até sua correção, o resultado remoto e o estado visual podem divergir temporariamente.
+
+## 13. Testes e validações
+
+A evolução da Parte 6 foi apoiada por testes automatizados de:
+
+- criação transacional e persistência da outbox;
+- instalação e migrations do schema Dexie;
+- claim, estados, sucesso, falha, retry/backoff e reset de processamento travado;
+- contexto de business e associação explícita;
+- gateway Supabase e RPCs com mocks;
+- movimentações rastreadas, snapshots, idempotência e atualização atômica esperada;
+- ausência de `service_role` no frontend, de pull indevido e de gatilhos automáticos de sincronização.
+
+Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados e a entrega 6E registrou 439 testes aprovados. Esses números pertencem aos relatórios daqueles momentos e não representam uma nova execução nesta tarefa documental.
+
+Além da suíte automatizada, as etapas 6D e 6F foram validadas operacionalmente em Supabase real de teste. A 6D verificou a base remota, Auth, business/membership e push de categorias/produtos; a 6F verificou a RPC de estoque, seus efeitos transacionais e a recusa de snapshot divergente.
+
+## 14. Limitações atuais
+
+- pull remoto ainda não existe;
+- cursor de pull ainda não existe;
+- central de conflitos ainda não existe;
+- resolução real de conflitos ainda não existe;
+- sincronização automática ainda não existe;
+- sincronização bidirecional completa ainda não existe;
+- múltiplos dispositivos ainda exigem validações práticas adicionais;
+- o botão “Enviando...” possui um bug visual conhecido e pode permanecer preso após sucesso remoto.
+
+Por essas limitações, a Parte 6 permanece em andamento.
+
+## 15. Próximos passos recomendados
+
+1. Corrigir o bug visual do botão “Enviando...”.
+2. Planejar a etapa 6G — pull remoto com cursor seguro.
+3. Tratar conflitos básicos após a existência de um pull confiável.
+4. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
+5. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
+
+Cada passo deve permanecer separado e receber testes e validação proporcionais ao risco antes do avanço seguinte.
+
+## 16. Conclusão
+
+A Parte 6 avançou de maneira incremental, segura e testada: primeiro foi criada a outbox transacional; depois vieram processamento e retry; em seguida, o push manual protegido; sua validação em Supabase real; a RPC atômica de movimentações; e, por fim, a validação operacional dessa RPC.
+
+A Parte 6 ainda não está integralmente concluída. Entretanto, a base de push remoto está madura e operacionalmente validada para categorias, produtos e movimentações rastreadas compatíveis. Pull remoto, cursor, conflitos reais, central de conflitos e sincronização automática permanecem como evoluções futuras explícitas.

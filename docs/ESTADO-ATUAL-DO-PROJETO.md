@@ -227,7 +227,7 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
 - Parte 6: **em andamento pelas fatias 6A–6F**; a 6D validou categorias/produtos em ambiente real, a 6E adicionou em código a RPC atômica e o push manual de movimentos rastreados, e a 6F confirmou entrada, saída, atualização de `stock_movements`/`products.current_quantity`, idempotência em `sync_operations` e recusa de snapshot divergente. Há uma ressalva visual no botão “Enviando...”. Pull, conflitos reais, central de conflitos e automação não foram implementados.
-- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`.
+- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a evolução técnica de 6A a 6F está consolidada em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`.
 - Próximo passo recomendado: corrigir o estado visual de loading do envio manual e, depois, planejar a 6G — pull remoto com cursor seguro, em etapa separada.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

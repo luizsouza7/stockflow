@@ -88,6 +88,8 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Pendente:** corrigir a ressalva visual, executar cenários multi-dispositivo amplos, implementar pull/cursor, retry automático, conflitos reais e central de conflitos.
 
+**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6F estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
+
 ## Parte 7 — regras 55–69
 
 **Objetivo real:** consolidar hooks e reatividade, estratégia de estado, formulários, moeda, confirmações, feedback, erros, loading/empty states, responsividade, performance, segurança e privacidade.
