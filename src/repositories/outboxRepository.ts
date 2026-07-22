@@ -29,7 +29,7 @@ interface MarkClaimedSyncedInput {
   remoteVersion: number;
 }
 
-interface BindUnscopedInput {
+interface BindEligibleForContextInput {
   userId: string;
   businessId: string;
   boundAt: string;
@@ -188,19 +188,19 @@ export const outboxRepository = {
     return versions.length > 0 ? Math.max(...versions) : undefined;
   },
 
-  async bindUnscoped(input: BindUnscopedInput): Promise<number> {
+  async bindEligibleForContext(input: BindEligibleForContextInput): Promise<number> {
     return localDb.transaction('rw', localDb.outbox, async () => {
       const entries = (await localDb.outbox.toArray())
         .filter(
           (entry) =>
             (entry.status === 'pending' || entry.status === 'error') &&
             !entry.userId &&
-            !entry.businessId,
+            (!entry.businessId || entry.businessId === input.businessId),
         )
         .map((entry) => ({
           ...entry,
           userId: input.userId,
-          businessId: input.businessId,
+          businessId: entry.businessId ?? input.businessId,
           status: 'pending' as const,
           updatedAt: input.boundAt,
           lastError: undefined,
@@ -222,6 +222,17 @@ export const outboxRepository = {
           (entry.status === 'pending' || entry.status === 'error') &&
           !entry.userId &&
           !entry.businessId,
+      )
+      .count();
+  },
+
+  async countEligibleForBinding(businessId: string): Promise<number> {
+    return localDb.outbox
+      .filter(
+        (entry) =>
+          (entry.status === 'pending' || entry.status === 'error') &&
+          !entry.userId &&
+          (!entry.businessId || entry.businessId === businessId),
       )
       .count();
   },

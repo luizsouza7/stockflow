@@ -19,13 +19,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa atual: 6F validada em Supabase real, loading corrigido em etapa posterior e 6G encerrada pela opção C. O pull funcional está bloqueado porque o domínio local ainda é device-scoped; não existe central de conflitos ou sincronização automática.
-- Schema Dexie atual: versão 10.
-- Estado de testes comprovado: 45 arquivos, 461 testes aprovados na revisão da 6G.
-- Evolução mais recente consolidada: Parte 6G encerrada pela opção C, com guarda manual e pull funcional bloqueado até existir scoping local por `businessId`. A Parte 3 permanece concluída.
-- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6G; regras 43–54 permanecem parcialmente atendidas**.
+- Etapa atual: 6H-A concluída como fundação de escopo local. O legado permanece unscoped, a UI ainda é device-scoped e pull, conflitos e sincronização automática continuam ausentes.
+- Schema Dexie atual: versão 11.
+- Estado de testes comprovado: 48 arquivos, 494 testes aprovados na 6H-A.
+- Evolução mais recente consolidada: Parte 6H-A, com escopo opcional, índices por business e preservação integral do legado, sem pull funcional. A Parte 3 permanece concluída.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-A; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: preservar 6D/6F e criar uma etapa anterior de scoping local por `businessId`, com decisão explícita sobre os dados legados device-scoped, antes de retomar pull/cursor.
+- Próximo passo recomendado: preservar 6D/6F e implementar, em etapa separada, a associação consciente do legado e o runtime scope-aware antes de retomar pull/cursor.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -95,7 +95,7 @@ Antes de qualquer mudança persistida:
 - nunca invente snapshot, associação ou valor histórico;
 - documente contexto, decisão e consequências em ADR quando a mudança for arquitetural.
 
-A versão atual é 10. Uma mudança futura de schema deve começar em versão superior e preservar a sequência v1 → v10 existente.
+A versão atual é 11. Uma mudança futura de schema deve começar em versão superior e preservar a sequência v1 → v11 existente.
 
 ## Regras específicas para estoque
 
@@ -134,7 +134,7 @@ Ao chegar às partes autorizadas:
 - conflitos devem ser detectados e armazenados, não sobrescritos silenciosamente;
 - o service worker não deve cachear respostas privadas indiscriminadamente.
 
-A 6B fornece claim/retry local. A 6C liga um executor remoto somente ao botão da Conta, após reconfirmar sessão, business e membership. Eventos device-scoped precisam de ação separada para receber `userId`/`businessId`. Categorias/produtos usam RPC idempotente/versionada; updates sem versão-base ficam em erro. A 6E acrescenta a RPC exclusiva para movimentos rastreados. Não ligar push ao boot, Auth, eventos online/offline, timer ou Service Worker. `conflict` continua somente previsto; não há resolução.
+A 6B fornece claim/retry local. A 6C liga um executor remoto somente ao botão da Conta, após reconfirmar sessão, business e membership. A associação manual completa `userId`/`businessId` em eventos totalmente unscoped e apenas `userId` em eventos já scoped para o mesmo business; nunca altera payload, entidade ou eventos de outro business. Categorias/produtos usam RPC idempotente/versionada e a 6E acrescenta movimentos rastreados. Não ligar push ao boot, Auth, conectividade, timer ou Service Worker.
 
 A 6D comprovou esse fluxo em Supabase real de teste, incluindo migrations, Auth, business/membership, push de categorias/produtos, `sync_operations` e o bloqueio então vigente de movimentos. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6D.md` e não deve ser reescrito retroativamente.
 
@@ -142,7 +142,7 @@ A 6E adiciona `register_stock_movement` em migration nova e libera somente `move
 
 A 6F validou a RPC em Supabase real com entrada e saída, atualização atômica do saldo, incremento de versão, ledger de idempotência e recusa de snapshot divergente. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6F.md`. Naquele momento houve uma ressalva visual no botão “Enviando...”, corrigida em etapa posterior.
 
-A ressalva visual foi corrigida posteriormente. Na 6G, a auditoria confirmou que apenas eventos da outbox podem receber `userId`/`businessId`; entidades, stores, repositories e listagens locais continuam globais ao dispositivo. A opção C bloqueia qualquer pull funcional. A Conta expõe somente uma verificação manual, que valida configuração, sessão, business, conectividade e membership, mas não possui gateway de leitura, cursor, Dexie v11 ou aplicação local. Não transformar esse bloqueio em pull funcional antes do scoping local.
+A ressalva visual foi corrigida posteriormente. Na 6G, a opção C bloqueou qualquer pull funcional. A 6H-A adicionou `businessId?`, índices v11 e consultas separadas por escopo, mas manteve o runtime da UI e o legado unscoped. Não usar outbox ou business selecionado para backfill, nem transformar a guarda manual em pull antes da associação explícita e do runtime scope-aware.
 
 Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
@@ -195,7 +195,7 @@ O relatório de entrega deve informar:
 
 - `docs/auditoria-fase-0.md` contém uma raiz anterior e retrata lacunas de 12/07/2026, algumas já resolvidas.
 - O ADR-001 teve sua numeração interna corrigida na consolidação documental de 15/07/2026.
-- O README representa o estado funcional, schema v10, migrations, arquitetura, limitações, suíte e roadmap atuais.
+- O README representa o estado funcional, schema v11, migrations, arquitetura, limitações, suíte e roadmap atuais.
 - O primeiro reload offline e o ciclo de atualização A → B já foram validados manualmente; a coordenação de abas deve ser conferida novamente quando houver um upgrade de schema legítimo.
 - O identificador de build é derivado automaticamente dos artefatos gerados; não deve ser substituído por incremento manual de cache.
 
@@ -203,4 +203,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes, é o plano oficial. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas; 6D/6F preservam as validações reais e o loading já foi corrigido. A 6G escolheu a opção C porque entidades locais não possuem scoping por business: a guarda de pull é manual e não baixa dados. Preserve schema, dados e arquitetura; o próximo passo é projetar o scoping local e os dados legados antes de retomar pull/cursor; não faça commit ou push.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes, é o plano oficial. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas; 6D/6F preservam as validações reais. A 6H-A adicionou fundação local por `businessId`, mantendo legado e formulários unscoped, sem backfill, pull ou cursor. Preserve schema, dados e arquitetura; o próximo passo é a associação explícita e o runtime scope-aware antes do pull; não faça commit ou push.

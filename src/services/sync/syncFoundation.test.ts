@@ -35,6 +35,16 @@ const MANUAL_PULL_GUARD_SOURCE = [
   './manualPullService.ts',
   '../../components/ManualCloudPushPanel.tsx',
 ].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
+const LOCAL_SCOPE_SOURCE = [
+  '../../domain/businessScope.ts',
+  '../../repositories/categoryRepository.ts',
+  '../../repositories/productRepository.ts',
+  '../../repositories/movementRepository.ts',
+  '../categoryService.ts',
+  '../productService.ts',
+  '../stockMovementService.ts',
+  '../outboxService.ts',
+].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
 
 describe('limites da fundacao local de sync', () => {
   it('nao acessa Supabase, fetch ou tabelas remotas nas mutacoes locais', () => {
@@ -113,6 +123,18 @@ describe('limites da fundacao local de sync', () => {
     );
     expect(SERVICE_WORKER_SOURCE).not.toMatch(
       /addEventListener\s*\(\s*['"](?:sync|periodicsync)['"]/i,
+    );
+  });
+
+  it('fundacao de escopo nao le business selecionado nem acessa Supabase', () => {
+    expect(LOCAL_SCOPE_SOURCE).not.toMatch(
+      /businessContextService|getSelected\s*\(|supabase|\.from\s*\(|\.rpc\s*\(|fetch\s*\(/i,
+    );
+  });
+
+  it('fundacao de escopo nao dispara pull ou sincronizacao automatica', () => {
+    expect(LOCAL_SCOPE_SOURCE).not.toMatch(
+      /manualPullService|checkManualPull|setInterval\s*\(|onAuthStateChange|addEventListener\s*\(\s*['"]online['"]/i,
     );
   });
 });

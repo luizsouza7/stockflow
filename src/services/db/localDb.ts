@@ -37,6 +37,12 @@ const movementSchemaV5 = '++id, productId, type, date, syncStatus';
 const productSchemaWithUuid =
   'id, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt';
 const movementSchemaWithUuid = 'id, productId, type, date, syncStatus';
+const categorySchemaWithBusiness =
+  'id, businessId, name, updatedAt, deletedAt, syncStatus';
+const productSchemaWithBusiness =
+  'id, businessId, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt';
+const movementSchemaWithBusiness =
+  'id, businessId, productId, type, date, syncStatus';
 const productsMigrationTable = 'productsUuidMigration';
 const movementsMigrationTable = 'movementsUuidMigration';
 
@@ -296,6 +302,12 @@ export class StockFlowDatabase extends Dexie {
     this.version(10).stores({
       outbox:
         'id, [entityType+entityId], operation, status, createdAt, updatedAt, nextAttemptAt, &idempotencyKey, userId, businessId',
+    });
+
+    this.version(11).stores({
+      categories: categorySchemaWithBusiness,
+      products: productSchemaWithBusiness,
+      movements: movementSchemaWithBusiness,
     });
   }
 }

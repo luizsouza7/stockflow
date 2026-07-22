@@ -9,10 +9,10 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Parte 3 do Prompt Mestre concluída.
 - Parte 4 (regras 30–35) concluída no escopo local.
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
-- Schema Dexie atual: **versão 10**, com outbox local persistente.
+- Schema Dexie atual: **versão 11**, com outbox preservada e índices locais por `businessId`.
 - Parte 5 concluída no escopo de Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 avançou pelas fatias 6A–6G: após outbox, push e RPC atômica validados, a 6G auditou o pull e o bloqueou com segurança porque os dados locais ainda são device-scoped e não possuem `businessId`.
-- Suíte atual: **461 testes em 45 arquivos**.
+- Parte 6 avançou até a 6H-A: a 6G bloqueou o pull e a 6H-A criou a fundação local de escopo, sem associar automaticamente o legado e sem liberar pull.
+- Suíte atual: **494 testes em 48 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -61,7 +61,7 @@ O indicador usa `navigator.onLine` e eventos nativos `online`/`offline`; ele inf
 
 ## Backup e exportação local
 
-A página **Dados** gera, sem rede, um backup JSON explícito com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `10` como metadado e coleções separadas de categorias, produtos e movimentações. A outbox não integra o arquivo de backup de domínio. A leitura ocorre em uma transação somente leitura das três tabelas de domínio e inclui soft deletes e histórico, preservando UUIDs, relações, centavos e a distinção entre movimentos rastreados e legados.
+A página **Dados** gera, sem rede, um backup JSON explícito com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `11` como metadado e coleções separadas de categorias, produtos e movimentações. A outbox não integra o arquivo de backup de domínio. A leitura inclui soft deletes, histórico e `businessId` quando presente, preservando sua ausência nos dados legados.
 
 Também é possível exportar produtos e movimentações em CSV. Os arquivos são baixados localmente e não alteram o banco nem são enviados a servidor. Não há importação/restauração, backup automático ou recuperação em nuvem; a importação permanece futura até existir estratégia rigorosamente validada e segura.
 
@@ -79,7 +79,7 @@ Sucesso de executor local/testável remove o evento. O executor remoto da 6C sol
 
 ## Push remoto manual — Parte 6C
 
-A página **Conta** oferece um fluxo deliberadamente separado: carregar estabelecimentos permitidos pela RLS, validar e selecionar um contexto, associar eventos device-scoped ainda sem contexto e, em outra ação, enviar alterações compatíveis. A seleção armazena localmente apenas o `businessId` em chave isolada pelo UUID do usuário. Associar pendências atualiza somente `userId`/`businessId` e metadados da outbox, em transação, sem enviar ou alterar entidades de negócio.
+A página **Conta** oferece um fluxo deliberadamente separado: carregar estabelecimentos permitidos pela RLS, validar e selecionar um contexto, associar eventos elegíveis e, em outra ação, enviar alterações compatíveis. `businessId` representa o escopo da entidade/evento; `userId` identifica o usuário que vinculou o evento ao fluxo remoto. A associação manual completa ambos nos eventos totalmente unscoped ou apenas `userId` nos eventos já scoped para o business selecionado. Outro business nunca é associado. A ação altera somente a outbox, sem enviar ou alterar entidades.
 
 O push exige Supabase configurado, sessão reconfirmada no clique, usuário correspondente, conexão indicada como online, membership ativa e evento vinculado ao mesmo usuário/estabelecimento. Categorias e produtos usam RPCs PostgreSQL específicas, um ledger remoto por `business_id + idempotency_key`, RLS e `version` otimista. Updates de produto não escrevem `current_quantity`; somente `product.created` envia o saldo inicial.
 
@@ -95,12 +95,18 @@ O envio só ocorre pelo botão **Enviar alterações compatíveis**. Não há ch
 
 A auditoria da 6G confirmou que `Category`, `Product` e `Movement`, suas stores e suas consultas locais não possuem scoping por `businessId`. Apenas a outbox pode ser vinculada explicitamente a usuário/estabelecimento. Como o mesmo IndexedDB pode conter dados históricos v1 → v10 de escopo do dispositivo, importar linhas remotas poderia misturar estabelecimentos, sobrescrever pendências ou desalinhar movimentos e saldo.
 
-A página **Conta** oferece apenas **Verificar busca manual da nuvem**. Essa ação reconfirma Supabase, sessão, usuário, conectividade, business e membership, mas sempre bloqueia antes de consultar entidades remotas e explica que nenhum dado foi baixado. Não existe gateway de pull, cursor, aplicação local, Dexie v11, pull automático, reconciliação ou resolução real de conflitos.
+A página **Conta** oferece apenas **Verificar busca manual da nuvem**. Essa ação reconfirma Supabase, sessão, usuário, conectividade, business e membership, mas sempre bloqueia antes de consultar entidades remotas e explica que nenhum dado foi baixado. Na 6G ainda não existia a v11; mesmo após sua criação fundacional na 6H-A, não existe gateway de pull, cursor, aplicação local, pull automático, reconciliação ou resolução real de conflitos.
+
+## Fundação do escopo local — Parte 6H-A
+
+`Category`, `Product` e `Movement` agora aceitam `businessId?: string`. Ausência significa dado local legado/unscoped. A v11 adiciona índices por business às três stores sem backfill: IDs, relações, estoque, preços, snapshots, soft deletes e outbox permanecem intactos. A outbox recebe o mesmo `businessId` em novas mutações scoped e aguarda associação manual de `userId`; as entidades de domínio nunca recebem `userId`.
+
+O runtime atual e os formulários continuam criando e exibindo dados unscoped. Há APIs internas explícitas e consultas isoladas para a fundação scoped, mas ainda não existe associação das entidades legadas, filtro global da UI por business ou uso do business selecionado para transformar dados. O pull e o cursor continuam bloqueados/inexistentes.
 
 ## Limitações atuais
 
 - Auth e o push dependem de configuração, aplicação das migrations e validação em um projeto Supabase real;
-- o push é parcial e manual: suporta categorias, produtos e movimentações rastreadas vinculadas; o pull funcional está bloqueado até existir scoping local por business, e não há retry automático ou resolução de conflitos;
+- o push é parcial e manual; o pull funcional continua bloqueado até o runtime e a associação explícita por business estarem concluídos, e não há retry automático ou resolução de conflitos;
 - movimentações legadas sem snapshots continuam bloqueadas, e divergências de estoque permanecem em erro/backoff até uma etapa futura de conflitos;
 - eventos antigos sem `businessId` nunca são enviados automaticamente, e updates sem versão remota segura permanecem em erro;
 - não há importação/restauração, backup automático ou backup em nuvem;
@@ -149,13 +155,13 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 ## Testes
 
-A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, upgrades do banco e lifecycle entre conexões, incluindo o caminho histórico completo v1 → v10.
+A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, escopo local e lifecycle entre conexões, incluindo v1 → v11 e v10 → v11.
 
-Estado validado nesta etapa: **461 testes aprovados em 45 arquivos**.
+Estado validado nesta etapa: **494 testes aprovados em 48 arquivos**.
 
 ## Banco local e migrations
 
-O banco padrão é `stockflow-local-db`. O schema final v10 contém `products`, `categories`, `movements` e `outbox`.
+O banco padrão é `stockflow-local-db`. O schema final v11 contém `products`, `categories`, `movements` e `outbox`.
 
 | Versão | Evolução principal |
 | --- | --- |
@@ -165,8 +171,10 @@ O banco padrão é `stockflow-local-db`. O schema final v10 contém `products`, 
 | v4 | movimentações antigas explicitadas como legadas |
 | v5 | categorias convertidas em entidades |
 | v6–v9 | migração segura dos IDs e relações para UUID e limpeza das stores temporárias |
+| v10 | adição isolada da outbox persistente |
+| v11 | índices `businessId` nas três stores de domínio, sem backfill |
 
-As migrations preservam dados históricos e relações. O teste permanente v1 → v10 comprova preço em centavos, quantidade, categoria, movimentação legada, UUIDs e relação entre produto e movimentação; o upgrade v9 → v10 preserva as três tabelas existentes e inicia a outbox vazia.
+As migrations preservam dados históricos e relações. O teste permanente v1 → v11 mantém o contrato histórico; v10 → v11 preserva também a outbox e comprova que um evento associado não atribui `businessId` à entidade.
 
 ## Decisões arquiteturais
 
@@ -176,7 +184,8 @@ Os ADRs atuais registram:
 2. snapshots de estoque nas movimentações;
 3. separação entre domínio, services e repositories;
 4. categorias como entidades;
-5. UUIDs para produtos e movimentações.
+5. UUIDs para produtos e movimentações;
+6. escopo local por `businessId` e preservação do legado unscoped.
 
 ## Roadmap oficial
 
@@ -200,7 +209,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída com as regras 30–35 implementadas no escopo local. A Parte 5 está concluída e validada operacionalmente em Supabase real. A Parte 6 avançou pelas fatias 6A–6G: a 6F validou a RPC de movimentos e a 6G bloqueou o pull após comprovar a ausência de scoping local por business. Pull funcional/cursor, conflitos reais, central de conflitos e sincronização automática continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-A, que criou a fundação de escopo sem associação automática. Runtime completo por business, pull/cursor, conflitos reais, central de conflitos e sincronização automática continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

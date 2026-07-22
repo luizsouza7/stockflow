@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { StockFlowDatabase } from './localDb';
 
@@ -70,6 +71,19 @@ function createVersionNineDatabase(name: string) {
   return database;
 }
 
+function createVersionTenDatabase(name: string) {
+  const database = new Dexie(name);
+  database.version(10).stores({
+    products:
+      'id, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+    movements: 'id, productId, type, date, syncStatus',
+    categories: 'id, name, updatedAt, deletedAt, syncStatus',
+    outbox:
+      'id, [entityType+entityId], operation, status, createdAt, updatedAt, nextAttemptAt, &idempotencyKey, userId, businessId',
+  });
+  return database;
+}
+
 function schemaSignature(database: Dexie) {
   return database.tables
     .map((table) => ({
@@ -85,8 +99,14 @@ describe('migracoes do banco local', () => {
     await Promise.all(databaseNames.splice(0).map((name) => Dexie.delete(name)));
   });
 
-  it('migra dados historicos diretamente da versao 1 ate o schema atual v10', async () => {
-    const databaseName = `stockflow-v1-to-v10-${crypto.randomUUID()}`;
+  it('v11 nao usa deleteDatabase, clear ou backfill de businessId', () => {
+    const source = readFileSync(new URL('./localDb.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/deleteDatabase|\.clear\s*\(/);
+    expect(source).not.toMatch(/businessId\s*[:=].*outbox|outbox.*businessId\s*[:=]/i);
+  });
+
+  it('migra dados historicos diretamente da versao 1 ate o schema atual v11', async () => {
+    const databaseName = `stockflow-v1-to-v11-${crypto.randomUUID()}`;
     databaseNames.push(databaseName);
     const legacyDatabase = createVersionOneDatabase(databaseName);
     const createdAt = '2025-01-10T09:00:00.000Z';
@@ -127,7 +147,7 @@ describe('migracoes do banco local', () => {
     const product = products[0];
     const movement = movements[0];
 
-    expect(migratedDatabase.verno).toBe(10);
+    expect(migratedDatabase.verno).toBe(11);
     expect(migratedDatabase.tables.map((table) => table.name).sort()).toEqual([
       'categories',
       'movements',
@@ -150,7 +170,9 @@ describe('migracoes do banco local', () => {
       syncStatus: 'pending',
     });
     expect(product).not.toHaveProperty('price');
+    expect(product).not.toHaveProperty('businessId');
     expect(categories[0]).toMatchObject({ id: product?.categoryId, name: 'Bebidas' });
+    expect(categories[0]).not.toHaveProperty('businessId');
     expect(movement).toMatchObject({
       id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
       productId: product?.id,
@@ -163,6 +185,7 @@ describe('migracoes do banco local', () => {
     });
     expect(movement).not.toHaveProperty('previousQuantity');
     expect(movement).not.toHaveProperty('resultingQuantity');
+    expect(movement).not.toHaveProperty('businessId');
 
     migratedDatabase.close();
   });
@@ -619,7 +642,7 @@ describe('migracoes do banco local', () => {
       reopenedMovements.map((movement) => [movement.note, movement]),
     );
 
-    expect(reopenedDatabase.verno).toBe(10);
+    expect(reopenedDatabase.verno).toBe(11);
     expect(reopenedDatabase.tables.map((table) => table.name).sort()).toEqual([
       'categories',
       'movements',
@@ -762,7 +785,7 @@ describe('migracoes do banco local', () => {
     const migratedDatabase = new StockFlowDatabase(databaseName);
     await migratedDatabase.open();
 
-    expect(migratedDatabase.verno).toBe(10);
+    expect(migratedDatabase.verno).toBe(11);
     expect(await migratedDatabase.categories.get(categoryId)).toMatchObject({ name: 'Preservada' });
     expect(await migratedDatabase.products.get(productId)).toMatchObject({
       salePriceInCents: 1234,
@@ -792,7 +815,93 @@ describe('migracoes do banco local', () => {
     migratedDatabase.close();
   });
 
-  it('produz o mesmo schema final em fresh install e upgrade direto da v5', async () => {
+  it('preserva integralmente v10 no upgrade para v11 sem inferir businessId', async () => {
+    const databaseName = `stockflow-v10-to-v11-${crypto.randomUUID()}`;
+    databaseNames.push(databaseName);
+    const databaseV10 = createVersionTenDatabase(databaseName);
+    const businessId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const userId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const categoryId = '11111111-1111-4111-8111-111111111111';
+    const productId = '22222222-2222-4222-8222-222222222222';
+    const movementId = '33333333-3333-4333-8333-333333333333';
+    const outboxId = '44444444-4444-4444-8444-444444444444';
+    const createdAt = '2026-07-20T10:00:00.000Z';
+    const updatedAt = '2026-07-20T11:00:00.000Z';
+    const deletedAt = '2026-07-20T12:00:00.000Z';
+    const category = {
+      id: categoryId,
+      name: 'Legada',
+      createdAt,
+      updatedAt,
+      deletedAt,
+      syncStatus: 'error',
+    };
+    const product = {
+      id: productId,
+      name: 'Produto legado',
+      code: 'LEG-1',
+      categoryId,
+      salePriceInCents: 2599,
+      currentQuantity: 7,
+      minimumStock: 3,
+      createdAt,
+      updatedAt,
+      deletedAt,
+      syncStatus: 'error',
+    };
+    const movement = {
+      id: movementId,
+      productId,
+      type: 'entrada',
+      quantity: 2,
+      note: 'Historico',
+      date: updatedAt,
+      previousQuantity: 5,
+      resultingQuantity: 7,
+      isLegacy: false,
+      syncStatus: 'error',
+    };
+    const outbox = {
+      id: outboxId,
+      entityType: 'product',
+      entityId: productId,
+      operation: 'product.updated',
+      payload: product,
+      status: 'error',
+      attemptCount: 3,
+      lastError: 'falha preservada',
+      createdAt,
+      updatedAt,
+      nextAttemptAt: '2026-07-20T12:30:00.000Z',
+      userId,
+      businessId,
+      idempotencyKey: 'evento-legado-associado',
+      remoteVersion: 2,
+    };
+
+    await databaseV10.open();
+    await databaseV10.table('categories').add(category);
+    await databaseV10.table('products').add(product);
+    await databaseV10.table('movements').add(movement);
+    await databaseV10.table('outbox').add(outbox);
+    databaseV10.close();
+
+    const migratedDatabase = new StockFlowDatabase(databaseName);
+    await migratedDatabase.open();
+
+    expect(migratedDatabase.verno).toBe(11);
+    expect(await migratedDatabase.categories.toArray()).toEqual([category]);
+    expect(await migratedDatabase.products.toArray()).toEqual([product]);
+    expect(await migratedDatabase.movements.toArray()).toEqual([movement]);
+    expect(await migratedDatabase.outbox.toArray()).toEqual([outbox]);
+    expect(await migratedDatabase.categories.where('businessId').equals(businessId).count()).toBe(0);
+    expect(await migratedDatabase.products.where('businessId').equals(businessId).count()).toBe(0);
+    expect(await migratedDatabase.movements.where('businessId').equals(businessId).count()).toBe(0);
+    expect((await migratedDatabase.outbox.get(outboxId))?.businessId).toBe(businessId);
+    migratedDatabase.close();
+  });
+
+  it('produz o mesmo schema final v11 em fresh install e upgrade direto da v5', async () => {
     const freshDatabaseName = `stockflow-fresh-schema-${crypto.randomUUID()}`;
     const migratedDatabaseName = `stockflow-migrated-schema-${crypto.randomUUID()}`;
     databaseNames.push(freshDatabaseName, migratedDatabaseName);
@@ -805,19 +914,19 @@ describe('migracoes do banco local', () => {
     await freshDatabase.open();
     await migratedDatabase.open();
 
-    expect(freshDatabase.verno).toBe(10);
-    expect(migratedDatabase.verno).toBe(10);
+    expect(freshDatabase.verno).toBe(11);
+    expect(migratedDatabase.verno).toBe(11);
     expect(schemaSignature(migratedDatabase)).toEqual(schemaSignature(freshDatabase));
     expect(schemaSignature(freshDatabase)).toEqual([
       {
         name: 'categories',
         primaryKey: 'id',
-        indexes: ['deletedAt', 'name', 'syncStatus', 'updatedAt'],
+        indexes: ['businessId', 'deletedAt', 'name', 'syncStatus', 'updatedAt'],
       },
       {
         name: 'movements',
         primaryKey: 'id',
-        indexes: ['date', 'productId', 'syncStatus', 'type'],
+        indexes: ['businessId', 'date', 'productId', 'syncStatus', 'type'],
       },
       {
         name: 'outbox',
@@ -839,6 +948,7 @@ describe('migracoes do banco local', () => {
         primaryKey: 'id',
         indexes: [
           'categoryId',
+          'businessId',
           'currentQuantity',
           'deletedAt',
           'minimumStock',

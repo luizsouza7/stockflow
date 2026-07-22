@@ -11,6 +11,10 @@ import {
 } from '../domain/productCode';
 import { localDb } from './db/localDb';
 import { outboxService } from './outboxService';
+import {
+  assertSameBusinessScope,
+  validateBusinessId,
+} from '../domain/businessScope';
 
 export type ProductEditingLookup =
   | { status: 'active'; product: Product }
@@ -57,32 +61,12 @@ export const productService = {
   },
 
   async create(data: CreateProductInput): Promise<string> {
-    const name = sanitizeProductName(data.name);
-    validateMinimumStock(data.minimumStock);
-    validateSalePriceInCents(data.salePriceInCents);
-    validateInitialQuantity(data.currentQuantity);
-    await validateCategoryAssociation(data.categoryId);
-    const code = sanitizeProductCode(data.code);
-    await ensureUniqueActiveCode(code);
-    const product: Product = {
-      ...data,
-      id: generateUuid(),
-      name,
-      code,
-      syncStatus: 'pending',
-    };
+    return createInScope(data);
+  },
 
-    return localDb.transaction('rw', localDb.products, localDb.outbox, async () => {
-      const id = await productRepository.create(product);
-      await outboxService.enqueue({
-        entityType: 'product',
-        entityId: id,
-        operation: 'product.created',
-        payload: product,
-        occurredAt: product.updatedAt,
-      });
-      return id;
-    });
+  async createScoped(data: CreateProductInput, businessId: string): Promise<string> {
+    validateBusinessId(businessId);
+    return createInScope(data, businessId);
   },
 
   async update(id: string, data: UpdateProductInput): Promise<number> {
@@ -101,7 +85,7 @@ export const productService = {
     }
 
     if ('categoryId' in data) {
-      await validateCategoryAssociation(data.categoryId);
+      await validateCategoryAssociation(data.categoryId, product.businessId);
     }
 
     const changes: Partial<CreateProductInput> = {
@@ -117,7 +101,7 @@ export const productService = {
 
     if (data.code !== undefined) {
       const code = sanitizeProductCode(data.code);
-      await ensureUniqueActiveCode(code, product.code);
+      await ensureUniqueActiveCode(code, product.businessId, product.code);
       changes.code = code;
     }
 
@@ -169,6 +153,45 @@ export const productService = {
   },
 };
 
+async function createInScope(
+  data: CreateProductInput,
+  businessId?: string,
+): Promise<string> {
+  const name = sanitizeProductName(data.name);
+  validateMinimumStock(data.minimumStock);
+  validateSalePriceInCents(data.salePriceInCents);
+  validateInitialQuantity(data.currentQuantity);
+  await validateCategoryAssociation(data.categoryId, businessId);
+  const code = sanitizeProductCode(data.code);
+  await ensureUniqueActiveCode(code, businessId);
+  const product: Product = {
+    id: generateUuid(),
+    ...(businessId ? { businessId } : {}),
+    name,
+    code,
+    categoryId: data.categoryId,
+    salePriceInCents: data.salePriceInCents,
+    currentQuantity: data.currentQuantity,
+    minimumStock: data.minimumStock,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    ...(data.deletedAt ? { deletedAt: data.deletedAt } : {}),
+    syncStatus: 'pending',
+  };
+
+  return localDb.transaction('rw', localDb.products, localDb.outbox, async () => {
+    const id = await productRepository.create(product);
+    await outboxService.enqueue({
+      entityType: 'product',
+      entityId: id,
+      operation: 'product.created',
+      payload: product,
+      occurredAt: product.updatedAt,
+    });
+    return id;
+  });
+}
+
 function resolveCategoryName(
   categoryId: string | undefined,
   categoryById: Map<string, { name: string; deletedAt?: string }>,
@@ -186,7 +209,10 @@ function resolveCategoryName(
   return category.deletedAt ? `${category.name} (excluida)` : category.name;
 }
 
-async function validateCategoryAssociation(categoryId: string | undefined): Promise<void> {
+async function validateCategoryAssociation(
+  categoryId: string | undefined,
+  businessId: string | undefined,
+): Promise<void> {
   if (!categoryId) {
     return;
   }
@@ -196,6 +222,12 @@ async function validateCategoryAssociation(categoryId: string | undefined): Prom
   if (!category || category.deletedAt) {
     throw new Error('Selecione uma categoria ativa valida.');
   }
+
+  assertSameBusinessScope(
+    { businessId },
+    category,
+    'A categoria selecionada pertence a outro escopo local.',
+  );
 }
 
 function validateSalePriceInCents(value: number): void {
@@ -226,7 +258,11 @@ function validateInitialQuantity(value: number): void {
   }
 }
 
-async function ensureUniqueActiveCode(code: string, currentCode?: string): Promise<void> {
+async function ensureUniqueActiveCode(
+  code: string,
+  businessId: string | undefined,
+  currentCode?: string,
+): Promise<void> {
   const normalizedCode = normalizeProductCodeForComparison(code);
 
   if (
@@ -237,7 +273,9 @@ async function ensureUniqueActiveCode(code: string, currentCode?: string): Promi
     return;
   }
 
-  const activeProducts = await productRepository.findAllActive();
+  const activeProducts = businessId
+    ? await productRepository.findAllActiveForBusiness(businessId)
+    : await productRepository.findAllActiveUnscoped();
   const duplicate = activeProducts.some(
     (product) => normalizeProductCodeForComparison(product.code) === normalizedCode,
   );

@@ -93,7 +93,7 @@ describe('regras locais de estoque', () => {
   });
 
   it('cria banco novo diretamente no schema final e persiste UUIDs apos reabertura', async () => {
-    expect(localDb.verno).toBe(10);
+    expect(localDb.verno).toBe(11);
     expect(localDb.tables.map((table) => table.name).sort()).toEqual([
       'categories',
       'movements',
@@ -131,7 +131,7 @@ describe('regras locais de estoque', () => {
     localDb.close();
     await localDb.open();
 
-    expect(localDb.verno).toBe(10);
+    expect(localDb.verno).toBe(11);
     expect((await localDb.products.get(productId))?.id).toBe(productId);
     expect((await localDb.categories.get(categoryId))?.id).toBe(categoryId);
     expect(await localDb.movements.get(movementId ?? '')).toMatchObject({

@@ -15,7 +15,11 @@ import {
   type ManualPullService,
 } from '../services/sync/manualPullService';
 
-const EMPTY_SUMMARY: LocalPushSummary = { unscoped: 0, selectedBusiness: 0 };
+const EMPTY_SUMMARY: LocalPushSummary = {
+  unscoped: 0,
+  awaitingUserBinding: 0,
+  selectedBusiness: 0,
+};
 type ActiveAction = 'load-businesses' | 'select-business' | 'bind' | 'push' | null;
 
 interface ManualCloudPushPanelProps {
@@ -273,18 +277,22 @@ export function ManualCloudPushPanel({
 
       <div className="mt-5 rounded-md bg-slate-100 p-4 text-sm text-slate-700">
         <p>{summary.unscoped} alteracao(oes) local(is) ainda sem estabelecimento.</p>
+        <p className="mt-1">
+          {summary.awaitingUserBinding} alteracao(oes) elegivel(is) para associacao manual ao
+          estabelecimento selecionado.
+        </p>
         <p className="mt-1">{summary.selectedBusiness} alteracao(oes) vinculada(s) ao estabelecimento selecionado.</p>
       </div>
 
       <p className="mt-4 text-sm text-slate-600">
-        Associar pendencias apenas grava usuario e estabelecimento na outbox. Esse passo nao envia
-        dados e nao altera produtos, categorias ou movimentacoes.
+        Associar pendencias grava o usuario na outbox e, quando ainda ausente, o estabelecimento.
+        Esse passo nao envia dados e nao altera produtos, categorias ou movimentacoes.
       </p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <button
           type="button"
           onClick={bindLocalEvents}
-          disabled={isBusy || isCheckingPull || !selectedId || !isOnline || summary.unscoped === 0}
+          disabled={isBusy || isCheckingPull || !selectedId || !isOnline || summary.awaitingUserBinding === 0}
           className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60"
         >
           {activeAction === 'bind' ? 'Processando...' : 'Associar pendencias locais'}

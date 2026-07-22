@@ -21,6 +21,8 @@ const category: Category = {
   syncStatus: 'pending',
 };
 
+const BUSINESS_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
 const activeProduct: Product = {
   id: '22222222-2222-4222-8222-222222222222',
   name: 'Cafe, premium',
@@ -86,7 +88,7 @@ afterAll(async () => {
 });
 
 describe('backup local JSON', () => {
-  it('gera formato proprio v1 com schema Dexie v10 e nome previsivel', async () => {
+  it('gera formato proprio v1 com schema Dexie v11 e nome previsivel', async () => {
     const file = await backupExportService.createJsonBackup(
       new Date('2026-07-15T15:30:00.000Z'),
     );
@@ -102,7 +104,7 @@ describe('backup local JSON', () => {
       exportedAt: '2026-07-15T15:30:00.000Z',
       databaseSchemaVersion: STOCKFLOW_DATABASE_SCHEMA_VERSION,
     });
-    expect(localDb.verno).toBe(10);
+    expect(localDb.verno).toBe(11);
   });
 
   it('preserva categorias, produtos ativos, soft deletes, campos opcionais e relacionamentos', async () => {
@@ -134,6 +136,53 @@ describe('backup local JSON', () => {
       previousQuantity: 5,
       resultingQuantity: 8,
     });
+  });
+
+  it('preserva businessId quando presente e ausencia quando legado em JSON e CSV', async () => {
+    const scopedCategory: Category = {
+      ...category,
+      id: '66666666-6666-4666-8666-666666666666',
+      businessId: BUSINESS_ID,
+      name: 'Scoped',
+      deletedAt: undefined,
+    };
+    const scopedProduct: Product = {
+      ...activeProduct,
+      id: '77777777-7777-4777-8777-777777777777',
+      businessId: BUSINESS_ID,
+      categoryId: scopedCategory.id,
+      code: 'SCOPED',
+    };
+    const scopedMovement: Movement = {
+      ...trackedMovement,
+      id: '88888888-8888-4888-8888-888888888888',
+      businessId: BUSINESS_ID,
+      productId: scopedProduct.id,
+    };
+    await localDb.categories.add(scopedCategory);
+    await localDb.products.add(scopedProduct);
+    await localDb.movements.add(scopedMovement);
+
+    const json = JSON.parse((await backupExportService.createJsonBackup()).content);
+    const productsCsv = await backupExportService.createProductsCsv();
+    const movementsCsv = await backupExportService.createMovementsCsv();
+
+    expect(json.data.categories.find(({ id }: Category) => id === scopedCategory.id)?.businessId).toBe(BUSINESS_ID);
+    expect(json.data.products.find(({ id }: Product) => id === scopedProduct.id)?.businessId).toBe(BUSINESS_ID);
+    expect(json.data.movements.find(({ id }: Movement) => id === scopedMovement.id)?.businessId).toBe(BUSINESS_ID);
+    expect(json.data.categories.find(({ id }: Category) => id === category.id)).not.toHaveProperty('businessId');
+    expect(productsCsv.content).toContain('"businessId"');
+    expect(productsCsv.content).toContain(`"${BUSINESS_ID}"`);
+    expect(movementsCsv.content).toContain('"businessId"');
+    expect(movementsCsv.content).toContain(`"${BUSINESS_ID}"`);
+  });
+
+  it('rejeita backup com relacoes entre escopos diferentes', async () => {
+    await localDb.products.update(activeProduct.id, { businessId: BUSINESS_ID });
+
+    await expect(backupExportService.createJsonBackup()).rejects.toThrow(
+      'Produto e categoria pertencem a escopos locais diferentes.',
+    );
   });
 
   it('nao altera, perde ou duplica registros durante a exportacao', async () => {

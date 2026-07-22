@@ -2,6 +2,7 @@ export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface Product {
   id: string;
+  businessId?: string;
   name: string;
   code: string;
   categoryId?: string;
@@ -14,7 +15,7 @@ export interface Product {
   syncStatus: SyncStatus;
 }
 
-export type CreateProductInput = Omit<Product, 'id'>;
+export type CreateProductInput = Omit<Product, 'id' | 'businessId'>;
 
 export type UpdateProductInput = Partial<
   Pick<Product, 'name' | 'code' | 'categoryId' | 'salePriceInCents' | 'minimumStock'>

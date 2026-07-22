@@ -65,6 +65,23 @@ describe('painel de push manual', () => {
     expect(await screen.findByText(/Nenhum dado foi enviado/)).toBeTruthy();
   });
 
+  it('habilita associacao para evento scoped do business selecionado sem userId', async () => {
+    const push = createPushService({
+      unscoped: 0,
+      awaitingUserBinding: 1,
+      selectedBusiness: 0,
+    });
+    renderPanel({ push });
+
+    expect(await screen.findByText(/1 alteracao\(oes\) elegivel\(is\)/)).toBeTruthy();
+    const button = screen.getByRole('button', { name: 'Associar pendencias locais' });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(button);
+
+    await waitFor(() => expect(push.bindLocalEvents).toHaveBeenCalledTimes(1));
+    expect(push.push).not.toHaveBeenCalled();
+  });
+
   it('push ocorre somente pelo botao manual', async () => {
     const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
     renderPanel({ push });
@@ -101,10 +118,14 @@ describe('painel de push manual', () => {
   });
 
   it('encerra loading apos sucesso mesmo se a recarga do resumo continuar pendente', async () => {
-    const summaryReload = deferred<{ unscoped: number; selectedBusiness: number }>();
+    const summaryReload = deferred<{
+      unscoped: number;
+      awaitingUserBinding: number;
+      selectedBusiness: number;
+    }>();
     const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
     push.getLocalSummary
-      .mockResolvedValueOnce({ unscoped: 0, selectedBusiness: 1 })
+      .mockResolvedValueOnce({ unscoped: 0, awaitingUserBinding: 0, selectedBusiness: 1 })
       .mockReturnValueOnce(summaryReload.promise);
     renderPanel({ push });
 
@@ -147,8 +168,8 @@ describe('painel de push manual', () => {
   it('libera novo envio quando a recarga encontra outra pendencia', async () => {
     const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
     push.getLocalSummary
-      .mockResolvedValueOnce({ unscoped: 0, selectedBusiness: 1 })
-      .mockResolvedValue({ unscoped: 0, selectedBusiness: 1 });
+      .mockResolvedValueOnce({ unscoped: 0, awaitingUserBinding: 0, selectedBusiness: 1 })
+      .mockResolvedValue({ unscoped: 0, awaitingUserBinding: 0, selectedBusiness: 1 });
     renderPanel({ push });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
@@ -420,9 +441,17 @@ function createContext() {
   };
 }
 
-function createPushService(summary: { unscoped: number; selectedBusiness: number }) {
+function createPushService(summary: {
+  unscoped: number;
+  awaitingUserBinding?: number;
+  selectedBusiness: number;
+}) {
+  const completeSummary = {
+    ...summary,
+    awaitingUserBinding: summary.awaitingUserBinding ?? summary.unscoped,
+  };
   return {
-    getLocalSummary: vi.fn<ManualPushService['getLocalSummary']>().mockResolvedValue(summary),
+    getLocalSummary: vi.fn<ManualPushService['getLocalSummary']>().mockResolvedValue(completeSummary),
     bindLocalEvents: vi.fn<ManualPushService['bindLocalEvents']>().mockResolvedValue({
       status: 'completed',
       message: '1 alteracao local foi associada. Nenhum dado foi enviado.',

@@ -40,6 +40,7 @@ export interface BindLocalEventsResult {
 
 export interface LocalPushSummary {
   unscoped: number;
+  awaitingUserBinding: number;
   selectedBusiness: number;
 }
 
@@ -56,13 +57,16 @@ export function createManualPushService(
 ): ManualPushService {
   return {
     async getLocalSummary(userId, businessId) {
-      const [unscoped, selectedBusiness] = await Promise.all([
+      const [unscoped, awaitingUserBinding, selectedBusiness] = await Promise.all([
         outboxRepository.countUnscoped(),
+        businessId
+          ? outboxRepository.countEligibleForBinding(businessId)
+          : Promise.resolve(0),
         userId && businessId
           ? outboxRepository.countForContext(userId, businessId)
           : Promise.resolve(0),
       ]);
-      return { unscoped, selectedBusiness };
+      return { unscoped, awaitingUserBinding, selectedBusiness };
     },
 
     async bindLocalEvents({ userId, businessId, isOnline, now = () => new Date() }) {
@@ -86,7 +90,7 @@ export function createManualPushService(
         };
       }
 
-      const bound = await outboxRepository.bindUnscoped({
+      const bound = await outboxRepository.bindEligibleForContext({
         userId: userId!,
         businessId: businessId!,
         boundAt: toIsoString(now()),
@@ -96,7 +100,7 @@ export function createManualPushService(
         message:
           bound > 0
             ? `${bound} ${bound === 1 ? 'alteracao local foi associada' : 'alteracoes locais foram associadas'} ao estabelecimento. Nenhum dado foi enviado.`
-            : 'Nao ha alteracoes locais sem estabelecimento para associar.',
+            : 'Nao ha alteracoes locais elegiveis para associar a este contexto.',
         bound,
       };
     },

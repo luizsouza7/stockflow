@@ -4,6 +4,7 @@ export type MovementType = 'entrada' | 'saida';
 
 interface MovementBase {
   id: string;
+  businessId?: string;
   productId: string;
   type: MovementType;
   quantity: number;
@@ -28,7 +29,7 @@ export type Movement = TrackedMovement | LegacyMovement;
 
 export type RegisterMovementInput = Omit<
   MovementBase,
-  'id'
+  'id' | 'businessId'
 >;
 
 export type MovementWithProduct = Movement & {

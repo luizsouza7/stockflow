@@ -8,6 +8,9 @@ import type { Category } from '../types/Category';
 import { generateUuid } from '../utils/id';
 import { localDb } from './db/localDb';
 import { outboxService } from './outboxService';
+import { validateBusinessId } from '../domain/businessScope';
+
+type CategoryChanges = Partial<Omit<Category, 'id' | 'businessId'>>;
 
 export const categoryService = {
   async listActive(): Promise<Category[]> {
@@ -20,29 +23,12 @@ export const categoryService = {
   },
 
   async create(name: string): Promise<string> {
-    const sanitizedName = validateCategoryName(name);
-    await ensureUniqueActiveName(sanitizedName);
-    const now = new Date().toISOString();
+    return createInScope(name);
+  },
 
-    const category: Category = {
-      id: generateUuid(),
-      name: sanitizedName,
-      createdAt: now,
-      updatedAt: now,
-      syncStatus: 'pending',
-    };
-
-    return localDb.transaction('rw', localDb.categories, localDb.outbox, async () => {
-      const id = await categoryRepository.create(category);
-      await outboxService.enqueue({
-        entityType: 'category',
-        entityId: id,
-        operation: 'category.created',
-        payload: category,
-        occurredAt: now,
-      });
-      return id;
-    });
+  async createScoped(name: string, businessId: string): Promise<string> {
+    validateBusinessId(businessId);
+    return createInScope(name, businessId);
   },
 
   async update(id: string, name: string): Promise<void> {
@@ -53,9 +39,9 @@ export const categoryService = {
     }
 
     const sanitizedName = validateCategoryName(name);
-    await ensureUniqueActiveName(sanitizedName, id);
+    await ensureUniqueActiveName(sanitizedName, category.businessId, id);
     const now = new Date().toISOString();
-    const changes: Partial<Category> = {
+    const changes: CategoryChanges = {
       name: sanitizedName,
       updatedAt: now,
       syncStatus: 'pending',
@@ -113,9 +99,42 @@ export const categoryService = {
   },
 };
 
-async function ensureUniqueActiveName(name: string, ignoredId?: string): Promise<void> {
+async function createInScope(name: string, businessId?: string): Promise<string> {
+  const sanitizedName = validateCategoryName(name);
+  await ensureUniqueActiveName(sanitizedName, businessId);
+  const now = new Date().toISOString();
+
+  const category: Category = {
+    id: generateUuid(),
+    ...(businessId ? { businessId } : {}),
+    name: sanitizedName,
+    createdAt: now,
+    updatedAt: now,
+    syncStatus: 'pending',
+  };
+
+  return localDb.transaction('rw', localDb.categories, localDb.outbox, async () => {
+    const id = await categoryRepository.create(category);
+    await outboxService.enqueue({
+      entityType: 'category',
+      entityId: id,
+      operation: 'category.created',
+      payload: category,
+      occurredAt: now,
+    });
+    return id;
+  });
+}
+
+async function ensureUniqueActiveName(
+  name: string,
+  businessId: string | undefined,
+  ignoredId?: string,
+): Promise<void> {
   const normalizedName = normalizeCategoryNameForComparison(name);
-  const categories = await categoryRepository.findAllActive();
+  const categories = businessId
+    ? await categoryRepository.findAllActiveForBusiness(businessId)
+    : await categoryRepository.findAllActiveUnscoped();
   const duplicate = categories.some(
     (category) =>
       category.id !== ignoredId &&

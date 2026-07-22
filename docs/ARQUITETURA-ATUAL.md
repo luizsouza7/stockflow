@@ -94,7 +94,7 @@ Os repositories atuais são módulos concretos. Existe apenas a persistência lo
 - versões e funções de upgrade;
 - stores temporárias usadas somente na migration de UUID.
 
-O schema atual é a versão 10 e contém `products`, `movements`, `categories` e `outbox`. A v10 adiciona somente a outbox, sem alterar as stores de domínio. A biblioteca Dexie instalada é 4.4.4.
+O schema atual é a versão 11 e contém `products`, `movements`, `categories` e `outbox`. A v10 adicionou a outbox; a v11 adiciona somente índices `businessId` às três stores de domínio, sem backfill ou alteração dos registros. A biblioteca Dexie instalada é 4.4.4.
 
 `src/services/db/databaseLifecycle.ts` observa a instância central antes do primeiro render. Em `versionchange`, a conexão antiga é fechada e a UI exige uma decisão explícita de reload. Em `blocked`, a aba que tenta o upgrade mostra orientação clara e envia somente `{ type: 'DATABASE_UPGRADE_BLOCKED' }` pelo canal `stockflow-database-lifecycle`; abas que reconhecem essa mensagem fecham suas conexões. Mensagens desconhecidas são ignoradas e o canal é opcional. As subscriptions da UI recebem estado, mas não controlam a instalação dos listeners Dexie.
 
@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 45 arquivos e 461 testes aprovados:
+A arquitetura é verificada por 48 arquivos e 494 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -262,7 +262,7 @@ manualPushService → syncRemoteGateway
 Supabase / PostgreSQL / Auth / RLS
 ```
 
-A escrita continua local. O claim remoto filtra `userId`/`businessId`; eventos sem contexto não viram `processing`. A migration 6C cria `sync_operations` com chave `(business_id, idempotency_key)` e RPCs para create/update/soft delete de categorias/produtos. Updates exigem a `remoteVersion` arquivada pelo último evento `synced`; divergência vira erro amigável, não overwrite. Produtos atualizados nunca escrevem `current_quantity`.
+A escrita continua local. O claim remoto filtra `userId`/`businessId`; eventos sem contexto não viram `processing`. `businessId` é o escopo da entidade e `userId` é o proprietário que vinculou manualmente o evento para sincronização. Eventos sem usuário são associáveis quando totalmente unscoped ou quando já pertencem ao business selecionado; outro business é excluído. A migration 6C cria `sync_operations` e RPCs protegidas. Updates exigem a `remoteVersion`; produtos atualizados nunca escrevem `current_quantity`.
 
 A migration 6E amplia o ledger para `movement.created` e cria `register_stock_movement`. O gateway bloqueia movimentos legados/invalidos antes da rede. Na RPC, `auth.uid()` e membership são verificados explicitamente sob `SECURITY INVOKER`; a linha do produto no mesmo business é lida com `FOR UPDATE`; o saldo remoto precisa coincidir com `previousQuantity`; o servidor calcula e compara `resultingQuantity`; saída negativa é recusada; movimento, saldo, versão do produto e ledger são gravados atomicamente. Repetição de chave/payload retorna o resultado anterior; chave divergente falha. O app não altera o saldo local após o sucesso e não gera `product.updated` extra.
 
@@ -288,21 +288,23 @@ Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorn
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6G: o pull funcional foi bloqueado por segurança, e conflitos reais/automação continuam ausentes. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6H-A: existe fundação de escopo local, mas pull, conflitos reais e automação continuam ausentes. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 
 O fluxo da conta é `Account → useAuthSession → authService → cliente Supabase`. A rota é lazy; abrir as páginas locais não inicializa o módulo Supabase. Se as variáveis estiverem ausentes ou inválidas, a página explica a indisponibilidade e não bloqueia o restante do sistema. Uma sessão previamente persistida pelo cliente oficial pode ser restaurada offline; novos logins/cadastros exigem conectividade e logout usa escopo local para remover a sessão deste navegador.
 
-Dados IndexedDB continuam device-scoped até uma ação consciente de associação da outbox. A seleção é isolada por usuário e revalidada por membership; logout limpa o contexto ativo. Eventos vinculados permanecem vinculados ao usuário/business original e não são reutilizados por outra conta.
+O runtime da UI continua device-scoped e cria dados unscoped. A seleção remota é isolada por usuário e revalidada por membership; logout limpa o contexto ativo. Eventos vinculados permanecem vinculados ao usuário/business original e não são reutilizados por outra conta.
 
-Esse vínculo da outbox não cria scoping nas entidades. `Category`, `Product` e `Movement` não possuem `businessId`; as stores, repositories e consultas da UI abrangem o banco inteiro do dispositivo. Portanto, a 6G não criou gateway de pull, cursor ou Dexie v11. `manualPullService.check()` é chamado apenas pelo botão da Conta, valida os pré-requisitos remotos e sempre termina em bloqueio explícito antes de qualquer leitura de categorias, produtos ou movimentos.
+Na 6H-A, `Category`, `Product` e `Movement` passam a aceitar `businessId?`; ausência representa legado unscoped. Regras puras validam UUID e igualdade de escopo. Repositories oferecem consultas explícitas unscoped ou por business, usando os índices v11. Produto/categoria precisam compartilhar escopo e movimento herda o escopo do produto. A UI atual permanece device-scoped e cria dados unscoped; ela não lê o business selecionado para mutações locais.
+
+O vínculo da outbox 6C continua independente: associar pendências pode preencher `userId` e, se ausente, `businessId` no evento, mas nunca adiciona `userId` às entidades nem faz backfill de `businessId`. Eventos já scoped preservam o business e só podem ser vinculados no mesmo contexto. O pull permanece bloqueado, sem gateway, cursor ou aplicação local.
 
 ## Backup e exportação
 
 O fluxo é `UI → backupExportService → Dexie`. O acesso direto do service ao `localDb` é restrito à transação somente leitura que captura `categories`, `products` e `movements` como um único snapshot lógico; não foi criada uma abstração repository artificial para uma leitura atômica multi-tabela.
 
-O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 10`, inclui soft deletes e valida UUIDs, relações, tipos, inteiros, datas e movimentos legados antes do download. Produtos e movimentações também podem ser exportados em CSV. O fluxo é local/offline, não faz chamadas de rede e fica indisponível quando o lifecycle do banco não está normal. Importação/restauração não foi implementada e permanece futura até haver estratégia rigorosamente validada.
+O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 11`, preserva `businessId` quando presente e sua ausência no legado, além de validar relações no mesmo escopo. Produtos e movimentações também podem ser exportados em CSV com a coluna de escopo. Importação/restauração não foi implementada.
 
 ## Referências arquiteturais
 
@@ -311,6 +313,7 @@ O backup representa dados do StockFlow em JSON, não estruturas internas do Inde
 - `docs/arquitetura/adrs/ADR-002-snapshots-de-estoque-nas-movimentacoes.md`;
 - `docs/arquitetura/adrs/ADR-003-separacao-dominio-servicos-repositories.md`;
 - `docs/arquitetura/adrs/ADR-004-categorias-como-entidades.md`;
-- `docs/arquitetura/adrs/ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`.
+- `docs/arquitetura/adrs/ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`;
+- `docs/arquitetura/adrs/ADR-006-escopo-local-por-business-e-legado-unscoped.md`.
 
 Este documento resume as decisões; os ADRs preservam contexto e consequências específicas e não são duplicados integralmente aqui.

@@ -3,7 +3,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import type { OutboxEntry } from '../../types/Sync';
 import type { BusinessContextService } from '../businessContextService';
+import { categoryService } from '../categoryService';
 import { localDb } from '../db/localDb';
+import { outboxRepository } from '../../repositories/outboxRepository';
 import { createManualPushService } from './manualPushService';
 import type { SyncRemoteGateway } from './syncRemoteGateway';
 
@@ -131,6 +133,72 @@ describe('push remoto manual e controlado', () => {
       lastError: undefined,
       nextAttemptAt: undefined,
     });
+  });
+
+  it('associa evento scoped sem userId ao mesmo business e o torna selecionavel pelo push', async () => {
+    const categoryId = await categoryService.createScoped('Categoria scoped', BUSINESS_ID);
+    const [entry] = await outboxRepository.findAll();
+    const entityBeforeBinding = await localDb.categories.get(categoryId);
+    const payloadBeforeBinding = structuredClone(entry!.payload);
+    const gateway = createGateway();
+    const service = createTestService(gateway, createContext());
+
+    expect(entry).toMatchObject({ businessId: BUSINESS_ID });
+    expect(entry).not.toHaveProperty('userId');
+    expect(await outboxRepository.countUnscoped()).toBe(0);
+    expect(await outboxRepository.countForContext(USER_ID, BUSINESS_ID)).toBe(0);
+    expect(await service.getLocalSummary(USER_ID, BUSINESS_ID)).toEqual({
+      unscoped: 0,
+      awaitingUserBinding: 1,
+      selectedBusiness: 0,
+    });
+
+    const binding = await service.bindLocalEvents({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+    expect(binding.bound).toBe(1);
+    expect(await localDb.outbox.get(entry!.id)).toMatchObject({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      payload: payloadBeforeBinding,
+    });
+    expect(await localDb.categories.get(categoryId)).toEqual(entityBeforeBinding);
+    expect(await outboxRepository.countForContext(USER_ID, BUSINESS_ID)).toBe(1);
+    expect(gateway.push).not.toHaveBeenCalled();
+
+    const push = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+    expect(push).toMatchObject({ claimed: 1, succeeded: 1 });
+    expect(gateway.push).toHaveBeenCalledTimes(1);
+  });
+
+  it('nao considera nem associa evento scoped sem userId de outro business', async () => {
+    const otherBusinessId = '99999999-9999-4999-8999-999999999999';
+    const entry = categoryEntry({
+      userId: undefined,
+      businessId: otherBusinessId,
+    });
+    entry.payload = { ...entry.payload, businessId: otherBusinessId };
+    await localDb.outbox.add(entry);
+    const gateway = createGateway();
+    const service = createTestService(gateway, createContext());
+
+    expect(await outboxRepository.countEligibleForBinding(BUSINESS_ID)).toBe(0);
+    const result = await service.bindLocalEvents({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result.bound).toBe(0);
+    expect(await localDb.outbox.get(entry.id)).toMatchObject({ businessId: otherBusinessId });
+    expect((await localDb.outbox.get(entry.id))?.userId).toBeUndefined();
+    expect(gateway.push).not.toHaveBeenCalled();
   });
 
   it('envia categoria suportada e arquiva sucesso com versao remota', async () => {

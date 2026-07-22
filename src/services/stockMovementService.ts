@@ -35,7 +35,12 @@ export const stockMovementService = {
 
       const persistedMovement: TrackedMovement = {
         id: generateUuid(),
-        ...movement,
+        ...(product.businessId ? { businessId: product.businessId } : {}),
+        productId: movement.productId,
+        type: movement.type,
+        quantity: movement.quantity,
+        note: movement.note,
+        date: movement.date,
         ...snapshot,
         isLegacy: false,
         syncStatus: 'pending',

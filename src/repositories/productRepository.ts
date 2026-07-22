@@ -1,5 +1,10 @@
 import { localDb } from '../services/db/localDb';
 import type { CreateProductInput, Product } from '../types/Product';
+import {
+  isEntityInBusiness,
+  isUnscopedEntity,
+  validateBusinessId,
+} from '../domain/businessScope';
 
 type ProductDetailsChanges = Partial<Omit<CreateProductInput, 'currentQuantity'>>;
 type ProductStockChanges = Pick<
@@ -19,6 +24,37 @@ export const productRepository = {
 
   async findById(id: string): Promise<Product | undefined> {
     return localDb.products.get(id);
+  },
+
+  async findAllUnscoped(): Promise<Product[]> {
+    return localDb.products.filter(isUnscopedEntity).toArray();
+  },
+
+  async findAllActiveUnscoped(): Promise<Product[]> {
+    return localDb.products.filter(
+      (product) => isUnscopedEntity(product) && !product.deletedAt,
+    ).toArray();
+  },
+
+  async findAllForBusiness(businessId: string): Promise<Product[]> {
+    validateBusinessId(businessId);
+    return localDb.products.where('businessId').equals(businessId).toArray();
+  },
+
+  async findAllActiveForBusiness(businessId: string): Promise<Product[]> {
+    const products = await this.findAllForBusiness(businessId);
+    return products.filter((product) => !product.deletedAt);
+  },
+
+  async findUnscopedById(id: string): Promise<Product | undefined> {
+    const product = await localDb.products.get(id);
+    return product && isUnscopedEntity(product) ? product : undefined;
+  },
+
+  async findByIdForBusiness(id: string, businessId: string): Promise<Product | undefined> {
+    validateBusinessId(businessId);
+    const product = await localDb.products.get(id);
+    return product && isEntityInBusiness(product, businessId) ? product : undefined;
   },
 
   async create(product: Product): Promise<string> {

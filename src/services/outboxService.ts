@@ -7,6 +7,7 @@ import type {
   SyncStatusSummary,
 } from '../types/Sync';
 import { generateUuid } from '../utils/id';
+import { validateOptionalBusinessId } from '../domain/businessScope';
 
 interface CreateOutboxEntryInput {
   entityType: SyncEntityType;
@@ -41,6 +42,7 @@ export const outboxService = {
 
 export function createOutboxEntry(input: CreateOutboxEntryInput): OutboxEntry {
   const id = generateUuid();
+  validateOptionalBusinessId(input.payload.businessId);
 
   return {
     id,
@@ -48,6 +50,7 @@ export function createOutboxEntry(input: CreateOutboxEntryInput): OutboxEntry {
     entityId: input.entityId,
     operation: input.operation,
     payload: input.payload,
+    ...(input.payload.businessId ? { businessId: input.payload.businessId } : {}),
     status: 'pending',
     attemptCount: 0,
     createdAt: input.occurredAt,

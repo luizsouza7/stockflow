@@ -34,7 +34,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Product, Category e Movement usam UUID; datas seguem estratégia consistente; Dexie está na versão 10; valores monetários usam centavos; soft delete, snapshots, histórico e transação atômica de entrada/saída estão cobertos por testes.
+**Progresso comprovado:** Product, Category e Movement usam UUID e aceitam escopo local opcional; Dexie está na versão 11; valores monetários usam centavos; soft delete, snapshots, histórico e transação atômica de entrada/saída estão cobertos por testes.
 
 **Pendente:** entidades de usuário/estabelecimento/sincronização pertencem à evolução futura. As validações defensivas de nome e estoque mínimo no `productService` foram consolidadas sem alterar o schema.
 
@@ -56,7 +56,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** operações locais continuam usando IndexedDB; o estado inicial e os eventos de conectividade possuem testes e cleanup; a mensagem offline não promete sincronização; o service worker distingue navegações e caminhos estáticos conhecidos de APIs, rotas privadas, recursos externos e métodos mutáveis; o build injeta identificador determinístico e isola caches por versão; caches antigos do StockFlow são removidos por prefixo somente na ativação; o registro ocorre somente em produção; uma nova versão aguardando pode ser aplicada por ação do usuário com reload único controlado; o lifecycle do IndexedDB trata `versionchange`, upgrade bloqueado, cleanup e aviso entre abas sem compartilhar dados de domínio; e a página Dados exporta backup JSON versionado e CSVs de produtos/movimentações, offline, sem modificar o banco ou enviar dados para servidor. O primeiro reload offline e o ciclo real de atualização A → B com preservação do IndexedDB foram validados manualmente.
 
-**Pendente neste recorte:** nenhuma. Importação/restauração não integra a entrega segura atual e permanece futura; a coordenação de múltiplas abas deve ser novamente validada em navegador com o upgrade legítimo v10 da outbox.
+**Pendente neste recorte:** nenhuma. Importação/restauração não integra a entrega segura atual e permanece futura; a coordenação de múltiplas abas deve ser novamente validada em navegador com o schema atual v11, que preserva a outbox criada na v10.
 
 ## Parte 5 — regras 36–42
 
@@ -72,7 +72,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento. 6A, 6B, 6C e 6E estão concluídas em código/testes; 6D e 6F foram validadas operacionalmente; o loading foi corrigido depois. A 6G foi concluída como bloqueio planejado (opção C), não como sincronização bidirecional.
+**Status:** em andamento. 6A–6G permanecem concluídas nos respectivos escopos. A 6H-A criou a fundação local por business, sem associação do legado, pull ou sincronização bidirecional.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
@@ -88,9 +88,11 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Decisão da fatia 6G:** a auditoria comprovou que Category, Product e Movement não têm `businessId`; IndexedDB, repositories e UI são device-scoped. Por isso, o pull funcional foi bloqueado. Uma guarda acionada somente pelo usuário valida Supabase, sessão, business, conectividade e membership e informa que nenhum dado foi baixado. Não houve gateway de leitura, cursor ou Dexie v11.
 
-**Pendente:** criar scoping local seguro por business e estratégia explícita para dados legados antes do pull/cursor; executar cenários multi-dispositivo amplos; implementar retry automático, conflitos reais e central de conflitos.
+**Progresso da fatia 6H-A:** Category, Product e Movement aceitam `businessId?`; a ausência identifica legado unscoped. A v11 indexa as três stores por business sem backfill. Eventos scoped aguardam associação manual de `userId` no mesmo business; a associação preserva payload e entidades, e eventos de outro business permanecem isolados. Formulários continuam unscoped e o business selecionado não transforma entidades.
 
-**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6G estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
+**Pendente:** fluxo consciente de associação do legado e runtime integralmente scope-aware antes do pull/cursor; cenários multi-dispositivo amplos; retry automático, conflitos reais e central de conflitos.
+
+**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6H-A estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
 
 ## Parte 7 — regras 55–69
 
@@ -108,7 +110,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 45 arquivos com 461 testes aprovados na revisão da 6G, incluindo os caminhos de migration v1 → v10 e v9 → v10 e as garantias de outbox, processamento/retry, push manual, RPC atômica, bloqueio seguro do pull, ausência de automatismo, conectividade, PWA, lifecycle, backup e Auth.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 48 arquivos com 494 testes aprovados na 6H-A, incluindo v1 → v11 e v10 → v11, escopo local, outbox, push/RPC preservados, bloqueio do pull e ausência de automatismo.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -128,7 +130,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** iniciada.
 
-**Progresso comprovado:** Prompt Mestre, documentos de continuidade e cinco ADRs; tema, problema e objetivos preliminares estão registrados.
+**Progresso comprovado:** Prompt Mestre, documentos de continuidade e seis ADRs; tema, problema e objetivos preliminares estão registrados.
 
 **Pendente:** requisitos formais, histórias, casos de uso, matriz, diagramas coerentes, documentação acadêmica completa e instrumentos de pesquisa/usabilidade sem inventar resultados.
 
@@ -168,7 +170,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** iniciada.
 
-**Progresso comprovado:** histórico de movimentações, Dexie versionado até v10, migrations locais testadas, build usado na validação e arquitetura local documentada.
+**Progresso comprovado:** histórico de movimentações, Dexie versionado até v11, migrations locais testadas, build usado na validação e arquitetura local documentada.
 
 **Pendente:** audit log administrativo somente se necessário, seed se autorizado, documentação e diagramas das próximas etapas de sincronização e checklist final do TCC.
 
@@ -184,4 +186,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Preservar os registros das validações 6D e 6F. O próximo passo seguro é uma etapa própria de scoping local por `businessId`, com migração e tratamento explícito dos dados legados device-scoped. Só depois o pull/cursor deve ser retomado. Conflitos reais e central de conflitos permanecem etapas separadas.
+Preservar os registros das validações 6D e 6F. O próximo passo seguro é implementar a associação explícita do legado e tornar o runtime local integralmente scope-aware, sem inferência pela outbox ou pelo business selecionado. Só depois o pull/cursor deve ser retomado. Conflitos reais e central de conflitos permanecem etapas separadas.

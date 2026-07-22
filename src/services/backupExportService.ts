@@ -2,10 +2,14 @@ import type { Category } from '../types/Category';
 import type { Movement } from '../types/Movement';
 import type { Product, SyncStatus } from '../types/Product';
 import { localDb } from './db/localDb';
+import {
+  assertSameBusinessScope,
+  validateOptionalBusinessId,
+} from '../domain/businessScope';
 
 export const STOCKFLOW_BACKUP_FORMAT = 'stockflow-backup';
 export const STOCKFLOW_BACKUP_FORMAT_VERSION = 1;
-export const STOCKFLOW_DATABASE_SCHEMA_VERSION = 10;
+export const STOCKFLOW_DATABASE_SCHEMA_VERSION = 11;
 
 export interface StockFlowBackup {
   format: typeof STOCKFLOW_BACKUP_FORMAT;
@@ -65,6 +69,7 @@ export const backupExportService = {
     validateSnapshot(snapshot);
     const rows = snapshot.products.map((product) => [
       product.id,
+      product.businessId ?? '',
       product.name,
       product.code,
       product.categoryId ?? '',
@@ -81,6 +86,7 @@ export const backupExportService = {
       content: createCsv(
         [
           'id',
+          'businessId',
           'name',
           'code',
           'categoryId',
@@ -105,6 +111,7 @@ export const backupExportService = {
     validateSnapshot(snapshot);
     const rows = snapshot.movements.map((movement) => [
       movement.id,
+      movement.businessId ?? '',
       movement.productId,
       movement.type,
       movement.quantity,
@@ -120,6 +127,7 @@ export const backupExportService = {
       content: createCsv(
         [
           'id',
+          'businessId',
           'productId',
           'type',
           'quantity',
@@ -195,6 +203,8 @@ function validateSnapshot(snapshot: LocalDataSnapshot): void {
   const categoryIds = validateUniqueIds(snapshot.categories, 'categoria');
   const productIds = validateUniqueIds(snapshot.products, 'produto');
   validateUniqueIds(snapshot.movements, 'movimentacao');
+  const categoryById = new Map(snapshot.categories.map((category) => [category.id, category]));
+  const productById = new Map(snapshot.products.map((product) => [product.id, product]));
 
   snapshot.categories.forEach(validateCategory);
   snapshot.products.forEach((product) => {
@@ -202,18 +212,31 @@ function validateSnapshot(snapshot: LocalDataSnapshot): void {
     if (product.categoryId !== undefined && !categoryIds.has(product.categoryId)) {
       throw new Error('Produto referencia categoria inexistente.');
     }
+    if (product.categoryId !== undefined) {
+      assertSameBusinessScope(
+        product,
+        categoryById.get(product.categoryId)!,
+        'Produto e categoria pertencem a escopos locais diferentes.',
+      );
+    }
   });
   snapshot.movements.forEach((movement) => {
     validateMovement(movement);
     if (!productIds.has(movement.productId)) {
       throw new Error('Movimentacao referencia produto inexistente.');
     }
+    assertSameBusinessScope(
+      movement,
+      productById.get(movement.productId)!,
+      'Movimentacao e produto pertencem a escopos locais diferentes.',
+    );
   });
 }
 
 function validateCategory(value: Category): void {
   assertPlainObject(value, 'categoria');
   assertUuid(value.id, 'id da categoria');
+  validateOptionalBusinessId(value.businessId);
   assertString(value.name, 'nome da categoria');
   assertIsoDate(value.createdAt, 'createdAt da categoria');
   assertIsoDate(value.updatedAt, 'updatedAt da categoria');
@@ -224,6 +247,7 @@ function validateCategory(value: Category): void {
 function validateProduct(value: Product): void {
   assertPlainObject(value, 'produto');
   assertUuid(value.id, 'id do produto');
+  validateOptionalBusinessId(value.businessId);
   assertString(value.name, 'nome do produto');
   assertString(value.code, 'codigo do produto');
   if (value.categoryId !== undefined) assertUuid(value.categoryId, 'categoryId do produto');
@@ -239,6 +263,7 @@ function validateProduct(value: Product): void {
 function validateMovement(value: Movement): void {
   assertPlainObject(value, 'movimentacao');
   assertUuid(value.id, 'id da movimentacao');
+  validateOptionalBusinessId(value.businessId);
   assertUuid(value.productId, 'productId da movimentacao');
   if (value.type !== 'entrada' && value.type !== 'saida') {
     throw new Error('Tipo de movimentacao invalido.');
