@@ -12,6 +12,7 @@ import {
 } from '../services/sync/manualPushService';
 
 const EMPTY_SUMMARY: LocalPushSummary = { unscoped: 0, selectedBusiness: 0 };
+type ActiveAction = 'load-businesses' | 'select-business' | 'bind' | 'push' | null;
 
 interface ManualCloudPushPanelProps {
   session: Session;
@@ -31,10 +32,19 @@ export function ManualCloudPushPanel({
   const [candidateId, setCandidateId] = useState('');
   const [selectedId, setSelectedId] = useState(() => contextService.getSelected(userId) ?? '');
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
-  const [isBusy, setIsBusy] = useState(false);
+  const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const actionInProgress = useRef(false);
+  const isMounted = useRef(true);
+  const isBusy = activeAction !== null;
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     setSelectedId(contextService.getSelected(userId) ?? '');
@@ -53,34 +63,38 @@ export function ManualCloudPushPanel({
     };
   }, [contextService, pushService, selectedId, userId]);
 
-  async function runAction(action: () => Promise<void>) {
+  async function runAction(actionName: Exclude<ActiveAction, null>, action: () => Promise<void>) {
     if (actionInProgress.current) return;
     actionInProgress.current = true;
-    setIsBusy(true);
+    setActiveAction(actionName);
     setMessage('');
     setError('');
 
     try {
       await action();
     } catch {
-      setError('Nao foi possivel concluir esta acao de nuvem agora.');
+      if (isMounted.current) {
+        setError('Nao foi possivel concluir esta acao de nuvem agora.');
+      }
     } finally {
       actionInProgress.current = false;
-      setIsBusy(false);
+      if (isMounted.current) setActiveAction(null);
     }
   }
 
   async function refreshSummary(businessId = selectedId) {
-    setSummary(await pushService.getLocalSummary(userId, businessId || undefined));
+    const nextSummary = await pushService.getLocalSummary(userId, businessId || undefined);
+    if (isMounted.current) setSummary(nextSummary);
   }
 
   function loadBusinesses() {
-    void runAction(async () => {
+    void runAction('load-businesses', async () => {
       if (!isOnline) {
         setError('Conecte-se a internet para consultar estabelecimentos.');
         return;
       }
       const available = await contextService.listAvailable();
+      if (!isMounted.current) return;
       setBusinesses(available);
       const stored = contextService.getSelected(userId);
       setCandidateId(
@@ -97,21 +111,25 @@ export function ManualCloudPushPanel({
   }
 
   function selectBusiness() {
-    void runAction(async () => {
+    void runAction('select-business', async () => {
       await contextService.select(userId, candidateId);
+      if (!isMounted.current) return;
       setSelectedId(candidateId);
       await refreshSummary(candidateId);
-      setMessage('Estabelecimento selecionado e validado para esta conta.');
+      if (isMounted.current) {
+        setMessage('Estabelecimento selecionado e validado para esta conta.');
+      }
     });
   }
 
   function bindLocalEvents() {
-    void runAction(async () => {
+    void runAction('bind', async () => {
       const result = await pushService.bindLocalEvents({
         userId,
         businessId: selectedId || undefined,
         isOnline,
       });
+      if (!isMounted.current) return;
       if (result.status === 'blocked') setError(result.message);
       else setMessage(result.message);
       await refreshSummary();
@@ -119,15 +137,26 @@ export function ManualCloudPushPanel({
   }
 
   function pushCompatibleEvents() {
-    void runAction(async () => {
-      const result = await pushService.push({
-        userId,
-        businessId: selectedId || undefined,
-        isOnline,
-      });
-      if (result.status === 'blocked') setError(result.message);
-      else setMessage(result.message);
-      await refreshSummary();
+    void runAction('push', async () => {
+      try {
+        const result = await pushService.push({
+          userId,
+          businessId: selectedId || undefined,
+          isOnline,
+        });
+        if (!isMounted.current) return;
+        if (result.status === 'blocked') {
+          setError(result.message);
+        } else {
+          setMessage(result.message);
+          setSummary((current) => ({
+            ...current,
+            selectedBusiness: Math.max(0, current.selectedBusiness - result.succeeded),
+          }));
+        }
+      } finally {
+        if (isMounted.current) void refreshSummary().catch(() => undefined);
+      }
     });
   }
 
@@ -166,7 +195,7 @@ export function ManualCloudPushPanel({
           disabled={isBusy || !isOnline}
           className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60"
         >
-          {isBusy ? 'Aguarde...' : 'Carregar meus estabelecimentos'}
+          {activeAction === 'load-businesses' ? 'Aguarde...' : 'Carregar meus estabelecimentos'}
         </button>
 
         {businesses.length > 0 && (
@@ -213,7 +242,7 @@ export function ManualCloudPushPanel({
           disabled={isBusy || !selectedId || !isOnline || summary.unscoped === 0}
           className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60"
         >
-          {isBusy ? 'Processando...' : 'Associar pendencias locais'}
+          {activeAction === 'bind' ? 'Processando...' : 'Associar pendencias locais'}
         </button>
         <button
           type="button"
@@ -221,7 +250,11 @@ export function ManualCloudPushPanel({
           disabled={isBusy || !selectedId || !isOnline || summary.selectedBusiness === 0}
           className="inline-flex min-h-11 items-center justify-center rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
-          {isBusy ? 'Enviando...' : 'Enviar alteracoes compativeis'}
+          {activeAction === 'push'
+            ? 'Enviando...'
+            : summary.selectedBusiness === 0
+              ? 'Nenhuma alteracao compativel para enviar'
+              : 'Enviar alteracoes compativeis'}
         </button>
       </div>
     </section>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import type { BusinessContextService } from '../services/businessContextService';
@@ -97,6 +97,65 @@ describe('painel de push manual', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar alteracoes compativeis' })).toBeTruthy());
   });
 
+  it('encerra loading apos sucesso mesmo se a recarga do resumo continuar pendente', async () => {
+    const summaryReload = deferred<{ unscoped: number; selectedBusiness: number }>();
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    push.getLocalSummary
+      .mockResolvedValueOnce({ unscoped: 0, selectedBusiness: 1 })
+      .mockReturnValueOnce(summaryReload.promise);
+    renderPanel({ push });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
+
+    expect(await screen.findByText(/1 alteracao compativel foi enviada/)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Enviando...' })).toBeNull());
+    const button = screen.getByRole('button', { name: 'Nenhuma alteracao compativel para enviar' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(push.getLocalSummary).toHaveBeenCalledTimes(2);
+  });
+
+  it('encerra loading, mostra erro amigavel e recarrega resumo apos falha', async () => {
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    push.push.mockRejectedValue(new Error('falha remota sensivel'));
+    renderPanel({ push });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Nao foi possivel concluir esta acao de nuvem agora.',
+    );
+    expect(screen.queryByRole('button', { name: 'Enviando...' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Enviar alteracoes compativeis' })).toBeTruthy();
+    await waitFor(() => expect(push.getLocalSummary).toHaveBeenCalledTimes(2));
+  });
+
+  it('desabilita envio com texto adequado quando nao ha pendencias', async () => {
+    const push = createPushService({ unscoped: 0, selectedBusiness: 0 });
+    renderPanel({ push });
+
+    const button = await screen.findByRole('button', {
+      name: 'Nenhuma alteracao compativel para enviar',
+    });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(button);
+    expect(push.push).not.toHaveBeenCalled();
+  });
+
+  it('libera novo envio quando a recarga encontra outra pendencia', async () => {
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    push.getLocalSummary
+      .mockResolvedValueOnce({ unscoped: 0, selectedBusiness: 1 })
+      .mockResolvedValue({ unscoped: 0, selectedBusiness: 1 });
+    renderPanel({ push });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
+    await waitFor(() => expect(push.getLocalSummary).toHaveBeenCalledTimes(2));
+    const button = await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(push.push).toHaveBeenCalledTimes(2));
+  });
+
   it('mensagem de sucesso inclui movimentos rastreados e preserva limite de pull', async () => {
     const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
     renderPanel({ push });
@@ -127,7 +186,34 @@ describe('painel de push manual', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
 
     expect(await screen.findByText(/legadas ou divergentes exigem atencao/)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Enviando...' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Enviar alteracoes compativeis' })).toBeTruthy();
+    await waitFor(() => expect(push.getLocalSummary).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(/sincronizacao completa|tudo sincronizado/i)).toBeNull();
+  });
+
+  it('nao recarrega nem atualiza estado depois de desmontar durante o envio', async () => {
+    const pendingPush = deferred<Awaited<ReturnType<ManualPushService['push']>>>();
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    push.push.mockReturnValue(pendingPush.promise);
+    const view = renderPanel({ push });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Enviar alteracoes compativeis' }));
+    expect(screen.getByRole('button', { name: 'Enviando...' })).toBeTruthy();
+    view.unmount();
+
+    await act(async () => {
+      pendingPush.resolve({
+        status: 'completed',
+        message: 'Envio concluido.',
+        claimed: 1,
+        succeeded: 1,
+        failed: 0,
+      });
+      await pendingPush.promise;
+    });
+
+    expect(push.getLocalSummary).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -140,7 +226,7 @@ function renderPanel({
   push?: ReturnType<typeof createPushService>;
   isOnline?: boolean;
 }) {
-  render(
+  return render(
     <ManualCloudPushPanel
       session={createSession()}
       isOnline={isOnline}
@@ -148,6 +234,14 @@ function renderPanel({
       pushService={push}
     />,
   );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 function createContext() {
