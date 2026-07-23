@@ -88,7 +88,7 @@ describe('bloqueio planejado do pull manual', () => {
     expect(context.validateMembership).toHaveBeenCalledWith(USER_ID, BUSINESS_ID);
   });
 
-  it('com todos os pre-requisitos bloqueia pelo scoping local e nao baixa dados', async () => {
+  it('com todos os pre-requisitos bloqueia pelo runtime local incompleto e nao baixa dados', async () => {
     const context = createContext();
     const service = createService(context);
 
@@ -96,12 +96,15 @@ describe('bloqueio planejado do pull manual', () => {
 
     expect(result).toEqual(expect.objectContaining({
       status: 'blocked',
-      reason: 'local-business-scope-required',
+      reason: 'local-runtime-scope-required',
       downloaded: 0,
       applied: 0,
       ignored: 0,
     }));
-    expect(result.message).toMatch(/nao estao separados por estabelecimento/i);
+    expect(result.message).toMatch(/runtime principal ainda nao filtra todas as telas/i);
+    expect(result.message).toMatch(/carga inicial/i);
+    expect(result.message).toMatch(/cursor/i);
+    expect(result.message).not.toMatch(/nao estao separados por estabelecimento|businessId/i);
   });
 
   it('nao altera nem remove a outbox local', async () => {

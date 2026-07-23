@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa atual: a 6H-A criou a fundação local de escopo por `businessId`, após a 6G bloquear o pull. Dados antigos permanecem explicitamente unscoped; o runtime completo por business, a associação explícita e o pull ainda não existem. O push permanece manual e não existe sincronização automática.
+- Etapa atual: a 6H-B permite associação explícita e integral do legado ao business validado. A operação usa preview, confirmação e transação atômica, sem upload ou outbox histórica artificial. O runtime completo por business e o pull ainda não existem.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -123,26 +123,28 @@ As versões 6 a 9 formam uma única sequência técnica de upgrade por limitaç�
 - Produto novo ou editado somente pode apontar para categoria ativa existente; produto sem categoria é permitido.
 - Produto e categoria precisam compartilhar o mesmo escopo; movimento herda o `businessId` do produto.
 - Atualização comum, soft delete e registro de movimento não podem trocar o escopo da entidade.
+- A associação do legado é integral, manual e atômica; inconsistências relacionais ou de contexto da outbox bloqueiam toda a operação.
 - Novos produtos, categorias e movimentações recebem UUID no cliente.
 - Mutações locais marcam `syncStatus: "pending"`, mas esse status ainda não é consumido por uma sincronização real.
 
 ## ADRs existentes
 
-Há 6 arquivos de ADR em `docs/arquitetura/adrs`:
+Há 7 arquivos de ADR em `docs/arquitetura/adrs`:
 
 1. `ADR-001-valores-monetarios-em-centavos.md`;
 2. `ADR-002-snapshots-de-estoque-nas-movimentacoes.md`;
 3. `ADR-003-separacao-dominio-servicos-repositories.md`;
 4. `ADR-004-categorias-como-entidades.md`;
 5. `ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`;
-6. `ADR-006-escopo-local-por-business-e-legado-unscoped.md`.
+6. `ADR-006-escopo-local-por-business-e-legado-unscoped.md`;
+7. `ADR-007-associacao-explicita-e-atomica-de-dados-legados.md`.
 
 O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-001`.
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **48**.
-- Testes aprovados na revisão da 6H-A: **494 de 494**.
+- Arquivos de teste atuais: **50**.
+- Testes aprovados na 6H-B: **531 de 531**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade, dos banners e do lifecycle do IndexedDB. Um teste com fake-indexeddb mantém uma conexão antiga aberta, observa o bloqueio real e confirma a liberação do upgrade após o fechamento. Testes de página comprovam cleanup em `pagehide`, reabertura explícita e preservação de dados após BFCache, ausência de listeners/canais duplicados, invalidação de `open()` pendente por estado terminal ou novo `pagehide` e proibição de conexão reaberta em `reload-required`. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
@@ -172,7 +174,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - backup JSON versionado e exportação CSV local de produtos e movimentações, com validação e snapshot somente leitura;
 - Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
 - migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
-- suíte atual de 494 testes em 48 arquivos aprovada.
+- suíte atual de 531 testes em 50 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -224,14 +226,14 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalos de regras: Parte 1 (1–11), Parte 2 (12–18), Parte 3 (19–29), Parte 4 (30–35), Parte 5 (36–42), Parte 6 (43–54), Parte 7 (55–69), Parte 8 (70–79), Parte 9 (80–86), Parte 10 (87–98), Parte 11 (99–106), Parte 12 (107–118), Parte 13 (119–128), Parte 14 (129–138) e Parte 15 (139–143).
 
-- Evolução mais recente consolidada: Parte 6H-A, com `businessId?`, índices v11 e legado unscoped preservado sem associação automática.
+- Evolução mais recente consolidada: Parte 6H-B, com preview e associação consciente do conjunto legado, sem associação automática ou upload integral.
 - Parte principal atual: **Parte 6 em andamento**. A Parte 3 permanece concluída.
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
-- Parte 6: **em andamento pelas fatias 6A–6H-A**. A fundação separa consultas scoped e unscoped, mas a UI ainda não opera integralmente por business. Pull funcional, cursor, associação de legado, conflitos reais, central de conflitos e automação não foram implementados.
-- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a evolução técnica de 6A a 6H-A está consolidada em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`.
+- Parte 6: **em andamento pelas fatias 6A–6H-B**. O legado pode ser associado integralmente, mas a UI ainda não opera integralmente por business. Pull funcional, cursor, carga inicial remota, conflitos reais, central de conflitos e automação não foram implementados.
+- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a evolução técnica de 6A a 6H-B está consolidada em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`.
 - Próximo passo recomendado: criar, em etapa separada, o fluxo consciente de associação do legado e tornar o runtime local scope-aware antes de retomar pull/cursor.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

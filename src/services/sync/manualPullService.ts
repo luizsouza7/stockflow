@@ -12,7 +12,7 @@ export type ManualPullBlockReason =
   | 'session-ended'
   | 'session-mismatch'
   | 'membership-invalid'
-  | 'local-business-scope-required';
+  | 'local-runtime-scope-required';
 
 interface ManualPullInput {
   userId?: string;
@@ -89,8 +89,8 @@ export function createManualPullService(
       }
 
       return blocked(
-        'local-business-scope-required',
-        'Busca remota bloqueada com seguranca: categorias, produtos e movimentacoes locais ainda pertencem ao dispositivo e nao estao separados por estabelecimento. Nenhum dado remoto foi baixado.',
+        'local-runtime-scope-required',
+        'Busca remota bloqueada com seguranca: o runtime principal ainda nao filtra todas as telas e operacoes pelo estabelecimento selecionado; formularios comuns ainda podem criar dados sem escopo; e ainda nao existem estrategia segura de carga inicial, cursor, aplicacao local de dados remotos ou tratamento real de conflitos. Nenhum dado remoto foi baixado.',
       );
     },
   };

@@ -11,8 +11,8 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 11**, com outbox preservada e índices locais por `businessId`.
 - Parte 5 concluída no escopo de Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 avançou até a 6H-A: a 6G bloqueou o pull e a 6H-A criou a fundação local de escopo, sem associar automaticamente o legado e sem liberar pull.
-- Suíte atual: **494 testes em 48 arquivos**.
+- Parte 6 avançou até a 6H-B: a fundação local agora possui associação integral e consciente do legado, sem associação automática, upload integral ou pull.
+- Suíte atual: **531 testes em 50 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -101,7 +101,13 @@ A página **Conta** oferece apenas **Verificar busca manual da nuvem**. Essa aç
 
 `Category`, `Product` e `Movement` agora aceitam `businessId?: string`. Ausência significa dado local legado/unscoped. A v11 adiciona índices por business às três stores sem backfill: IDs, relações, estoque, preços, snapshots, soft deletes e outbox permanecem intactos. A outbox recebe o mesmo `businessId` em novas mutações scoped e aguarda associação manual de `userId`; as entidades de domínio nunca recebem `userId`.
 
-O runtime atual e os formulários continuam criando e exibindo dados unscoped. Há APIs internas explícitas e consultas isoladas para a fundação scoped, mas ainda não existe associação das entidades legadas, filtro global da UI por business ou uso do business selecionado para transformar dados. O pull e o cursor continuam bloqueados/inexistentes.
+O runtime atual e os formulários continuam criando e exibindo dados unscoped. Há APIs internas explícitas e consultas isoladas; a associação integral existe somente no fluxo consciente da Conta. Filtro global da UI por business e pull/cursor continuam ausentes.
+
+## Associação explícita do legado — Parte 6H-B
+
+A página **Conta** permite revisar e associar conscientemente o conjunto completo de categorias, produtos e movimentações unscoped ao estabelecimento selecionado. A preview é somente leitura e a confirmação executa uma única transação sobre as três stores e a outbox. Relações incompatíveis, eventos `processing` ou vínculos com outro business/usuário bloqueiam tudo.
+
+A operação preserva IDs, relações, estoque, preços, snapshots, soft delete, payloads e idempotência. Ela adapta somente eventos existentes e não inventa histórico de outbox, não reexecuta movimentos, não envia dados e não libera pull. Entidades sem evento continuam sem upload automático. O runtime principal ainda não filtra todas as telas por business.
 
 ## Limitações atuais
 
@@ -157,7 +163,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, escopo local e lifecycle entre conexões, incluindo v1 → v11 e v10 → v11.
 
-Estado validado nesta etapa: **494 testes aprovados em 48 arquivos**.
+Estado validado nesta etapa: **531 testes aprovados em 50 arquivos**.
 
 ## Banco local e migrations
 
@@ -209,7 +215,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-A, que criou a fundação de escopo sem associação automática. Runtime completo por business, pull/cursor, conflitos reais, central de conflitos e sincronização automática continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-B, com associação explícita do legado sem upload automático. Runtime completo por business, carga inicial remota, pull/cursor, conflitos reais e sincronização automática continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

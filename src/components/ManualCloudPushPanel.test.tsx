@@ -6,6 +6,7 @@ import type { Session } from '@supabase/supabase-js';
 import type { BusinessContextService } from '../services/businessContextService';
 import type { ManualPushService } from '../services/sync/manualPushService';
 import type { ManualPullService } from '../services/sync/manualPullService';
+import type { LegacyDataAssociationService } from '../services/sync/legacyDataAssociationService';
 import { ManualCloudPushPanel } from './ManualCloudPushPanel';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -194,7 +195,8 @@ describe('painel de push manual', () => {
     expect(screen.getByText(/movimentacoes rastreadas compativeis/i)).toBeTruthy();
     expect(screen.getByText(/legadas sem snapshots permanecem bloqueadas/i)).toBeTruthy();
     expect(screen.getByText(/busca remota e a resolucao de conflitos/i)).toBeTruthy();
-    expect(screen.getByText(/nao resolve conflitos automaticamente/i)).toBeTruthy();
+    expect(screen.getByText(/runtime principal ainda nao filtra todas as telas/i)).toBeTruthy();
+    expect(screen.getByText(/carga inicial segura, cursor/i)).toBeTruthy();
   });
 
   it('mostra a verificacao de pull apenas como acao manual bloqueada', async () => {
@@ -205,7 +207,7 @@ describe('painel de push manual', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
 
     await waitFor(() => expect(pull.check).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/nao estao separados por estabelecimento/i)).toBeTruthy();
+    expect(await screen.findByText(/Busca remota bloqueada com seguranca/i)).toBeTruthy();
     expect(screen.queryByText(/Tudo sincronizado|Conflitos resolvidos/i)).toBeNull();
   });
 
@@ -253,6 +255,143 @@ describe('painel de push manual', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' })).toBeTruthy());
   });
 
+  it('bloqueia push, pull e troca de business durante associacao integral', async () => {
+    const pending = deferred<Awaited<ReturnType<LegacyDataAssociationService['associate']>>>();
+    const association = createAssociationService();
+    const push = createPushService({ unscoped: 0, selectedBusiness: 1 });
+    const pull = createPullService();
+    association.associate.mockReturnValue(pending.promise);
+    renderPanel({ association, push, pull });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar dados locais antigos' }));
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Associar dados ao estabelecimento' }));
+
+    expect(screen.getByRole('button', { name: 'Associando dados...' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Enviando...' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Enviar alteracoes compativeis' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Carregar meus estabelecimentos' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar alteracoes compativeis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
+    expect(push.push).not.toHaveBeenCalled();
+    expect(pull.check).not.toHaveBeenCalled();
+
+    pending.resolve({
+      status: 'completed',
+      message: 'Dados associados. Nenhum dado foi enviado.',
+      associated: { categories: 1, products: 1, movements: 1, outboxUpdated: 1 },
+    });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Associando dados...' })).toBeNull());
+  });
+
+  it('recarrega o resumo apos associacao e libera o push sem envia-lo automaticamente', async () => {
+    const push = createPushService({ unscoped: 1, selectedBusiness: 0 });
+    push.getLocalSummary
+      .mockResolvedValueOnce({ unscoped: 1, awaitingUserBinding: 1, selectedBusiness: 0 })
+      .mockResolvedValueOnce({ unscoped: 0, awaitingUserBinding: 0, selectedBusiness: 1 });
+    renderPanel({ push });
+
+    expect(await screen.findByText(/1 alteracao\(oes\).*sem estabelecimento/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar dados locais antigos' }));
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Associar dados ao estabelecimento' }));
+
+    await waitFor(() => expect(push.getLocalSummary).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(/0 alteracao\(oes\).*sem estabelecimento/)).toBeTruthy();
+    expect(screen.getByText(/0 alteracao\(oes\) elegivel\(is\)/)).toBeTruthy();
+    expect(screen.getByText(/1 alteracao\(oes\).*vinculada/)).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Enviar alteracoes compativeis' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(push.push).not.toHaveBeenCalled();
+  });
+
+  it('encerra loading da associacao antes de uma recarga lenta do resumo', async () => {
+    const reload = deferred<{
+      unscoped: number;
+      awaitingUserBinding: number;
+      selectedBusiness: number;
+    }>();
+    const push = createPushService({ unscoped: 1, selectedBusiness: 0 });
+    push.getLocalSummary
+      .mockResolvedValueOnce({ unscoped: 1, awaitingUserBinding: 1, selectedBusiness: 0 })
+      .mockReturnValueOnce(reload.promise);
+    renderPanel({ push });
+
+    await screen.findByText(/1 alteracao\(oes\).*sem estabelecimento/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar dados locais antigos' }));
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Associar dados ao estabelecimento' }));
+
+    expect(await screen.findByText(/Dados associados/)).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Associando dados...' })).toBeNull();
+    });
+    expect(screen.queryByRole('button', { name: 'Enviando...' })).toBeNull();
+    expect(push.getLocalSummary).toHaveBeenCalledTimes(2);
+    expect(push.push).not.toHaveBeenCalled();
+
+    reload.resolve({ unscoped: 0, awaitingUserBinding: 0, selectedBusiness: 1 });
+    await act(async () => reload.promise);
+  });
+
+  it('preserva o sucesso da associacao quando a recarga do resumo falha', async () => {
+    const push = createPushService({ unscoped: 1, selectedBusiness: 0 });
+    push.getLocalSummary
+      .mockResolvedValueOnce({ unscoped: 1, awaitingUserBinding: 1, selectedBusiness: 0 })
+      .mockRejectedValueOnce(new Error('falha ao reler resumo'));
+    renderPanel({ push });
+
+    await screen.findByText(/1 alteracao\(oes\).*sem estabelecimento/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar dados locais antigos' }));
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Associar dados ao estabelecimento' }));
+
+    expect(await screen.findByText(/Dados associados/)).toBeTruthy();
+    await waitFor(() => expect(push.getLocalSummary).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Associando dados...' })).toBeNull();
+  });
+
+  it('descarta resumo tardio do business anterior apos troca de contexto', async () => {
+    const staleReload = deferred<{
+      unscoped: number;
+      awaitingUserBinding: number;
+      selectedBusiness: number;
+    }>();
+    const context = createContext();
+    context.listAvailable.mockResolvedValue([
+      { id: BUSINESS_ID, name: 'Loja Central' },
+      { id: OTHER_BUSINESS_ID, name: 'Loja Bairro' },
+    ]);
+    const push = createPushService({ unscoped: 1, selectedBusiness: 0 });
+    push.getLocalSummary
+      .mockResolvedValueOnce({ unscoped: 1, awaitingUserBinding: 1, selectedBusiness: 0 })
+      .mockReturnValueOnce(staleReload.promise)
+      .mockResolvedValue({ unscoped: 0, awaitingUserBinding: 0, selectedBusiness: 2 });
+    renderPanel({ context, push });
+
+    await screen.findByText(/1 alteracao\(oes\).*sem estabelecimento/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar dados locais antigos' }));
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Associar dados ao estabelecimento' }));
+    await waitFor(() => expect(push.getLocalSummary).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Carregar meus estabelecimentos' }));
+    const select = await screen.findByLabelText('Estabelecimento');
+    fireEvent.change(select, { target: { value: OTHER_BUSINESS_ID } });
+    fireEvent.click(screen.getByRole('button', { name: 'Usar estabelecimento' }));
+    expect(await screen.findByText(/2 alteracao\(oes\).*vinculada/)).toBeTruthy();
+
+    staleReload.resolve({ unscoped: 99, awaitingUserBinding: 99, selectedBusiness: 99 });
+    await act(async () => staleReload.promise);
+    expect(screen.queryByText(/99 alteracao\(oes\)/)).toBeNull();
+    expect(screen.getByText(/2 alteracao\(oes\).*vinculada/)).toBeTruthy();
+  });
+
   it('limpa mensagem de pull ao trocar o estabelecimento selecionado', async () => {
     const context = createContext();
     context.listAvailable.mockResolvedValue([
@@ -262,14 +401,14 @@ describe('painel de push manual', () => {
     renderPanel({ context });
 
     fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
-    expect(await screen.findByText(/nao estao separados por estabelecimento/i)).toBeTruthy();
+    expect(await screen.findByText(/Busca remota bloqueada com seguranca/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Carregar meus estabelecimentos' }));
     const select = await screen.findByLabelText('Estabelecimento');
     fireEvent.change(select, { target: { value: OTHER_BUSINESS_ID } });
     fireEvent.click(screen.getByRole('button', { name: 'Usar estabelecimento' }));
 
     await waitFor(() => expect(context.select).toHaveBeenCalledWith(USER_ID, OTHER_BUSINESS_ID));
-    await waitFor(() => expect(screen.queryByText(/nao estao separados por estabelecimento/i)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Busca remota bloqueada com seguranca/i)).toBeNull());
   });
 
   it('limpa mensagem de pull ao mudar a conectividade', async () => {
@@ -288,7 +427,7 @@ describe('painel de push manual', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Verificar busca manual da nuvem' }));
-    expect(await screen.findByText(/nao estao separados por estabelecimento/i)).toBeTruthy();
+    expect(await screen.findByText(/Busca remota bloqueada com seguranca/i)).toBeTruthy();
     view.rerender(
       <ManualCloudPushPanel
         session={session}
@@ -299,7 +438,7 @@ describe('painel de push manual', () => {
       />,
     );
 
-    await waitFor(() => expect(screen.queryByText(/nao estao separados por estabelecimento/i)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Busca remota bloqueada com seguranca/i)).toBeNull());
   });
 
   it('ignora resultado antigo de pull depois da troca de contexto', async () => {
@@ -335,7 +474,7 @@ describe('painel de push manual', () => {
     await act(async () => {
       await pending.promise;
     });
-    expect(screen.queryByText(/nao estao separados por estabelecimento/i)).toBeNull();
+    expect(screen.queryByText(/Busca remota bloqueada com seguranca/i)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Verificando busca...' })).toBeNull();
   });
 
@@ -387,11 +526,13 @@ function renderPanel({
   context = createContext(),
   push = createPushService({ unscoped: 0, selectedBusiness: 1 }),
   pull = createPullService(),
+  association = createAssociationService(),
   isOnline = true,
 }: {
   context?: ReturnType<typeof createContext>;
   push?: ReturnType<typeof createPushService>;
   pull?: ReturnType<typeof createPullService>;
+  association?: ReturnType<typeof createAssociationService>;
   isOnline?: boolean;
 }) {
   return render(
@@ -401,6 +542,7 @@ function renderPanel({
       contextService={context}
       pushService={push}
       pullService={pull}
+      associationService={association}
     />,
   );
 }
@@ -411,11 +553,35 @@ function createPullService() {
   };
 }
 
+function createAssociationService() {
+  return {
+    preview: vi.fn<LegacyDataAssociationService['preview']>().mockResolvedValue({
+      status: 'ready',
+      message: 'Prévia concluída.',
+      preview: {
+        categories: 1,
+        products: 1,
+        movements: 1,
+        relatedOutbox: 1,
+        fullyUnscopedOutbox: 1,
+        selectedBusinessOutbox: 0,
+        blockers: [],
+        snapshotToken: 'snapshot-token',
+      },
+    }),
+    associate: vi.fn<LegacyDataAssociationService['associate']>().mockResolvedValue({
+      status: 'completed',
+      message: 'Dados associados. Nenhum dado foi enviado.',
+      associated: { categories: 1, products: 1, movements: 1, outboxUpdated: 1 },
+    }),
+  };
+}
+
 function blockedPullResult() {
   return {
     status: 'blocked' as const,
-    reason: 'local-business-scope-required' as const,
-    message: 'Busca remota bloqueada com seguranca: os dados locais nao estao separados por estabelecimento. Nenhum dado remoto foi baixado.',
+    reason: 'local-runtime-scope-required' as const,
+    message: 'Busca remota bloqueada com seguranca: o runtime principal ainda nao filtra todas as telas e operacoes pelo estabelecimento selecionado; formularios comuns ainda podem criar dados sem escopo; e ainda nao existem estrategia segura de carga inicial, cursor, aplicacao local de dados remotos ou tratamento real de conflitos. Nenhum dado remoto foi baixado.',
     downloaded: 0 as const,
     applied: 0 as const,
     ignored: 0 as const,

@@ -45,6 +45,12 @@ const LOCAL_SCOPE_SOURCE = [
   '../stockMovementService.ts',
   '../outboxService.ts',
 ].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
+const LEGACY_ASSOCIATION_SOURCE = [
+  '../../domain/legacyDataAssociation.ts',
+  '../../repositories/legacyDataAssociationRepository.ts',
+  './legacyDataAssociationService.ts',
+  '../../components/LegacyDataAssociationSection.tsx',
+].map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')).join('\n');
 
 describe('limites da fundacao local de sync', () => {
   it('nao acessa Supabase, fetch ou tabelas remotas nas mutacoes locais', () => {
@@ -135,6 +141,27 @@ describe('limites da fundacao local de sync', () => {
   it('fundacao de escopo nao dispara pull ou sincronizacao automatica', () => {
     expect(LOCAL_SCOPE_SOURCE).not.toMatch(
       /manualPullService|checkManualPull|setInterval\s*\(|onAuthStateChange|addEventListener\s*\(\s*['"]online['"]/i,
+    );
+  });
+
+  it('associacao legada nao acessa gateway remoto, RPC, pull ou cria outbox', () => {
+    expect(LEGACY_ASSOCIATION_SOURCE).not.toMatch(
+      /syncRemoteGateway|\.rpc\s*\(|\.from\s*\(|manualPullService|outboxService\.enqueue|createOutboxEntry|service_role/i,
+    );
+  });
+
+  it('associacao legada nao usa timer, background sync ou listener de conectividade', () => {
+    expect(LEGACY_ASSOCIATION_SOURCE).not.toMatch(
+      /setInterval\s*\(|onAuthStateChange|addEventListener\s*\(\s*['"]online['"]/i,
+    );
+    expect(SERVICE_WORKER_SOURCE).not.toMatch(
+      /addEventListener\s*\(\s*['"](?:sync|periodicsync)['"]/i,
+    );
+  });
+
+  it('boot, login e conectividade nao disparam associacao legada', () => {
+    expect(`${APP_BOOT_SOURCE}\n${AUTH_SOURCE}\n${CONNECTIVITY_SOURCE}`).not.toMatch(
+      /legacyDataAssociationService|associateLegacy|legacy-association/i,
     );
   });
 });

@@ -72,7 +72,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento. 6A–6G permanecem concluídas nos respectivos escopos. A 6H-A criou a fundação local por business, sem associação do legado, pull ou sincronização bidirecional.
+**Status:** em andamento. 6A–6H-B permanecem concluídas nos respectivos escopos. A associação do legado é explícita e local; pull e sincronização bidirecional continuam ausentes.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
@@ -90,9 +90,11 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso da fatia 6H-A:** Category, Product e Movement aceitam `businessId?`; a ausência identifica legado unscoped. A v11 indexa as três stores por business sem backfill. Eventos scoped aguardam associação manual de `userId` no mesmo business; a associação preserva payload e entidades, e eventos de outro business permanecem isolados. Formulários continuam unscoped e o business selecionado não transforma entidades.
 
-**Pendente:** fluxo consciente de associação do legado e runtime integralmente scope-aware antes do pull/cursor; cenários multi-dispositivo amplos; retry automático, conflitos reais e central de conflitos.
+**Progresso da fatia 6H-B:** a Conta oferece preview e confirmação explícita para associar integralmente o dataset unscoped. A operação atômica preserva dados e adapta somente eventos existentes; bloqueadores abortam tudo. Não há outbox histórica artificial, replay de movimentos, push automático ou pull.
 
-**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6H-A estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
+**Pendente:** runtime integralmente scope-aware e estratégia separada de carga inicial antes do pull/cursor; cenários multi-dispositivo amplos; retry automático, conflitos reais e central de conflitos.
+
+**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6H-B estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
 
 ## Parte 7 — regras 55–69
 
@@ -110,7 +112,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 48 arquivos com 494 testes aprovados na 6H-A, incluindo v1 → v11 e v10 → v11, escopo local, outbox, push/RPC preservados, bloqueio do pull e ausência de automatismo.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 50 arquivos com 531 testes aprovados na 6H-B, incluindo migrations v11, associação atômica, rollback, UI/locks, outbox preservada e ausência de automatismo.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -130,7 +132,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** iniciada.
 
-**Progresso comprovado:** Prompt Mestre, documentos de continuidade e seis ADRs; tema, problema e objetivos preliminares estão registrados.
+**Progresso comprovado:** Prompt Mestre, documentos de continuidade e sete ADRs; tema, problema e objetivos preliminares estão registrados.
 
 **Pendente:** requisitos formais, histórias, casos de uso, matriz, diagramas coerentes, documentação acadêmica completa e instrumentos de pesquisa/usabilidade sem inventar resultados.
 
@@ -186,4 +188,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Preservar os registros das validações 6D e 6F. O próximo passo seguro é implementar a associação explícita do legado e tornar o runtime local integralmente scope-aware, sem inferência pela outbox ou pelo business selecionado. Só depois o pull/cursor deve ser retomado. Conflitos reais e central de conflitos permanecem etapas separadas.
+Preservar os registros das validações 6D e 6F. O próximo passo seguro é tornar o runtime local integralmente scope-aware e definir uma estratégia separada de carga inicial, sem replay histórico. Só depois o pull/cursor deve ser retomado. Conflitos reais permanecem etapa separada.

@@ -19,11 +19,11 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa atual: 6H-A concluída como fundação de escopo local. O legado permanece unscoped, a UI ainda é device-scoped e pull, conflitos e sincronização automática continuam ausentes.
+- Etapa atual: 6H-B implementa associação manual integral do legado, com preview e rollback atômico. A UI principal ainda é device-scoped e pull, conflitos e sincronização automática continuam ausentes.
 - Schema Dexie atual: versão 11.
-- Estado de testes comprovado: 48 arquivos, 494 testes aprovados na 6H-A.
-- Evolução mais recente consolidada: Parte 6H-A, com escopo opcional, índices por business e preservação integral do legado, sem pull funcional. A Parte 3 permanece concluída.
-- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-A; regras 43–54 permanecem parcialmente atendidas**.
+- Estado de testes comprovado: 50 arquivos, 531 testes aprovados na 6H-B.
+- Evolução mais recente consolidada: Parte 6H-B, com associação explícita do conjunto unscoped e preservação dos eventos existentes, sem carga remota ou pull. A Parte 3 permanece concluída.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-B; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Próximo passo recomendado: preservar 6D/6F e implementar, em etapa separada, a associação consciente do legado e o runtime scope-aware antes de retomar pull/cursor.
 
@@ -142,7 +142,7 @@ A 6E adiciona `register_stock_movement` em migration nova e libera somente `move
 
 A 6F validou a RPC em Supabase real com entrada e saída, atualização atômica do saldo, incremento de versão, ledger de idempotência e recusa de snapshot divergente. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6F.md`. Naquele momento houve uma ressalva visual no botão “Enviando...”, corrigida em etapa posterior.
 
-A ressalva visual foi corrigida posteriormente. Na 6G, a opção C bloqueou qualquer pull funcional. A 6H-A adicionou `businessId?`, índices v11 e consultas separadas por escopo, mas manteve o runtime da UI e o legado unscoped. Não usar outbox ou business selecionado para backfill, nem transformar a guarda manual em pull antes da associação explícita e do runtime scope-aware.
+A ressalva visual foi corrigida posteriormente. A 6G bloqueou o pull e a 6H-A adicionou o escopo opcional. A 6H-B associa o conjunto legado somente após preview e confirmação, sem inventar eventos ou enviar dados. O próximo avanço deve tornar o runtime scope-aware e definir carga inicial remota antes de qualquer pull.
 
 Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
@@ -203,4 +203,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e os ADRs relevantes. O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes, é o plano oficial. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas; 6D/6F preservam as validações reais. A 6H-A adicionou fundação local por `businessId`, mantendo legado e formulários unscoped, sem backfill, pull ou cursor. Preserve schema, dados e arquitetura; o próximo passo é a associação explícita e o runtime scope-aware antes do pull; não faça commit ou push.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e os ADRs relevantes. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas. A 6H-B associa integralmente o legado após preview e confirmação, sem inventar outbox ou enviar dados. Preserve v11 e as validações 6D/6F; o próximo passo é runtime scope-aware e estratégia de carga inicial antes do pull; não faça commit ou push.

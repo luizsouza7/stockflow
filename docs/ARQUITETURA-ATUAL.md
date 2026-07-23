@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 48 arquivos e 494 testes aprovados:
+A arquitetura é verificada por 50 arquivos e 531 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -288,7 +288,7 @@ Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorn
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6H-A: existe fundação de escopo local, mas pull, conflitos reais e automação continuam ausentes. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6H-B: existe associação explícita do legado, mas runtime integral por business, pull, conflitos reais e automação continuam ausentes. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 
@@ -299,6 +299,8 @@ O runtime da UI continua device-scoped e cria dados unscoped. A seleção remota
 Na 6H-A, `Category`, `Product` e `Movement` passam a aceitar `businessId?`; ausência representa legado unscoped. Regras puras validam UUID e igualdade de escopo. Repositories oferecem consultas explícitas unscoped ou por business, usando os índices v11. Produto/categoria precisam compartilhar escopo e movimento herda o escopo do produto. A UI atual permanece device-scoped e cria dados unscoped; ela não lê o business selecionado para mutações locais.
 
 O vínculo da outbox 6C continua independente: associar pendências pode preencher `userId` e, se ausente, `businessId` no evento, mas nunca adiciona `userId` às entidades nem faz backfill de `businessId`. Eventos já scoped preservam o business e só podem ser vinculados no mesmo contexto. O pull permanece bloqueado, sem gateway, cursor ou aplicação local.
+
+A 6H-B adiciona `LegacyDataAssociationSection → legacyDataAssociationService → legacyDataAssociationRepository → Dexie`. A preview lê as quatro stores sem escrever. A confirmação repete validações e usa uma única transação `categories/products/movements/outbox`, condicionada à mesma assinatura de snapshot. Nenhuma outbox histórica é criada e nenhum gateway remoto participa da operação.
 
 ## Backup e exportação
 
@@ -315,5 +317,6 @@ O backup representa dados do StockFlow em JSON, não estruturas internas do Inde
 - `docs/arquitetura/adrs/ADR-004-categorias-como-entidades.md`;
 - `docs/arquitetura/adrs/ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`;
 - `docs/arquitetura/adrs/ADR-006-escopo-local-por-business-e-legado-unscoped.md`.
+- `docs/arquitetura/adrs/ADR-007-associacao-explicita-e-atomica-de-dados-legados.md`.
 
 Este documento resume as decisões; os ADRs preservam contexto e consequências específicas e não são duplicados integralmente aqui.

@@ -14,13 +14,27 @@ import {
   manualPullService,
   type ManualPullService,
 } from '../services/sync/manualPullService';
+import {
+  LegacyDataAssociationSection,
+  type LegacyAssociationAction,
+} from './LegacyDataAssociationSection';
+import {
+  legacyDataAssociationService,
+  type LegacyDataAssociationService,
+} from '../services/sync/legacyDataAssociationService';
 
 const EMPTY_SUMMARY: LocalPushSummary = {
   unscoped: 0,
   awaitingUserBinding: 0,
   selectedBusiness: 0,
 };
-type ActiveAction = 'load-businesses' | 'select-business' | 'bind' | 'push' | null;
+type ActiveAction =
+  | 'load-businesses'
+  | 'select-business'
+  | 'bind'
+  | 'push'
+  | LegacyAssociationAction
+  | null;
 
 interface ManualCloudPushPanelProps {
   session: Session;
@@ -28,6 +42,8 @@ interface ManualCloudPushPanelProps {
   contextService?: BusinessContextService;
   pushService?: ManualPushService;
   pullService?: ManualPullService;
+  associationService?: LegacyDataAssociationService;
+  onBusyChange?(isBusy: boolean): void;
 }
 
 export function ManualCloudPushPanel({
@@ -36,6 +52,8 @@ export function ManualCloudPushPanel({
   contextService = businessContextService,
   pushService = manualPushService,
   pullService = manualPullService,
+  associationService = legacyDataAssociationService,
+  onBusyChange,
 }: ManualCloudPushPanelProps) {
   const userId = session.user.id;
   const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
@@ -51,7 +69,14 @@ export function ManualCloudPushPanel({
   const pullCheckInProgress = useRef(false);
   const pullContextRevision = useRef(0);
   const isMounted = useRef(true);
+  const currentUserId = useRef(userId);
+  const currentSelectedId = useRef(selectedId);
+  const summaryRequestId = useRef(0);
   const isBusy = activeAction !== null;
+  const selectedBusinessName = businesses.find(({ id }) => id === selectedId)?.name;
+
+  currentUserId.current = userId;
+  currentSelectedId.current = selectedId;
 
   useEffect(() => {
     isMounted.current = true;
@@ -59,6 +84,11 @@ export function ManualCloudPushPanel({
       isMounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    onBusyChange?.(isBusy || isCheckingPull);
+    return () => onBusyChange?.(false);
+  }, [isBusy, isCheckingPull, onBusyChange]);
 
   useEffect(() => {
     setSelectedId(contextService.getSelected(userId) ?? '');
@@ -76,8 +106,18 @@ export function ManualCloudPushPanel({
   useEffect(() => {
     if (!contextService.isConfigured()) return;
     let active = true;
+    const requestId = ++summaryRequestId.current;
+    const expectedUserId = userId;
+    const expectedBusinessId = selectedId;
     void pushService.getLocalSummary(userId, selectedId || undefined).then((value) => {
-      if (active) setSummary(value);
+      if (
+        active &&
+        requestId === summaryRequestId.current &&
+        currentUserId.current === expectedUserId &&
+        currentSelectedId.current === expectedBusinessId
+      ) {
+        setSummary(value);
+      }
     });
     return () => {
       active = false;
@@ -104,8 +144,18 @@ export function ManualCloudPushPanel({
   }
 
   async function refreshSummary(businessId = selectedId) {
-    const nextSummary = await pushService.getLocalSummary(userId, businessId || undefined);
-    if (isMounted.current) setSummary(nextSummary);
+    const requestId = ++summaryRequestId.current;
+    const expectedUserId = userId;
+    const expectedBusinessId = businessId;
+    const nextSummary = await pushService.getLocalSummary(expectedUserId, businessId || undefined);
+    if (
+      isMounted.current &&
+      requestId === summaryRequestId.current &&
+      currentUserId.current === expectedUserId &&
+      currentSelectedId.current === expectedBusinessId
+    ) {
+      setSummary(nextSummary);
+    }
   }
 
   function loadBusinesses() {
@@ -135,6 +185,7 @@ export function ManualCloudPushPanel({
     void runAction('select-business', async () => {
       await contextService.select(userId, candidateId);
       if (!isMounted.current) return;
+      currentSelectedId.current = candidateId;
       setSelectedId(candidateId);
       await refreshSummary(candidateId);
       if (isMounted.current) {
@@ -314,9 +365,10 @@ export function ManualCloudPushPanel({
       <div className="mt-6 border-t border-slate-200 pt-5">
         <h4 className="font-semibold text-slate-950">Busca manual da nuvem</h4>
         <p className="mt-2 text-sm text-slate-600">
-          A busca permanece bloqueada ate que categorias, produtos e movimentacoes locais sejam
-          separados por estabelecimento. Esta verificacao e manual, nao baixa dados e nao resolve
-          conflitos automaticamente.
+          A busca permanece bloqueada porque o runtime principal ainda nao filtra todas as telas e
+          operacoes pelo estabelecimento selecionado, os formularios comuns ainda podem criar
+          dados sem escopo e ainda faltam carga inicial segura, cursor, aplicacao local remota e
+          tratamento real de conflitos. Esta verificacao e manual e nao baixa dados.
         </p>
         {pullMessage && (
           <p role="status" className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -332,6 +384,24 @@ export function ManualCloudPushPanel({
           {isCheckingPull ? 'Verificando busca...' : 'Verificar busca manual da nuvem'}
         </button>
       </div>
+
+      <LegacyDataAssociationSection
+        userId={userId}
+        businessId={selectedId || undefined}
+        businessName={selectedBusinessName}
+        isOnline={isOnline}
+        isBusy={isBusy || isCheckingPull}
+        activeAction={
+          activeAction === 'legacy-preview' || activeAction === 'legacy-association'
+            ? activeAction
+            : null
+        }
+        runCloudAction={runAction}
+        onAssociationCompleted={() => {
+          void refreshSummary().catch(() => undefined);
+        }}
+        service={associationService}
+      />
     </section>
   );
 }
