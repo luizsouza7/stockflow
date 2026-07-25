@@ -5,11 +5,14 @@ import { productService } from '../services/productService';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { getStockStatus, type StockStatus } from '../domain/stockStatus';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
 
 export function Alerts() {
+  const activeScope = useActiveDataScope();
   const { data: productsNeedingRestock, isLoading, error, refetch } = useDexieQuery(
-    () => productService.listProductsNeedingRestock(),
+    () => productService.listProductsNeedingRestockForScope(activeScope.scope),
     [],
+    [activeScope.scopeToken],
   );
 
   return (

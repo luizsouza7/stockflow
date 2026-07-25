@@ -1,27 +1,29 @@
 import { EmptyState } from '../components/EmptyState';
 import { StatCard } from '../components/StatCard';
 import { useDexieQuery } from '../hooks/useDexieQuery';
-import { getDashboardSummary, type DashboardSummary } from '../services/dashboardService';
+import { getDashboardSummaryForScope, type DashboardSummary } from '../services/dashboardService';
 import { formatDate } from '../utils/formatters';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
 
 export function Dashboard() {
-  const { data: summary, isLoading, error, refetch } = useDexieQuery<DashboardSummary>(() => getDashboardSummary(), {
+  const activeScope = useActiveDataScope();
+  const { data: summary, isLoading, error, refetch } = useDexieQuery<DashboardSummary>(() => getDashboardSummaryForScope(activeScope.scope), {
     totalProducts: 0,
     totalLowStock: 0,
     totalNeedingRestock: 0,
     totalOutOfStock: 0,
     totalMovements: 0,
     recentMovements: [],
-  });
+  }, [activeScope.scopeToken]);
 
   return (
     <div className="space-y-6">
       <section>
         <h1 className="text-2xl font-bold text-slate-950">Dashboard</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Visao geral do estoque local salvo neste dispositivo.
+          Visao geral de {activeScope.label.toLocaleLowerCase('pt-BR')}.
         </p>
       </section>
 

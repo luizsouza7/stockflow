@@ -11,6 +11,8 @@ import { useDexieQuery } from '../hooks/useDexieQuery';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { getUserFacingError } from '../utils/errors';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
+import { toMutationContext } from '../domain/businessScope';
 
 const initialFormData: ProductFormData = {
   name: '',
@@ -30,15 +32,38 @@ export function ProductForm() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInProgress = useRef(false);
-  const categoriesQuery = useDexieQuery(() => categoryService.listActive(), []);
+  const isMounted = useRef(false);
+  const activeScope = useActiveDataScope();
+  const currentScopeToken = useRef(activeScope.scopeToken);
+  const openedScopeToken = useRef(activeScope.scopeToken);
+  currentScopeToken.current = activeScope.scopeToken;
+  const categoriesQuery = useDexieQuery(
+    () => categoryService.listActiveForScope(activeScope.scope),
+    [],
+    [activeScope.scopeToken],
+  );
   const productQuery = useDexieQuery<ProductEditingLookup>(
     () =>
       productId
-        ? productService.getForEditing(productId)
+        ? productService.getForEditingForScope(productId, activeScope.scope)
         : Promise.resolve({ status: 'not-found' }),
     { status: 'not-found' },
-    [productId],
+    [productId, activeScope.scopeToken],
   );
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (openedScopeToken.current !== activeScope.scopeToken) {
+      submissionInProgress.current = false;
+      navigate('/produtos', { replace: true });
+    }
+  }, [activeScope.scopeToken, navigate]);
 
   useEffect(() => {
     if (!productId || productQuery.data.status !== 'active') {
@@ -113,22 +138,33 @@ export function ProductForm() {
     };
 
     const now = new Date().toISOString();
+    const submittedScopeToken = activeScope.scopeToken;
+    const mutationContext = toMutationContext(activeScope.scope);
     submissionInProgress.current = true;
     setIsSubmitting(true);
 
     try {
       if (isEditing && productId) {
-        await productService.update(productId, editableProductData);
+        await productService.updateForScope(productId, editableProductData, mutationContext);
       } else {
-        await productService.create({
-          ...editableProductData,
-          currentQuantity: formData.currentQuantity,
-          createdAt: now,
-          updatedAt: now,
-          syncStatus: 'pending',
-        });
+        await productService.createForScope(
+          {
+            ...editableProductData,
+            currentQuantity: formData.currentQuantity,
+            createdAt: now,
+            updatedAt: now,
+            syncStatus: 'pending',
+          },
+          mutationContext,
+        );
       }
 
+      if (
+        !isMounted.current ||
+        currentScopeToken.current !== submittedScopeToken
+      ) {
+        return;
+      }
       navigate('/produtos', {
         state: {
           successMessage: isEditing
@@ -137,6 +173,12 @@ export function ProductForm() {
         },
       });
     } catch (saveError) {
+      if (
+        !isMounted.current ||
+        currentScopeToken.current !== submittedScopeToken
+      ) {
+        return;
+      }
       setError(
         getUserFacingError(saveError, 'Nao foi possivel salvar o produto.', [
           'Produto nao encontrado.',
@@ -149,8 +191,10 @@ export function ProductForm() {
         ]),
       );
     } finally {
-      submissionInProgress.current = false;
-      setIsSubmitting(false);
+      if (isMounted.current) {
+        submissionInProgress.current = false;
+        setIsSubmitting(false);
+      }
     }
   }
 

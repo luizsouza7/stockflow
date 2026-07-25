@@ -8,6 +8,11 @@ import type {
 } from '../types/Sync';
 import { generateUuid } from '../utils/id';
 import { validateOptionalBusinessId } from '../domain/businessScope';
+import {
+  assertEntityInMutationContext,
+  validateMutationContext,
+  type LocalMutationContext,
+} from '../domain/businessScope';
 
 interface CreateOutboxEntryInput {
   entityType: SyncEntityType;
@@ -15,6 +20,7 @@ interface CreateOutboxEntryInput {
   operation: SyncOperation;
   payload: OutboxPayload;
   occurredAt: string;
+  context?: LocalMutationContext;
 }
 
 export const outboxService = {
@@ -38,11 +44,38 @@ export const outboxService = {
       totalAwaitingAction: pending + processing + error + conflict,
     };
   },
+
+  async getStatusSummaryForScope(
+    context: LocalMutationContext,
+  ): Promise<SyncStatusSummary> {
+    validateMutationContext(context);
+    const [pending, processing, error, conflict] = await Promise.all([
+      outboxRepository.countByStatusForScope('pending', context),
+      outboxRepository.countByStatusForScope('processing', context),
+      outboxRepository.countByStatusForScope('error', context),
+      outboxRepository.countByStatusForScope('conflict', context),
+    ]);
+    return {
+      pending,
+      processing,
+      error,
+      conflict,
+      totalAwaitingAction: pending + processing + error + conflict,
+    };
+  },
 };
 
 export function createOutboxEntry(input: CreateOutboxEntryInput): OutboxEntry {
   const id = generateUuid();
   validateOptionalBusinessId(input.payload.businessId);
+  if (input.context) {
+    validateMutationContext(input.context);
+    assertEntityInMutationContext(
+      input.payload,
+      input.context,
+      'A outbox nao pode receber uma entidade de outro escopo.',
+    );
+  }
 
   return {
     id,
@@ -51,6 +84,7 @@ export function createOutboxEntry(input: CreateOutboxEntryInput): OutboxEntry {
     operation: input.operation,
     payload: input.payload,
     ...(input.payload.businessId ? { businessId: input.payload.businessId } : {}),
+    ...(input.context?.kind === 'business' ? { userId: input.context.userId } : {}),
     status: 'pending',
     attemptCount: 0,
     createdAt: input.occurredAt,

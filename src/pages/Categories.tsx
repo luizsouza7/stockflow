@@ -1,13 +1,22 @@
-import { type FormEvent, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { categoryService } from '../services/categoryService';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { getUserFacingError } from '../utils/errors';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
+import { toMutationContext } from '../domain/businessScope';
 
 export function Categories() {
-  const categoriesQuery = useDexieQuery(() => categoryService.listActive(), []);
+  const activeScope = useActiveDataScope();
+  const currentScopeToken = useRef(activeScope.scopeToken);
+  currentScopeToken.current = activeScope.scopeToken;
+  const categoriesQuery = useDexieQuery(
+    () => categoryService.listActiveForScope(activeScope.scope),
+    [],
+    [activeScope.scopeToken],
+  );
   const categories = categoriesQuery.data;
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState<string>();
@@ -18,6 +27,17 @@ export function Categories() {
   const submissionInProgress = useRef(false);
   const deletionInProgress = useRef(false);
 
+  useEffect(() => {
+    setName('');
+    setEditingId(undefined);
+    setError('');
+    setSuccess('');
+    setIsSubmitting(false);
+    setDeletingId(undefined);
+    submissionInProgress.current = false;
+    deletionInProgress.current = false;
+  }, [activeScope.scopeToken]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -27,21 +47,26 @@ export function Categories() {
 
     setError('');
     setSuccess('');
+    const submittedScopeToken = activeScope.scopeToken;
+    const mutationContext = toMutationContext(activeScope.scope);
     submissionInProgress.current = true;
     setIsSubmitting(true);
 
     try {
       if (editingId) {
-        await categoryService.update(editingId, name);
+        await categoryService.updateForScope(editingId, name, mutationContext);
+        if (currentScopeToken.current !== submittedScopeToken) return;
         setSuccess('Categoria atualizada com sucesso.');
       } else {
-        await categoryService.create(name);
+        await categoryService.createForScope(name, mutationContext);
+        if (currentScopeToken.current !== submittedScopeToken) return;
         setSuccess('Categoria cadastrada com sucesso.');
       }
 
       setName('');
       setEditingId(undefined);
     } catch (categoryError) {
+      if (currentScopeToken.current !== submittedScopeToken) return;
       setError(
         getUserFacingError(categoryError, 'Nao foi possivel salvar a categoria.', [
           'Informe o nome da categoria.',
@@ -84,11 +109,15 @@ export function Categories() {
     setSuccess('');
     deletionInProgress.current = true;
     setDeletingId(id);
+    const submittedScopeToken = activeScope.scopeToken;
+    const mutationContext = toMutationContext(activeScope.scope);
 
     try {
-      await categoryService.softDelete(id);
+      await categoryService.softDeleteForScope(id, mutationContext);
+      if (currentScopeToken.current !== submittedScopeToken) return;
       setSuccess('Categoria excluida com sucesso.');
     } catch (categoryError) {
+      if (currentScopeToken.current !== submittedScopeToken) return;
       setError(
         getUserFacingError(categoryError, 'Nao foi possivel excluir a categoria.', [
           'Categoria nao encontrada.',

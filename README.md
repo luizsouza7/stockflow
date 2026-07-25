@@ -11,8 +11,8 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 11**, com outbox preservada e índices locais por `businessId`.
 - Parte 5 concluída no escopo de Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 avançou até a 6H-B: a fundação local agora possui associação integral e consciente do legado, sem associação automática, upload integral ou pull.
-- Suíte atual: **531 testes em 50 arquivos**.
+- Parte 6 avançou até a 6H-C: o runtime local opera por escopo ativo, preservando a associação manual do legado e sem carga inicial, pull ou automação.
+- Suíte atual: **557 testes em 52 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -61,7 +61,7 @@ O indicador usa `navigator.onLine` e eventos nativos `online`/`offline`; ele inf
 
 ## Backup e exportação local
 
-A página **Dados** gera, sem rede, um backup JSON explícito com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `11` como metadado e coleções separadas de categorias, produtos e movimentações. A outbox não integra o arquivo de backup de domínio. A leitura inclui soft deletes, histórico e `businessId` quando presente, preservando sua ausência nos dados legados.
+A página **Dados** gera, sem rede, um backup JSON device-wide com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `11` como metadado e coleções separadas de categorias, produtos e movimentações. A outbox não integra o arquivo de backup de domínio. A leitura inclui todos os escopos presentes no dispositivo, soft deletes, histórico e `businessId` quando presente, preservando sua ausência nos dados unscoped.
 
 Também é possível exportar produtos e movimentações em CSV. Os arquivos são baixados localmente e não alteram o banco nem são enviados a servidor. Não há importação/restauração, backup automático ou recuperação em nuvem; a importação permanece futura até existir estratégia rigorosamente validada e segura.
 
@@ -101,18 +101,31 @@ A página **Conta** oferece apenas **Verificar busca manual da nuvem**. Essa aç
 
 `Category`, `Product` e `Movement` agora aceitam `businessId?: string`. Ausência significa dado local legado/unscoped. A v11 adiciona índices por business às três stores sem backfill: IDs, relações, estoque, preços, snapshots, soft deletes e outbox permanecem intactos. A outbox recebe o mesmo `businessId` em novas mutações scoped e aguarda associação manual de `userId`; as entidades de domínio nunca recebem `userId`.
 
-O runtime atual e os formulários continuam criando e exibindo dados unscoped. Há APIs internas explícitas e consultas isoladas; a associação integral existe somente no fluxo consciente da Conta. Filtro global da UI por business e pull/cursor continuam ausentes.
+As APIs fundacionais unscoped e por business alimentam o runtime orientado pelo escopo ativo. A associação integral do legado continua existindo somente no fluxo consciente da Conta. Pull/cursor continuam ausentes.
 
 ## Associação explícita do legado — Parte 6H-B
 
 A página **Conta** permite revisar e associar conscientemente o conjunto completo de categorias, produtos e movimentações unscoped ao estabelecimento selecionado. A preview é somente leitura e a confirmação executa uma única transação sobre as três stores e a outbox. Relações incompatíveis, eventos `processing` ou vínculos com outro business/usuário bloqueiam tudo.
 
-A operação preserva IDs, relações, estoque, preços, snapshots, soft delete, payloads e idempotência. Ela adapta somente eventos existentes e não inventa histórico de outbox, não reexecuta movimentos, não envia dados e não libera pull. Entidades sem evento continuam sem upload automático. O runtime principal ainda não filtra todas as telas por business.
+A operação preserva IDs, relações, estoque, preços, snapshots, soft delete, payloads e idempotência. Ela adapta somente eventos existentes e não inventa histórico de outbox, não reexecuta movimentos, não envia dados e não libera pull. Entidades sem evento continuam sem upload automático.
+
+## Runtime por escopo ativo — Parte 6H-C
+
+Sem estabelecimento utilizável, Dashboard, Produtos, Categorias, Movimentações/Histórico e Alertas
+operam somente com dados unscoped. Com sessão e business previamente validado, essas telas, suas
+rotas por ID e mutações operam somente naquele estabelecimento. O contexto persistido por usuário
+inclui nome amigável e pode ser reutilizado offline sem consultar Supabase em leituras ou escritas
+normais.
+
+Novas mutações business criam entidade e outbox com `businessId` e `userId` na mesma transação.
+Trocar business não move nem associa dados, não dispara push/pull e invalida consultas e
+formulários do contexto anterior. O layout identifica discretamente se novas operações usarão
+dados locais ou o estabelecimento selecionado.
 
 ## Limitações atuais
 
 - Auth e o push dependem de configuração, aplicação das migrations e validação em um projeto Supabase real;
-- o push é parcial e manual; o pull funcional continua bloqueado até o runtime e a associação explícita por business estarem concluídos, e não há retry automático ou resolução de conflitos;
+- o push é parcial e manual; o pull funcional continua bloqueado por ausência de carga inicial segura, cursor, aplicação local remota e resolução real de conflitos;
 - movimentações legadas sem snapshots continuam bloqueadas, e divergências de estoque permanecem em erro/backoff até uma etapa futura de conflitos;
 - eventos antigos sem `businessId` nunca são enviados automaticamente, e updates sem versão remota segura permanecem em erro;
 - não há importação/restauração, backup automático ou backup em nuvem;
@@ -163,7 +176,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, escopo local e lifecycle entre conexões, incluindo v1 → v11 e v10 → v11.
 
-Estado validado nesta etapa: **531 testes aprovados em 50 arquivos**.
+Estado validado nesta etapa: **557 testes aprovados em 52 arquivos**.
 
 ## Banco local e migrations
 
@@ -191,7 +204,9 @@ Os ADRs atuais registram:
 3. separação entre domínio, services e repositories;
 4. categorias como entidades;
 5. UUIDs para produtos e movimentações;
-6. escopo local por `businessId` e preservação do legado unscoped.
+6. escopo local por `businessId` e preservação do legado unscoped;
+7. associação explícita e atômica do legado;
+8. runtime local orientado por escopo ativo.
 
 ## Roadmap oficial
 
@@ -215,7 +230,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-B, com associação explícita do legado sem upload automático. Runtime completo por business, carga inicial remota, pull/cursor, conflitos reais e sincronização automática continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-C, com runtime local isolado por escopo e associação explícita do legado sem upload automático. Carga inicial remota, pull/cursor, conflitos reais e sincronização automática continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

@@ -18,6 +18,8 @@ import {
   type ProductSort,
   type ProductStockFilter,
 } from '../domain/productFilters';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
+import { toMutationContext } from '../domain/businessScope';
 
 export function Products() {
   const [filters, setFilters] = useState<ProductFilters>(DEFAULT_PRODUCT_FILTERS);
@@ -27,11 +29,19 @@ export function Products() {
   const [success, setSuccess] = useState(() => readSuccessMessage(location.state));
   const [deletingId, setDeletingId] = useState<string>();
   const deletionInProgress = useRef(false);
+  const activeScope = useActiveDataScope();
+  const currentScopeToken = useRef(activeScope.scopeToken);
+  currentScopeToken.current = activeScope.scopeToken;
   const productsQuery = useDexieQuery(
-    () => productService.listActive(),
+    () => productService.listActiveForScope(activeScope.scope),
     [],
+    [activeScope.scopeToken],
   );
-  const categoriesQuery = useDexieQuery(() => categoryService.listActive(), []);
+  const categoriesQuery = useDexieQuery(
+    () => categoryService.listActiveForScope(activeScope.scope),
+    [],
+    [activeScope.scopeToken],
+  );
   const products = productsQuery.data;
 
   useEffect(() => {
@@ -39,6 +49,13 @@ export function Products() {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    setOperationError('');
+    setSuccess('');
+    setDeletingId(undefined);
+    deletionInProgress.current = false;
+  }, [activeScope.scopeToken]);
 
   const filteredProducts = useMemo(() => {
     return filterAndSortProducts(products, filters);
@@ -59,15 +76,19 @@ export function Products() {
     );
 
     if (confirmed) {
+      const submittedScopeToken = activeScope.scopeToken;
+      const mutationContext = toMutationContext(activeScope.scope);
       deletionInProgress.current = true;
       setDeletingId(id);
       setOperationError('');
       setSuccess('');
 
       try {
-        await productService.softDelete(id);
+        await productService.softDeleteForScope(id, mutationContext);
+        if (currentScopeToken.current !== submittedScopeToken) return;
         setSuccess('Produto excluido com sucesso.');
       } catch (deleteError) {
+        if (currentScopeToken.current !== submittedScopeToken) return;
         setOperationError(
           getUserFacingError(deleteError, 'Nao foi possivel excluir o produto.', [
             'Produto nao encontrado.',

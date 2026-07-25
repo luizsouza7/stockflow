@@ -75,10 +75,11 @@ describe('indicador local de sincronizacao futura', () => {
     expect(await screen.findByText(/1 alteracao marcada como conflito/)).toBeTruthy();
   });
 
-  it('mantem mensagem honesta sem depender de login ou Supabase configurado', async () => {
+  it('informa push manual sem prometer sincronizacao automatica ou bidirecional', async () => {
     renderIndicator({ pending: 1 });
-    expect(await screen.findByText(/dados continuam apenas neste dispositivo/)).toBeTruthy();
-    expect(screen.queryByText(/salvo na nuvem|sincronizado na nuvem/i)).toBeNull();
+    expect(await screen.findByText(/Sincronizacao automatica e bidirecional ainda nao esta disponivel/)).toBeTruthy();
+    expect(screen.getByText(/envio remoto manual pode ser realizado na pagina Conta/)).toBeTruthy();
+    expect(screen.queryByText(/pull disponivel|Tudo sincronizado|envio automatico/i)).toBeNull();
   });
 
   it('continua funcionando offline', async () => {
@@ -89,7 +90,7 @@ describe('indicador local de sincronizacao futura', () => {
   it('mostra estado adequado quando a outbox esta vazia', async () => {
     renderIndicator();
     expect(await screen.findByText(/Nenhuma alteracao local pendente/)).toBeTruthy();
-    expect(screen.getByText(/Sincronizacao remota ainda nao esta disponivel/)).toBeTruthy();
+    expect(screen.getByText(/Sincronizacao automatica e bidirecional ainda nao esta disponivel/)).toBeTruthy();
     expect(screen.queryByText(/Tudo sincronizado/i)).toBeNull();
   });
 

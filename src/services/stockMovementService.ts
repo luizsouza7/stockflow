@@ -5,16 +5,57 @@ import { localDb } from './db/localDb';
 import type { MovementWithProduct, RegisterMovementInput, TrackedMovement } from '../types/Movement';
 import { generateUuid } from '../utils/id';
 import { outboxService } from './outboxService';
+import {
+  validateMutationContext,
+  type DataScopeReference,
+  type LocalMutationContext,
+} from '../domain/businessScope';
 
 export const stockMovementService = {
   async register(movement: RegisterMovementInput): Promise<void> {
-    await localDb.transaction(
-      'rw',
-      localDb.products,
-      localDb.movements,
-      localDb.outbox,
-      async () => {
-      const product = await productRepository.findById(movement.productId);
+    await registerMovement(movement);
+  },
+
+  async registerForScope(
+    movement: RegisterMovementInput,
+    context: LocalMutationContext,
+  ): Promise<void> {
+    validateMutationContext(context);
+    await registerMovement(movement, context);
+  },
+
+  async listHistory(): Promise<MovementWithProduct[]> {
+    const [movements, products] = await Promise.all([
+      movementRepository.findAllNewestFirst(),
+      productRepository.findAll(),
+    ]);
+    return joinMovementsWithProducts(movements, products);
+  },
+
+  async listHistoryForScope(
+    scope: DataScopeReference,
+  ): Promise<MovementWithProduct[]> {
+    const [movements, products] = await Promise.all([
+      movementRepository.findAllForScopeNewestFirst(scope),
+      productRepository.findAllForScope(scope),
+    ]);
+    return joinMovementsWithProducts(movements, products);
+  },
+};
+
+async function registerMovement(
+  movement: RegisterMovementInput,
+  context?: LocalMutationContext,
+): Promise<void> {
+  await localDb.transaction(
+    'rw',
+    localDb.products,
+    localDb.movements,
+    localDb.outbox,
+    async () => {
+      const product = context
+        ? await productRepository.findByIdForScope(movement.productId, context)
+        : await productRepository.findById(movement.productId);
 
       if (!product || product.deletedAt) {
         throw new Error('Produto nao encontrado.');
@@ -52,22 +93,20 @@ export const stockMovementService = {
         operation: 'movement.created',
         payload: persistedMovement,
         occurredAt: now,
+        context,
       });
-      },
-    );
-  },
+    },
+  );
+}
 
-  async listHistory(): Promise<MovementWithProduct[]> {
-    const [movements, products] = await Promise.all([
-      movementRepository.findAllNewestFirst(),
-      productRepository.findAll(),
-    ]);
-    const productById = new Map(products.map((product) => [product.id, product]));
-
-    return movements.map((movement) => ({
-      ...movement,
-      productName: productById.get(movement.productId)?.name ?? 'Produto removido',
-      productCode: productById.get(movement.productId)?.code ?? '-',
-    }));
-  },
-};
+function joinMovementsWithProducts(
+  movements: Awaited<ReturnType<typeof movementRepository.findAllNewestFirst>>,
+  products: Awaited<ReturnType<typeof productRepository.findAll>>,
+): MovementWithProduct[] {
+  const productById = new Map(products.map((product) => [product.id, product]));
+  return movements.map((movement) => ({
+    ...movement,
+    productName: productById.get(movement.productId)?.name ?? 'Produto removido',
+    productCode: productById.get(movement.productId)?.code ?? '-',
+  }));
+}

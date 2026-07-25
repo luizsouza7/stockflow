@@ -8,7 +8,12 @@ import type { Category } from '../types/Category';
 import { generateUuid } from '../utils/id';
 import { localDb } from './db/localDb';
 import { outboxService } from './outboxService';
-import { validateBusinessId } from '../domain/businessScope';
+import {
+  validateBusinessId,
+  validateMutationContext,
+  type DataScopeReference,
+  type LocalMutationContext,
+} from '../domain/businessScope';
 
 type CategoryChanges = Partial<Omit<Category, 'id' | 'businessId'>>;
 
@@ -18,8 +23,20 @@ export const categoryService = {
     return categories.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   },
 
+  async listActiveForScope(scope: DataScopeReference): Promise<Category[]> {
+    const categories = await categoryRepository.findAllActiveForScope(scope);
+    return categories.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  },
+
   async getById(id: string): Promise<Category | undefined> {
     return categoryRepository.findById(id);
+  },
+
+  async getByIdForScope(
+    id: string,
+    scope: DataScopeReference,
+  ): Promise<Category | undefined> {
+    return categoryRepository.findByIdForScope(id, scope);
   },
 
   async create(name: string): Promise<string> {
@@ -29,6 +46,32 @@ export const categoryService = {
   async createScoped(name: string, businessId: string): Promise<string> {
     validateBusinessId(businessId);
     return createInScope(name, businessId);
+  },
+
+  async createForScope(name: string, context: LocalMutationContext): Promise<string> {
+    validateMutationContext(context);
+    return createInScope(
+      name,
+      context.kind === 'business' ? context.businessId : undefined,
+      context,
+    );
+  },
+
+  async updateForScope(
+    id: string,
+    name: string,
+    context: LocalMutationContext,
+  ): Promise<void> {
+    validateMutationContext(context);
+    await updateInScope(id, name, context);
+  },
+
+  async softDeleteForScope(
+    id: string,
+    context: LocalMutationContext,
+  ): Promise<void> {
+    validateMutationContext(context);
+    await softDeleteInScope(id, context);
   },
 
   async update(id: string, name: string): Promise<void> {
@@ -99,7 +142,11 @@ export const categoryService = {
   },
 };
 
-async function createInScope(name: string, businessId?: string): Promise<string> {
+async function createInScope(
+  name: string,
+  businessId?: string,
+  context?: LocalMutationContext,
+): Promise<string> {
   const sanitizedName = validateCategoryName(name);
   await ensureUniqueActiveName(sanitizedName, businessId);
   const now = new Date().toISOString();
@@ -114,6 +161,7 @@ async function createInScope(name: string, businessId?: string): Promise<string>
   };
 
   return localDb.transaction('rw', localDb.categories, localDb.outbox, async () => {
+    await ensureUniqueActiveName(sanitizedName, businessId);
     const id = await categoryRepository.create(category);
     await outboxService.enqueue({
       entityType: 'category',
@@ -121,9 +169,89 @@ async function createInScope(name: string, businessId?: string): Promise<string>
       operation: 'category.created',
       payload: category,
       occurredAt: now,
+      context,
     });
     return id;
   });
+}
+
+async function updateInScope(
+  id: string,
+  name: string,
+  context: LocalMutationContext,
+): Promise<void> {
+  const category = await categoryRepository.findByIdForScope(id, context);
+  if (!category || category.deletedAt) throw new Error('Categoria nao encontrada.');
+
+  const sanitizedName = validateCategoryName(name);
+  await ensureUniqueActiveName(sanitizedName, category.businessId, id);
+  const now = new Date().toISOString();
+  const changes: CategoryChanges = {
+    name: sanitizedName,
+    updatedAt: now,
+    syncStatus: 'pending',
+  };
+
+  await localDb.transaction('rw', localDb.categories, localDb.outbox, async () => {
+    const current = await categoryRepository.findByIdForScope(id, context);
+    if (!current || current.deletedAt) throw new Error('Categoria nao encontrada.');
+    await ensureUniqueActiveName(sanitizedName, current.businessId, id);
+    const changed = await categoryRepository.update(id, changes);
+    if (!changed) throw new Error('Categoria nao encontrada.');
+    const updatedCategory = await categoryRepository.findByIdForScope(id, context);
+    if (!updatedCategory) throw new Error('Categoria nao encontrada.');
+    await outboxService.enqueue({
+      entityType: 'category',
+      entityId: id,
+      operation: 'category.updated',
+      payload: updatedCategory,
+      occurredAt: now,
+      context,
+    });
+  });
+}
+
+async function softDeleteInScope(
+  id: string,
+  context: LocalMutationContext,
+): Promise<void> {
+  const category = await categoryRepository.findByIdForScope(id, context);
+  if (!category || category.deletedAt) throw new Error('Categoria nao encontrada.');
+
+  const now = new Date().toISOString();
+  await localDb.transaction(
+    'rw',
+    localDb.categories,
+    localDb.products,
+    localDb.outbox,
+    async () => {
+      const current = await categoryRepository.findByIdForScope(id, context);
+      if (!current || current.deletedAt) throw new Error('Categoria nao encontrada.');
+      const productsUsingCategory =
+        await productRepository.countActiveByCategoryIdForScope(id, context);
+      if (productsUsingCategory > 0) {
+        throw new Error(
+          `Nao e possivel excluir esta categoria porque ela esta sendo utilizada por ${productsUsingCategory} produto(s) ativo(s).`,
+        );
+      }
+      const changed = await categoryRepository.update(id, {
+        deletedAt: now,
+        updatedAt: now,
+        syncStatus: 'pending',
+      });
+      if (!changed) throw new Error('Categoria nao encontrada.');
+      const deletedCategory = await categoryRepository.findByIdForScope(id, context);
+      if (!deletedCategory) throw new Error('Categoria nao encontrada.');
+      await outboxService.enqueue({
+        entityType: 'category',
+        entityId: id,
+        operation: 'category.deleted',
+        payload: deletedCategory,
+        occurredAt: now,
+        context,
+      });
+    },
+  );
 }
 
 async function ensureUniqueActiveName(

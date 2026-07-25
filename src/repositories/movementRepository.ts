@@ -3,6 +3,7 @@ import type { Movement } from '../types/Movement';
 import {
   isUnscopedEntity,
   validateBusinessId,
+  type DataScopeReference,
 } from '../domain/businessScope';
 
 export const movementRepository = {
@@ -27,6 +28,12 @@ export const movementRepository = {
     return movements.sort((left, right) =>
       right.date.localeCompare(left.date) || right.id.localeCompare(left.id),
     );
+  },
+
+  async findAllForScopeNewestFirst(scope: DataScopeReference): Promise<Movement[]> {
+    return scope.kind === 'local'
+      ? this.findAllUnscopedNewestFirst()
+      : this.findAllForBusinessNewestFirst(scope.businessId);
   },
 
   async findPending(): Promise<Movement[]> {

@@ -2,6 +2,8 @@ import { useDexieQuery } from '../hooks/useDexieQuery';
 import { outboxService } from '../services/outboxService';
 import type { DatabaseLifecycleState } from '../services/db/databaseLifecycle';
 import type { SyncStatusSummary } from '../types/Sync';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
+import { toMutationContext, type LocalMutationContext } from '../domain/businessScope';
 
 const EMPTY_SUMMARY: SyncStatusSummary = {
   pending: 0,
@@ -13,6 +15,9 @@ const EMPTY_SUMMARY: SyncStatusSummary = {
 
 interface SyncStatusReader {
   getStatusSummary(): Promise<SyncStatusSummary>;
+  getStatusSummaryForScope?(
+    context: LocalMutationContext,
+  ): Promise<SyncStatusSummary>;
 }
 
 interface SyncStatusIndicatorProps {
@@ -26,11 +31,16 @@ export function SyncStatusIndicator({
   databaseLifecycleStatus,
   service = outboxService,
 }: SyncStatusIndicatorProps) {
+  const activeScope = useActiveDataScope();
   const canReadDatabase = databaseLifecycleStatus === 'normal';
   const summaryQuery = useDexieQuery(
-    () => (canReadDatabase ? service.getStatusSummary() : Promise.resolve(EMPTY_SUMMARY)),
+    () =>
+      canReadDatabase
+        ? service.getStatusSummaryForScope?.(toMutationContext(activeScope.scope)) ??
+          service.getStatusSummary()
+        : Promise.resolve(EMPTY_SUMMARY),
     EMPTY_SUMMARY,
-    [canReadDatabase, service],
+    [activeScope.scopeToken, canReadDatabase, service],
   );
 
   if (!canReadDatabase) {
@@ -68,7 +78,8 @@ export function SyncStatusIndicator({
         : summary.totalAwaitingAction > 0
           ? `${details.join('; ')}.`
           : 'Nenhuma alteracao local pendente.'}{' '}
-      Sincronizacao remota ainda nao esta disponivel; os dados continuam apenas neste dispositivo.
+      Sincronizacao automatica e bidirecional ainda nao esta disponivel. O envio remoto manual pode
+      ser realizado na pagina Conta.
       {!isOnline && ' Sem internet; o uso local continua disponivel.'}
     </aside>
   );

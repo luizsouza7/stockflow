@@ -7,11 +7,35 @@ import { ProductForm } from './pages/ProductForm';
 import { Products } from './pages/Products';
 import { Categories } from './pages/Categories';
 import { DataExport } from './pages/DataExport';
+import {
+  ActiveDataScopeProvider,
+  useActiveDataScope,
+} from './hooks/useActiveDataScope';
+
+function ScopedLayout() {
+  return (
+    <ActiveDataScopeProvider>
+      <ScopeReadyLayout />
+    </ActiveDataScopeProvider>
+  );
+}
+
+function ScopeReadyLayout() {
+  const activeScope = useActiveDataScope();
+  if (activeScope.isLoading) {
+    return (
+      <div role="status" className="grid min-h-screen place-items-center bg-slate-50 text-slate-600">
+        Identificando o contexto de dados...
+      </div>
+    );
+  }
+  return <Layout />;
+}
 
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: <ScopedLayout />,
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'produtos', element: <Products /> },

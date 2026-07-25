@@ -183,7 +183,8 @@ export function ManualCloudPushPanel({
 
   function selectBusiness() {
     void runAction('select-business', async () => {
-      await contextService.select(userId, candidateId);
+      const candidate = businesses.find(({ id }) => id === candidateId);
+      await contextService.select(userId, candidateId, candidate?.name);
       if (!isMounted.current) return;
       currentSelectedId.current = candidateId;
       setSelectedId(candidateId);
@@ -365,10 +366,9 @@ export function ManualCloudPushPanel({
       <div className="mt-6 border-t border-slate-200 pt-5">
         <h4 className="font-semibold text-slate-950">Busca manual da nuvem</h4>
         <p className="mt-2 text-sm text-slate-600">
-          A busca permanece bloqueada porque o runtime principal ainda nao filtra todas as telas e
-          operacoes pelo estabelecimento selecionado, os formularios comuns ainda podem criar
-          dados sem escopo e ainda faltam carga inicial segura, cursor, aplicacao local remota e
-          tratamento real de conflitos. Esta verificacao e manual e nao baixa dados.
+          A busca permanece bloqueada porque ainda faltam carga inicial segura, cursor, aplicacao
+          local de dados remotos e tratamento real de conflitos. Esta verificacao e manual e nao
+          baixa dados.
         </p>
         {pullMessage && (
           <p role="status" className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">

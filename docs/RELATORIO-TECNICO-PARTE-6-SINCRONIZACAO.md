@@ -4,7 +4,7 @@
 
 A Parte 6 trata da sincronização entre a base local offline-first, mantida em IndexedDB por meio do Dexie, e a base remota PostgreSQL disponibilizada pelo Supabase. Sua implementação foi dividida em etapas incrementais para preservar a integridade dos dados e tornar cada avanço verificável antes da introdução da etapa seguinte.
 
-Essa estratégia não cria nem apresenta uma sincronização simulada como se estivesse completa. A aplicação continua funcionando localmente e offline, e as operações de negócio são persistidas primeiro no dispositivo. No estado atual, dados elegíveis somente são enviados à nuvem por uma ação manual e controlada. A 6H-B associa o legado localmente sem representar upload; pull, conflitos e sincronização automática ainda não existem.
+Essa estratégia não cria nem apresenta uma sincronização simulada como se estivesse completa. A aplicação continua funcionando localmente e offline, e as operações de negócio são persistidas primeiro no dispositivo. No estado atual, dados elegíveis somente são enviados à nuvem por uma ação manual e controlada. A 6H-B associa o legado localmente sem representar upload e a 6H-C isola o runtime por escopo ativo; pull, conflitos e sincronização automática ainda não existem.
 
 ## 2. Relação com o Prompt Mestre
 
@@ -125,11 +125,13 @@ Foi observada uma ressalva visual: após o envio ser aplicado com sucesso no Sup
 
 ## 10. Etapa 6G — auditoria e bloqueio planejado do pull
 
-A auditoria confirmou que `Category`, `Product` e `Movement` não possuem `businessId`; suas stores, repositories e consultas de UI são device-scoped. Existem dados criados desde versões anteriores à nuvem no mesmo banco. Apenas os eventos da outbox podem ser associados explicitamente a usuário/business, o que não altera o escopo das entidades.
+Naquele momento, a auditoria confirmou que `Category`, `Product` e `Movement` ainda não possuíam `businessId`; suas stores, repositories e consultas de UI eram device-scoped. Existiam dados criados desde versões anteriores à nuvem no mesmo banco. Apenas os eventos da outbox podiam ser associados explicitamente a usuário/business, o que não alterava o escopo das entidades.
 
-Assim, a opção C foi adotada. `manualPullService` exige ação do usuário e valida Supabase configurado, sessão atual, usuário, business selecionado, conectividade e membership. Mesmo com todos os pré-requisitos, termina no bloqueio `local-runtime-scope-required`: o runtime principal ainda não filtra integralmente todas as telas e operações por business, formulários comuns ainda podem criar dados unscoped e ainda faltam estratégia segura de carga inicial, cursor, aplicação local remota e tratamento real de conflitos. Nenhuma tabela de domínio remota é consultada, nenhum dado é aplicado e a outbox não é alterada.
+Assim, na 6G, a opção C foi adotada. `manualPullService` exigia ação do usuário e validava Supabase configurado, sessão atual, usuário, business selecionado, conectividade e membership. Mesmo com todos os pré-requisitos, terminava no bloqueio então denominado `local-runtime-scope-required`: naquele momento o runtime ainda não filtrava integralmente as telas e operações por business e os formulários comuns ainda podiam criar dados unscoped. Nenhuma tabela de domínio remota era consultada, nenhum dado era aplicado e a outbox não era alterada.
 
-Não foi criada Dexie v11 porque não existe pull capaz de consumir um cursor com segurança. O schema permanece v10 e todas as migrations históricas foram preservadas. O próximo requisito arquitetural é separar entidades locais por business e definir o destino explícito dos dados legados device-scoped.
+Na 6G, não foi criada Dexie v11; o schema ainda era v10 e todas as migrations históricas foram preservadas. Essas limitações locais foram tratadas posteriormente: a 6H-A criou a fundação e os índices v11 por `businessId`, a 6H-B adicionou a associação explícita do legado e a 6H-C tornou o runtime integralmente scope-aware.
+
+Atualmente, o pull continua bloqueado por `pull-foundation-required`. Ainda faltam estratégia segura de carga inicial, cursor, leitura e aplicação local de dados remotos, reconciliação com pendências locais e tratamento real de conflitos. Nenhuma dessas capacidades foi implementada pelas etapas 6H-A/B/C.
 
 ### 10.1. Etapa 6H-A — fundação local de escopo por business
 
@@ -148,6 +150,29 @@ A Conta passa a oferecer uma preview somente leitura do conjunto unscoped e uma 
 Categorias, produtos, movimentos e eventos elegíveis são atualizados em uma única transação Dexie v11. IDs, relações, estoque, valores, snapshots, soft deletes, payloads, chaves de idempotência, status e tentativas são preservados. Entidades e eventos já scoped permanecem intactos.
 
 Não são criados eventos para registros antigos sem outbox. A associação não representa upload integral e movimentos históricos não são reexecutados remotamente. Push continua manual; pull, cursor, conflitos reais e automação continuam inexistentes.
+
+### 10.3. Etapa 6H-C — runtime local orientado por escopo ativo
+
+`ActiveDataScope` formaliza modo local e modo business. A fonte React única combina sessão atual e
+seleção validada persistida por usuário, incluindo nome amigável, sem armazenar token ou senha.
+Esse contexto previamente conhecido permite leitura e escrita offline sem chamadas Supabase nas
+operações normais.
+
+Dashboard, Produtos, edição por ID, Categorias, Movimentações/Histórico e Alertas usam consultas de
+repository por escopo. O modo local enxerga somente ausência de `businessId`; o modo business
+enxerga somente o UUID selecionado. Filtros e ordenação continuam no domínio após a consulta
+isolada. IDs válidos de outro escopo retornam estado indisponível.
+
+Services recebem `LocalMutationContext` explicitamente. Criação, update, delete e movimento
+revalidam o escopo nas transações; movimento herda o business do produto. Outboxes business novas
+recebem `userId` e `businessId` na mesma transação, enquanto o modo local permanece integralmente
+unscoped. Troca de contexto reassina consultas, invalida formulários e descarta feedback assíncrono
+antigo.
+
+O indicador do layout usa o nome do estabelecimento, sem UUID como título. Associação do legado e
+push permanecem manuais. A troca de business não move dados, não associa, não envia e não baixa.
+Backup JSON e CSV continuam device-wide e incluem todos os escopos presentes no dispositivo.
+Dexie permanece v11 e o Service Worker não foi alterado.
 
 ## 11. Segurança e privacidade
 
@@ -198,14 +223,15 @@ A evolução da Parte 6 foi apoiada por testes automatizados de:
 - ausência de `service_role` no frontend, de gateway/cursor/aplicação de pull e de gatilhos automáticos de sincronização;
 - pré-requisitos e bloqueio por scoping local, preservação da outbox e feedback manual da 6G.
 - invariantes de escopo, isolamento de repositories, outbox scoped e migrations v1/v10 → v11 da 6H-A.
+- contexto ativo, rotas/mutações isoladas, continuidade offline e ausência de automação da 6H-C.
 
-Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados, a 6E registrou 439, a revisão da 6G aprovou 461 em 45 arquivos e a 6H-A aprovou 494 em 48. A 6H-B aprovou 531 testes em 50 arquivos.
+Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados, a 6E registrou 439, a revisão da 6G aprovou 461 em 45 arquivos e a 6H-A aprovou 494 em 48. A 6H-B aprovou 531 testes em 50 arquivos; a 6H-C aprovou 557 em 52.
 
 Além da suíte automatizada, as etapas 6D e 6F foram validadas operacionalmente em Supabase real de teste. A 6D verificou a base remota, Auth, business/membership e push de categorias/produtos; a 6F verificou a RPC de estoque, seus efeitos transacionais e a recusa de snapshot divergente.
 
 ## 15. Limitações atuais
 
-- pull remoto funcional está bloqueado até existir associação explícita e runtime local integralmente scope-aware;
+- pull remoto funcional continua bloqueado por ausência de carga inicial segura, cursor, aplicação local remota e estratégia real de conflitos;
 - cursor de pull não foi criado porque não há aplicação segura que possa consumi-lo;
 - central de conflitos ainda não existe;
 - resolução real de conflitos ainda não existe;
@@ -218,17 +244,16 @@ Por essas limitações, a Parte 6 permanece em andamento.
 
 ## 16. Próximos passos recomendados
 
-1. Definir e implementar um fluxo consciente de associação dos dados legados, sem inferência pela outbox ou pelo business selecionado.
-2. Tornar consultas e mutações do runtime integralmente scope-aware, preservando o modo legado explícito.
-3. Retomar o pull com cursor composto e aplicação conservadora somente após essas etapas.
-4. Tratar conflitos básicos após a existência de um pull confiável.
-5. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
-6. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
+1. Definir carga inicial remota sem replay histórico e com reconciliação das pendências locais.
+2. Definir cursor confiável e aplicação local transacional antes de liberar pull.
+3. Tratar conflitos básicos após a existência de um pull confiável.
+4. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
+5. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
 
 Cada passo deve permanecer separado e receber testes e validação proporcionais ao risco antes do avanço seguinte.
 
 ## 17. Conclusão
 
-A Parte 6 avançou de maneira incremental, segura e testada: outbox, retry, push protegido, validações reais, RPC atômica, bloqueio consciente do pull, fundação local de escopo e, na 6H-B, associação explícita do legado sem reconstrução remota artificial.
+A Parte 6 avançou de maneira incremental, segura e testada: outbox, retry, push protegido, validações reais, RPC atômica, bloqueio consciente do pull, fundação local de escopo, associação explícita do legado e, na 6H-C, runtime isolado pelo escopo ativo.
 
-A Parte 6 ainda não está integralmente concluída. Entretanto, a base de push remoto está madura e operacionalmente validada para categorias, produtos e movimentações rastreadas compatíveis. Runtime integralmente scope-aware, estratégia segura de carga inicial, pull funcional, cursor, conflitos reais, central de conflitos e sincronização automática permanecem como evoluções futuras explícitas.
+A Parte 6 ainda não está integralmente concluída. Entretanto, a base de push remoto está madura e operacionalmente validada para categorias, produtos e movimentações rastreadas compatíveis. Estratégia segura de carga inicial, pull funcional, cursor, conflitos reais, central de conflitos e sincronização automática permanecem como evoluções futuras explícitas.

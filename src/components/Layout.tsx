@@ -7,6 +7,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePwaUpdate } from '../hooks/usePwaUpdate';
 import { useDatabaseLifecycle } from '../hooks/useDatabaseLifecycle';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'D' },
@@ -30,6 +31,7 @@ export function Layout() {
   const isOnline = useOnlineStatus();
   const { isUpdateAvailable, updateNow } = usePwaUpdate();
   const { state: databaseLifecycleState, reloadNow } = useDatabaseLifecycle();
+  const activeScope = useActiveDataScope();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -69,7 +71,16 @@ export function Layout() {
                   Painel de estoque
                 </h2>
               </div>
-              <StatusBadge isOnline={isOnline} />
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge isOnline={isOnline} />
+                <NavLink
+                  to="/conta"
+                  className="max-w-64 truncate text-xs font-medium text-slate-600 hover:text-brand-700"
+                  title={activeScope.label}
+                >
+                  {activeScope.isLoading ? 'Identificando contexto...' : activeScope.label}
+                </NavLink>
+              </div>
             </div>
             <OfflineBanner isOnline={isOnline} />
             <PwaUpdateBanner isVisible={isUpdateAvailable} onUpdate={updateNow} />
@@ -81,7 +92,7 @@ export function Layout() {
           </header>
 
           <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">
-            <Outlet />
+            <Outlet key={activeScope.scopeToken} />
           </main>
         </div>
       </div>

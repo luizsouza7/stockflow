@@ -5,6 +5,7 @@ import { categoryService } from './categoryService';
 import { localDb } from './db/localDb';
 import { productService } from './productService';
 import { stockMovementService } from './stockMovementService';
+import { outboxService } from './outboxService';
 
 const BUSINESS_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BUSINESS_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -195,6 +196,133 @@ describe('services com fundacao de escopo local', () => {
     expect(await localDb.categories.get(categoryId)).toEqual(entitiesBeforeBinding.category);
     expect(await localDb.products.get(productId)).toEqual(entitiesBeforeBinding.product);
     expect(await localDb.movements.toCollection().first()).toEqual(entitiesBeforeBinding.movement);
+  });
+
+  it('runtime business cria categoria, produto e movimento com userId e businessId na outbox', async () => {
+    const context = { kind: 'business' as const, userId: USER_A, businessId: BUSINESS_A };
+    const categoryId = await categoryService.createForScope('Runtime A', context);
+    const productId = await productService.createForScope(
+      productInput({ categoryId, currentQuantity: 4, code: 'RUNTIME-A' }),
+      context,
+    );
+    await stockMovementService.registerForScope(
+      {
+        productId,
+        type: 'saida',
+        quantity: 1,
+        note: 'Offline',
+        date: NOW,
+        syncStatus: 'pending',
+      },
+      context,
+    );
+
+    expect(await localDb.categories.get(categoryId)).toMatchObject({ businessId: BUSINESS_A });
+    expect(await localDb.products.get(productId)).toMatchObject({ businessId: BUSINESS_A });
+    expect(await localDb.movements.toCollection().first()).toMatchObject({
+      businessId: BUSINESS_A,
+      previousQuantity: 4,
+      resultingQuantity: 3,
+    });
+    expect((await outboxRepository.findAll()).every((entry) =>
+      entry.userId === USER_A && entry.businessId === BUSINESS_A
+    )).toBe(true);
+  });
+
+  it('runtime local cria entidades e outbox integralmente unscoped', async () => {
+    const context = { kind: 'local' as const };
+    const categoryId = await categoryService.createForScope('Somente local', context);
+    const productId = await productService.createForScope(
+      productInput({ categoryId, code: 'LOCAL-RUNTIME' }),
+      context,
+    );
+    await stockMovementService.registerForScope(
+      {
+        productId,
+        type: 'entrada',
+        quantity: 1,
+        note: '',
+        date: NOW,
+        syncStatus: 'pending',
+      },
+      context,
+    );
+
+    expect(await localDb.categories.get(categoryId)).not.toHaveProperty('businessId');
+    expect(await localDb.products.get(productId)).not.toHaveProperty('businessId');
+    expect(await localDb.movements.toCollection().first()).not.toHaveProperty('businessId');
+    expect((await outboxRepository.findAll()).every((entry) =>
+      entry.userId === undefined && entry.businessId === undefined
+    )).toBe(true);
+  });
+
+  it('runtime rejeita update, delete e movimento por ID de outro escopo', async () => {
+    const contextA = { kind: 'business' as const, userId: USER_A, businessId: BUSINESS_A };
+    const contextB = { kind: 'business' as const, userId: USER_A, businessId: BUSINESS_B };
+    const categoryId = await categoryService.createForScope('Business A', contextA);
+    const productId = await productService.createForScope(
+      productInput({ categoryId, code: 'ISOLADO-A' }),
+      contextA,
+    );
+
+    await expect(categoryService.updateForScope(categoryId, 'Invasao', contextB))
+      .rejects.toThrow('Categoria nao encontrada.');
+    await expect(productService.updateForScope(productId, { name: 'Invasao' }, contextB))
+      .rejects.toThrow('Produto nao encontrado.');
+    await expect(productService.softDeleteForScope(productId, { kind: 'local' }))
+      .rejects.toThrow('Produto nao encontrado.');
+    await expect(stockMovementService.registerForScope(
+      {
+        productId,
+        type: 'entrada',
+        quantity: 1,
+        note: '',
+        date: NOW,
+        syncStatus: 'pending',
+      },
+      contextB,
+    )).rejects.toThrow('Produto nao encontrado.');
+
+    expect(await localDb.products.get(productId)).toMatchObject({
+      name: 'Produto',
+      businessId: BUSINESS_A,
+    });
+    expect(await localDb.movements.count()).toBe(0);
+  });
+
+  it('codigo e nome sao unicos no escopo ativo e reutilizaveis em outro escopo', async () => {
+    const contextA = { kind: 'business' as const, userId: USER_A, businessId: BUSINESS_A };
+    const contextB = { kind: 'business' as const, userId: USER_A, businessId: BUSINESS_B };
+    await categoryService.createForScope('Bebidas', contextA);
+    await expect(categoryService.createForScope(' bebidas ', contextA))
+      .rejects.toThrow('Ja existe uma categoria ativa');
+    await expect(categoryService.createForScope(' bebidas ', contextB))
+      .resolves.toEqual(expect.any(String));
+
+    await productService.createForScope(productInput({ code: 'COD-SCOPE' }), contextA);
+    await expect(productService.createForScope(
+      productInput({ name: 'Duplicado', code: ' cod-scope ' }),
+      contextA,
+    )).rejects.toThrow('Ja existe um produto ativo');
+    await expect(productService.createForScope(
+      productInput({ name: 'Permitido', code: ' cod-scope ' }),
+      contextB,
+    )).resolves.toEqual(expect.any(String));
+  });
+
+  it('indicador de outbox soma somente o escopo ativo', async () => {
+    const contextA = { kind: 'business' as const, userId: USER_A, businessId: BUSINESS_A };
+    await categoryService.createForScope('Local', { kind: 'local' });
+    await categoryService.createForScope('Business A', contextA);
+    await categoryService.createForScope(
+      'Business B',
+      { kind: 'business', userId: USER_A, businessId: BUSINESS_B },
+    );
+
+    await expect(outboxService.getStatusSummaryForScope({ kind: 'local' }))
+      .resolves.toMatchObject({ pending: 1, totalAwaitingAction: 1 });
+    await expect(outboxService.getStatusSummaryForScope(contextA))
+      .resolves.toMatchObject({ pending: 1, totalAwaitingAction: 1 });
   });
 });
 

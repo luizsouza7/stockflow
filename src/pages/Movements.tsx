@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDexieQuery } from '../hooks/useDexieQuery';
 import { stockMovementService } from '../services/stockMovementService';
@@ -18,10 +18,23 @@ import {
   type MovementSort,
   type MovementTypeFilter,
 } from '../domain/movementFilters';
+import { useActiveDataScope } from '../hooks/useActiveDataScope';
+import { toMutationContext } from '../domain/businessScope';
 
 export function Movements() {
-  const productsQuery = useDexieQuery(() => productService.listActive(), []);
-  const movementsQuery = useDexieQuery(() => stockMovementService.listHistory(), []);
+  const activeScope = useActiveDataScope();
+  const currentScopeToken = useRef(activeScope.scopeToken);
+  currentScopeToken.current = activeScope.scopeToken;
+  const productsQuery = useDexieQuery(
+    () => productService.listActiveForScope(activeScope.scope),
+    [],
+    [activeScope.scopeToken],
+  );
+  const movementsQuery = useDexieQuery(
+    () => stockMovementService.listHistoryForScope(activeScope.scope),
+    [],
+    [activeScope.scopeToken],
+  );
   const products = productsQuery.data;
   const movements = movementsQuery.data;
   const [productId, setProductId] = useState('');
@@ -35,6 +48,17 @@ export function Movements() {
     DEFAULT_MOVEMENT_FILTERS,
   );
   const submissionInProgress = useRef(false);
+
+  useEffect(() => {
+    setProductId('');
+    setQuantity(1);
+    setNote('');
+    setError('');
+    setSuccess('');
+    setIsSubmitting(false);
+    setHistoryFilters(DEFAULT_MOVEMENT_FILTERS);
+    submissionInProgress.current = false;
+  }, [activeScope.scopeToken]);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === productId),
@@ -84,21 +108,25 @@ export function Movements() {
 
     submissionInProgress.current = true;
     setIsSubmitting(true);
+    const submittedScopeToken = activeScope.scopeToken;
+    const mutationContext = toMutationContext(activeScope.scope);
 
     try {
-      await stockMovementService.register({
+      await stockMovementService.registerForScope({
         productId,
         type,
         quantity,
         note,
         date: new Date().toISOString(),
         syncStatus: 'pending',
-      });
+      }, mutationContext);
 
+      if (currentScopeToken.current !== submittedScopeToken) return;
       setQuantity(1);
       setNote('');
       setSuccess('Movimentacao registrada com sucesso.');
     } catch (movementError) {
+      if (currentScopeToken.current !== submittedScopeToken) return;
       setError(
         getUserFacingError(movementError, 'Nao foi possivel registrar a movimentacao.', [
           'Produto nao encontrado.',

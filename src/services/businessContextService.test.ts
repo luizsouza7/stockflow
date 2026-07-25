@@ -28,7 +28,7 @@ describe('contexto seguro de estabelecimento', () => {
     expect(storage.setItem).not.toHaveBeenCalled();
   });
 
-  it('armazena somente o businessId em chave isolada pelo usuario', async () => {
+  it('armazena contexto validado com nome em chave isolada pelo usuario', async () => {
     const api = createApi();
     api.validateMembership.mockResolvedValue({
       data: { business_id: BUSINESS_ID },
@@ -37,12 +37,34 @@ describe('contexto seguro de estabelecimento', () => {
     const storage = createStorage();
     const service = createBusinessContextService(api, storage);
 
-    await service.select(USER_ID, BUSINESS_ID);
+    await service.select(USER_ID, BUSINESS_ID, 'Loja Central');
 
     expect(storage.setItem).toHaveBeenCalledWith(
       `stockflow:selected-business:${USER_ID}`,
-      BUSINESS_ID,
+      JSON.stringify({
+        userId: USER_ID,
+        id: BUSINESS_ID,
+        name: 'Loja Central',
+      }),
     );
+  });
+
+  it('recupera offline o contexto validado somente para o mesmo usuario', () => {
+    const stored = JSON.stringify({
+      userId: USER_ID,
+      id: BUSINESS_ID,
+      name: 'Loja Central',
+    });
+    const service = createBusinessContextService(undefined, createStorage(stored));
+
+    expect(service.getSelectedContext?.(USER_ID)).toEqual({
+      userId: USER_ID,
+      id: BUSINESS_ID,
+      name: 'Loja Central',
+    });
+    expect(
+      service.getSelectedContext?.('33333333-3333-4333-8333-333333333333'),
+    ).toBeUndefined();
   });
 
   it('ignora selecao armazenada invalida', () => {

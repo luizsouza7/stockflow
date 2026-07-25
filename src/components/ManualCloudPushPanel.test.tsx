@@ -42,7 +42,9 @@ describe('painel de push manual', () => {
     await screen.findByRole('option', { name: 'Loja Central' });
     fireEvent.click(screen.getByRole('button', { name: 'Usar estabelecimento' }));
 
-    await waitFor(() => expect(context.select).toHaveBeenCalledWith(USER_ID, BUSINESS_ID));
+    await waitFor(() =>
+      expect(context.select).toHaveBeenCalledWith(USER_ID, BUSINESS_ID, 'Loja Central'),
+    );
     expect(await screen.findByText(/selecionado e validado/)).toBeTruthy();
   });
 
@@ -195,7 +197,6 @@ describe('painel de push manual', () => {
     expect(screen.getByText(/movimentacoes rastreadas compativeis/i)).toBeTruthy();
     expect(screen.getByText(/legadas sem snapshots permanecem bloqueadas/i)).toBeTruthy();
     expect(screen.getByText(/busca remota e a resolucao de conflitos/i)).toBeTruthy();
-    expect(screen.getByText(/runtime principal ainda nao filtra todas as telas/i)).toBeTruthy();
     expect(screen.getByText(/carga inicial segura, cursor/i)).toBeTruthy();
   });
 
@@ -407,7 +408,13 @@ describe('painel de push manual', () => {
     fireEvent.change(select, { target: { value: OTHER_BUSINESS_ID } });
     fireEvent.click(screen.getByRole('button', { name: 'Usar estabelecimento' }));
 
-    await waitFor(() => expect(context.select).toHaveBeenCalledWith(USER_ID, OTHER_BUSINESS_ID));
+    await waitFor(() =>
+      expect(context.select).toHaveBeenCalledWith(
+        USER_ID,
+        OTHER_BUSINESS_ID,
+        'Loja Bairro',
+      ),
+    );
     await waitFor(() => expect(screen.queryByText(/Busca remota bloqueada com seguranca/i)).toBeNull());
   });
 
@@ -580,8 +587,8 @@ function createAssociationService() {
 function blockedPullResult() {
   return {
     status: 'blocked' as const,
-    reason: 'local-runtime-scope-required' as const,
-    message: 'Busca remota bloqueada com seguranca: o runtime principal ainda nao filtra todas as telas e operacoes pelo estabelecimento selecionado; formularios comuns ainda podem criar dados sem escopo; e ainda nao existem estrategia segura de carga inicial, cursor, aplicacao local de dados remotos ou tratamento real de conflitos. Nenhum dado remoto foi baixado.',
+    reason: 'pull-foundation-required' as const,
+    message: 'Busca remota bloqueada com seguranca: ainda nao existem estrategia segura de carga inicial, cursor, aplicacao local de dados remotos ou tratamento real de conflitos. Nenhum dado remoto foi baixado.',
     downloaded: 0 as const,
     applied: 0 as const,
     ignored: 0 as const,

@@ -96,12 +96,12 @@ describe('bloqueio planejado do pull manual', () => {
 
     expect(result).toEqual(expect.objectContaining({
       status: 'blocked',
-      reason: 'local-runtime-scope-required',
+      reason: 'pull-foundation-required',
       downloaded: 0,
       applied: 0,
       ignored: 0,
     }));
-    expect(result.message).toMatch(/runtime principal ainda nao filtra todas as telas/i);
+    expect(result.message).toMatch(/carga inicial, cursor/i);
     expect(result.message).toMatch(/carga inicial/i);
     expect(result.message).toMatch(/cursor/i);
     expect(result.message).not.toMatch(/nao estao separados por estabelecimento|businessId/i);

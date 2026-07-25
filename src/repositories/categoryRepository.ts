@@ -4,6 +4,7 @@ import {
   isEntityInBusiness,
   isUnscopedEntity,
   validateBusinessId,
+  type DataScopeReference,
 } from '../domain/businessScope';
 
 type CategoryChanges = Partial<Omit<Category, 'id' | 'businessId'>>;
@@ -42,6 +43,18 @@ export const categoryRepository = {
     return categories.filter((category) => !category.deletedAt);
   },
 
+  async findAllForScope(scope: DataScopeReference): Promise<Category[]> {
+    return scope.kind === 'local'
+      ? this.findAllUnscoped()
+      : this.findAllForBusiness(scope.businessId);
+  },
+
+  async findAllActiveForScope(scope: DataScopeReference): Promise<Category[]> {
+    return scope.kind === 'local'
+      ? this.findAllActiveUnscoped()
+      : this.findAllActiveForBusiness(scope.businessId);
+  },
+
   async findUnscopedById(id: string): Promise<Category | undefined> {
     const category = await localDb.categories.get(id);
     return category && isUnscopedEntity(category) ? category : undefined;
@@ -51,6 +64,15 @@ export const categoryRepository = {
     validateBusinessId(businessId);
     const category = await localDb.categories.get(id);
     return category && isEntityInBusiness(category, businessId) ? category : undefined;
+  },
+
+  async findByIdForScope(
+    id: string,
+    scope: DataScopeReference,
+  ): Promise<Category | undefined> {
+    return scope.kind === 'local'
+      ? this.findUnscopedById(id)
+      : this.findByIdForBusiness(id, scope.businessId);
   },
 
   async create(category: Category): Promise<string> {

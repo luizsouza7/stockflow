@@ -4,6 +4,7 @@ import {
   isEntityInBusiness,
   isUnscopedEntity,
   validateBusinessId,
+  type DataScopeReference,
 } from '../domain/businessScope';
 
 type ProductDetailsChanges = Partial<Omit<CreateProductInput, 'currentQuantity'>>;
@@ -46,6 +47,18 @@ export const productRepository = {
     return products.filter((product) => !product.deletedAt);
   },
 
+  async findAllForScope(scope: DataScopeReference): Promise<Product[]> {
+    return scope.kind === 'local'
+      ? this.findAllUnscoped()
+      : this.findAllForBusiness(scope.businessId);
+  },
+
+  async findAllActiveForScope(scope: DataScopeReference): Promise<Product[]> {
+    return scope.kind === 'local'
+      ? this.findAllActiveUnscoped()
+      : this.findAllActiveForBusiness(scope.businessId);
+  },
+
   async findUnscopedById(id: string): Promise<Product | undefined> {
     const product = await localDb.products.get(id);
     return product && isUnscopedEntity(product) ? product : undefined;
@@ -55,6 +68,15 @@ export const productRepository = {
     validateBusinessId(businessId);
     const product = await localDb.products.get(id);
     return product && isEntityInBusiness(product, businessId) ? product : undefined;
+  },
+
+  async findByIdForScope(
+    id: string,
+    scope: DataScopeReference,
+  ): Promise<Product | undefined> {
+    return scope.kind === 'local'
+      ? this.findUnscopedById(id)
+      : this.findByIdForBusiness(id, scope.businessId);
   },
 
   async create(product: Product): Promise<string> {
@@ -76,5 +98,19 @@ export const productRepository = {
   async countActiveByCategoryId(categoryId: string): Promise<number> {
     const products = await localDb.products.where('categoryId').equals(categoryId).toArray();
     return products.filter((product) => !product.deletedAt).length;
+  },
+
+  async countActiveByCategoryIdForScope(
+    categoryId: string,
+    scope: DataScopeReference,
+  ): Promise<number> {
+    const products = await localDb.products.where('categoryId').equals(categoryId).toArray();
+    return products.filter(
+      (product) =>
+        !product.deletedAt &&
+        (scope.kind === 'local'
+          ? isUnscopedEntity(product)
+          : isEntityInBusiness(product, scope.businessId)),
+    ).length;
   },
 };

@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 50 arquivos e 531 testes aprovados:
+A arquitetura é verificada por 52 arquivos e 557 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -129,6 +129,7 @@ Há testes unitários da conectividade, da política do service worker e da coor
 
 ```text
 Page
+  → useActiveDataScope
   → useDexieQuery
   → Service de consulta
   → Repository
@@ -288,17 +289,19 @@ Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorn
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6H-B: existe associação explícita do legado, mas runtime integral por business, pull, conflitos reais e automação continuam ausentes. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6H-C: existe associação explícita do legado e runtime integral por escopo ativo, mas carga inicial, pull, conflitos reais e automação continuam ausentes. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 
 O fluxo da conta é `Account → useAuthSession → authService → cliente Supabase`. A rota é lazy; abrir as páginas locais não inicializa o módulo Supabase. Se as variáveis estiverem ausentes ou inválidas, a página explica a indisponibilidade e não bloqueia o restante do sistema. Uma sessão previamente persistida pelo cliente oficial pode ser restaurada offline; novos logins/cadastros exigem conectividade e logout usa escopo local para remover a sessão deste navegador.
 
-O runtime da UI continua device-scoped e cria dados unscoped. A seleção remota é isolada por usuário e revalidada por membership; logout limpa o contexto ativo. Eventos vinculados permanecem vinculados ao usuário/business original e não são reutilizados por outra conta.
+O runtime compõe a sessão atual e a seleção persistida por usuário em `ActiveDataScope`. Sem seleção utilizável, a UI opera somente com unscoped; com business validado, opera somente naquele `businessId`. O nome amigável e os UUIDs validados ficam no contexto local, sem token ou senha, permitindo continuidade offline. Logout ou troca de usuário invalida o business da conta anterior.
 
-Na 6H-A, `Category`, `Product` e `Movement` passam a aceitar `businessId?`; ausência representa legado unscoped. Regras puras validam UUID e igualdade de escopo. Repositories oferecem consultas explícitas unscoped ou por business, usando os índices v11. Produto/categoria precisam compartilhar escopo e movimento herda o escopo do produto. A UI atual permanece device-scoped e cria dados unscoped; ela não lê o business selecionado para mutações locais.
+Na 6H-A, `Category`, `Product` e `Movement` passam a aceitar `businessId?`; ausência representa legado unscoped. Regras puras validam UUID e igualdade de escopo. Repositories oferecem consultas explícitas unscoped ou por business, usando os índices v11. Produto/categoria precisam compartilhar escopo e movimento herda o escopo do produto.
 
-O vínculo da outbox 6C continua independente: associar pendências pode preencher `userId` e, se ausente, `businessId` no evento, mas nunca adiciona `userId` às entidades nem faz backfill de `businessId`. Eventos já scoped preservam o business e só podem ser vinculados no mesmo contexto. O pull permanece bloqueado, sem gateway, cursor ou aplicação local.
+Na 6H-C, `ActiveDataScopeProvider` é a fonte única do runtime. Dashboard, Produtos, Categorias, Movimentações/Histórico, Alertas e lookups de rota usam APIs `ForScope`. Services recebem `LocalMutationContext` explicitamente e não consultam React, Auth ou Supabase. Mutações business validam o ID no escopo e gravam `userId`/`businessId` na outbox atômica; mutações locais permanecem integralmente unscoped. O token do escopo reassina consultas e invalida formulários/resultados antigos.
+
+O vínculo da outbox 6C continua disponível para eventos antigos: associar pendências pode preencher `userId` e, se ausente, `businessId` no evento, mas nunca adiciona `userId` às entidades nem faz backfill de `businessId`. Novas mutações do runtime business já nascem vinculadas. O pull permanece bloqueado, sem gateway, cursor ou aplicação local.
 
 A 6H-B adiciona `LegacyDataAssociationSection → legacyDataAssociationService → legacyDataAssociationRepository → Dexie`. A preview lê as quatro stores sem escrever. A confirmação repete validações e usa uma única transação `categories/products/movements/outbox`, condicionada à mesma assinatura de snapshot. Nenhuma outbox histórica é criada e nenhum gateway remoto participa da operação.
 
@@ -306,7 +309,7 @@ A 6H-B adiciona `LegacyDataAssociationSection → legacyDataAssociationService �
 
 O fluxo é `UI → backupExportService → Dexie`. O acesso direto do service ao `localDb` é restrito à transação somente leitura que captura `categories`, `products` e `movements` como um único snapshot lógico; não foi criada uma abstração repository artificial para uma leitura atômica multi-tabela.
 
-O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 11`, preserva `businessId` quando presente e sua ausência no legado, além de validar relações no mesmo escopo. Produtos e movimentações também podem ser exportados em CSV com a coluna de escopo. Importação/restauração não foi implementada.
+O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. Ele permanece device-wide e inclui unscoped e todos os businesses presentes. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 11`, preserva `businessId` quando presente e sua ausência no legado, além de validar relações no mesmo escopo. Produtos e movimentações também são exportados em CSV device-wide com a coluna de escopo. Importação/restauração não foi implementada.
 
 ## Referências arquiteturais
 
@@ -316,7 +319,8 @@ O backup representa dados do StockFlow em JSON, não estruturas internas do Inde
 - `docs/arquitetura/adrs/ADR-003-separacao-dominio-servicos-repositories.md`;
 - `docs/arquitetura/adrs/ADR-004-categorias-como-entidades.md`;
 - `docs/arquitetura/adrs/ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`;
-- `docs/arquitetura/adrs/ADR-006-escopo-local-por-business-e-legado-unscoped.md`.
-- `docs/arquitetura/adrs/ADR-007-associacao-explicita-e-atomica-de-dados-legados.md`.
+- `docs/arquitetura/adrs/ADR-006-escopo-local-por-business-e-legado-unscoped.md`;
+- `docs/arquitetura/adrs/ADR-007-associacao-explicita-e-atomica-de-dados-legados.md`;
+- `docs/arquitetura/adrs/ADR-008-runtime-local-orientado-por-escopo-ativo.md`.
 
 Este documento resume as decisões; os ADRs preservam contexto e consequências específicas e não são duplicados integralmente aqui.

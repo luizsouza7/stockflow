@@ -78,6 +78,49 @@ describe('repositories com escopo local', () => {
     expect(await categoryRepository.findUnscopedById('22222222-2222-4222-8222-222222222222')).toBeUndefined();
     expect(await productRepository.findUnscopedById('66666666-6666-4666-8666-666666666666')).toBeUndefined();
   });
+
+  it('APIs operacionais por escopo isolam local, business A e business B', async () => {
+    expect(
+      (await categoryRepository.findAllActiveForScope({ kind: 'local' })).map(({ id }) => id),
+    ).toEqual(['11111111-1111-4111-8111-111111111111']);
+    expect(
+      (
+        await productRepository.findAllActiveForScope({
+          kind: 'business',
+          businessId: BUSINESS_A,
+        })
+      ).map(({ id }) => id),
+    ).toEqual(['66666666-6666-4666-8666-666666666666']);
+    expect(
+      (
+        await movementRepository.findAllForScopeNewestFirst({
+          kind: 'business',
+          businessId: BUSINESS_B,
+        })
+      ).map(({ id }) => id),
+    ).toEqual(['bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb']);
+  });
+
+  it('lookup operacional por ID nao atravessa o escopo', async () => {
+    expect(
+      await productRepository.findByIdForScope(
+        '66666666-6666-4666-8666-666666666666',
+        { kind: 'local' },
+      ),
+    ).toBeUndefined();
+    expect(
+      await productRepository.findByIdForScope(
+        '55555555-5555-4555-8555-555555555555',
+        { kind: 'business', businessId: BUSINESS_A },
+      ),
+    ).toBeUndefined();
+    expect(
+      await categoryRepository.findByIdForScope(
+        '33333333-3333-4333-8333-333333333333',
+        { kind: 'business', businessId: BUSINESS_A },
+      ),
+    ).toBeUndefined();
+  });
 });
 
 function category(id: string, businessId?: string): Category {

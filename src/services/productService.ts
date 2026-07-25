@@ -14,6 +14,9 @@ import { outboxService } from './outboxService';
 import {
   assertSameBusinessScope,
   validateBusinessId,
+  validateMutationContext,
+  type DataScopeReference,
+  type LocalMutationContext,
 } from '../domain/businessScope';
 
 export type ProductEditingLookup =
@@ -37,8 +40,29 @@ export const productService = {
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   },
 
+  async listActiveForScope(scope: DataScopeReference): Promise<ProductWithCategory[]> {
+    const [products, categories] = await Promise.all([
+      productRepository.findAllActiveForScope(scope),
+      categoryRepository.findAllForScope(scope),
+    ]);
+    const categoryById = new Map(categories.map((category) => [category.id, category]));
+    return products
+      .map((product) => ({
+        ...product,
+        categoryName: resolveCategoryName(product.categoryId, categoryById),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  },
+
   async listProductsNeedingRestock(): Promise<ProductWithCategory[]> {
     const products = await this.listActive();
+    return products.filter(needsRestock);
+  },
+
+  async listProductsNeedingRestockForScope(
+    scope: DataScopeReference,
+  ): Promise<ProductWithCategory[]> {
+    const products = await this.listActiveForScope(scope);
     return products.filter(needsRestock);
   },
 
@@ -60,6 +84,16 @@ export const productService = {
     return { status: 'active', product };
   },
 
+  async getForEditingForScope(
+    id: string,
+    scope: DataScopeReference,
+  ): Promise<ProductEditingLookup> {
+    const product = await productRepository.findByIdForScope(id, scope);
+    if (!product) return { status: 'not-found' };
+    if (product.deletedAt) return { status: 'deleted' };
+    return { status: 'active', product };
+  },
+
   async create(data: CreateProductInput): Promise<string> {
     return createInScope(data);
   },
@@ -67,6 +101,62 @@ export const productService = {
   async createScoped(data: CreateProductInput, businessId: string): Promise<string> {
     validateBusinessId(businessId);
     return createInScope(data, businessId);
+  },
+
+  async createForScope(
+    data: CreateProductInput,
+    context: LocalMutationContext,
+  ): Promise<string> {
+    validateMutationContext(context);
+    return createInScope(
+      data,
+      context.kind === 'business' ? context.businessId : undefined,
+      context,
+    );
+  },
+
+  async updateForScope(
+    id: string,
+    data: UpdateProductInput,
+    context: LocalMutationContext,
+  ): Promise<number> {
+    validateMutationContext(context);
+    return updateInScope(id, data, context);
+  },
+
+  async softDeleteForScope(
+    id: string,
+    context: LocalMutationContext,
+  ): Promise<void> {
+    validateMutationContext(context);
+    const now = new Date().toISOString();
+    const changed = await localDb.transaction(
+      'rw',
+      localDb.products,
+      localDb.outbox,
+      async () => {
+        const current = await productRepository.findByIdForScope(id, context);
+        if (!current || current.deletedAt) return 0;
+        const updated = await productRepository.update(id, {
+          deletedAt: now,
+          updatedAt: now,
+          syncStatus: 'pending',
+        });
+        if (!updated) return updated;
+        const deletedProduct = await productRepository.findByIdForScope(id, context);
+        if (!deletedProduct) throw new Error('Produto nao encontrado.');
+        await outboxService.enqueue({
+          entityType: 'product',
+          entityId: id,
+          operation: 'product.deleted',
+          payload: deletedProduct,
+          occurredAt: now,
+          context,
+        });
+        return updated;
+      },
+    );
+    if (!changed) throw new Error('Produto nao encontrado.');
   },
 
   async update(id: string, data: UpdateProductInput): Promise<number> {
@@ -156,6 +246,7 @@ export const productService = {
 async function createInScope(
   data: CreateProductInput,
   businessId?: string,
+  context?: LocalMutationContext,
 ): Promise<string> {
   const name = sanitizeProductName(data.name);
   validateMinimumStock(data.minimumStock);
@@ -179,17 +270,86 @@ async function createInScope(
     syncStatus: 'pending',
   };
 
-  return localDb.transaction('rw', localDb.products, localDb.outbox, async () => {
-    const id = await productRepository.create(product);
-    await outboxService.enqueue({
-      entityType: 'product',
-      entityId: id,
-      operation: 'product.created',
-      payload: product,
-      occurredAt: product.updatedAt,
-    });
-    return id;
-  });
+  return localDb.transaction(
+    'rw',
+    localDb.categories,
+    localDb.products,
+    localDb.outbox,
+    async () => {
+      await validateCategoryAssociation(product.categoryId, businessId);
+      await ensureUniqueActiveCode(code, businessId);
+      const id = await productRepository.create(product);
+      await outboxService.enqueue({
+        entityType: 'product',
+        entityId: id,
+        operation: 'product.created',
+        payload: product,
+        occurredAt: product.updatedAt,
+        context,
+      });
+      return id;
+    },
+  );
+}
+
+async function updateInScope(
+  id: string,
+  data: UpdateProductInput,
+  context: LocalMutationContext,
+): Promise<number> {
+  const product = await productRepository.findByIdForScope(id, context);
+  if (!product || product.deletedAt) throw new Error('Produto nao encontrado.');
+
+  if (data.salePriceInCents !== undefined) validateSalePriceInCents(data.salePriceInCents);
+  if (data.minimumStock !== undefined) validateMinimumStock(data.minimumStock);
+  if ('categoryId' in data) {
+    await validateCategoryAssociation(data.categoryId, product.businessId);
+  }
+
+  const changes: Partial<CreateProductInput> = {
+    updatedAt: new Date().toISOString(),
+    syncStatus: 'pending',
+  };
+  if (data.name !== undefined) changes.name = sanitizeProductName(data.name);
+  if (data.categoryId !== undefined) changes.categoryId = data.categoryId;
+  if ('categoryId' in data && data.categoryId === undefined) changes.categoryId = undefined;
+  if (data.salePriceInCents !== undefined) changes.salePriceInCents = data.salePriceInCents;
+  if (data.minimumStock !== undefined) changes.minimumStock = data.minimumStock;
+  if (data.code !== undefined) {
+    const code = sanitizeProductCode(data.code);
+    await ensureUniqueActiveCode(code, product.businessId, product.code);
+    changes.code = code;
+  }
+
+  return localDb.transaction(
+    'rw',
+    localDb.categories,
+    localDb.products,
+    localDb.outbox,
+    async () => {
+      const current = await productRepository.findByIdForScope(id, context);
+      if (!current || current.deletedAt) throw new Error('Produto nao encontrado.');
+      if ('categoryId' in data) {
+        await validateCategoryAssociation(data.categoryId, current.businessId);
+      }
+      if (data.code !== undefined) {
+        await ensureUniqueActiveCode(changes.code ?? '', current.businessId, current.code);
+      }
+      const changed = await productRepository.update(id, changes);
+      if (!changed) return changed;
+      const updatedProduct = await productRepository.findByIdForScope(id, context);
+      if (!updatedProduct) throw new Error('Produto nao encontrado.');
+      await outboxService.enqueue({
+        entityType: 'product',
+        entityId: id,
+        operation: 'product.updated',
+        payload: updatedProduct,
+        occurredAt: updatedProduct.updatedAt,
+        context,
+      });
+      return changed;
+    },
+  );
 }
 
 function resolveCategoryName(

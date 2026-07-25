@@ -1,5 +1,6 @@
 import { localDb } from '../services/db/localDb';
 import type { OutboxEntry, OutboxStatus } from '../types/Sync';
+import type { LocalMutationContext } from '../domain/businessScope';
 
 interface ClaimEligibleInput {
   now: string;
@@ -59,6 +60,22 @@ export const outboxRepository = {
 
   async countByStatus(status: OutboxStatus): Promise<number> {
     return localDb.outbox.where('status').equals(status).count();
+  },
+
+  async countByStatusForScope(
+    status: OutboxStatus,
+    context: LocalMutationContext,
+  ): Promise<number> {
+    return localDb.outbox
+      .where('status')
+      .equals(status)
+      .filter((entry) =>
+        context.kind === 'local'
+          ? entry.businessId === undefined
+          : entry.businessId === context.businessId &&
+            (entry.userId === undefined || entry.userId === context.userId),
+      )
+      .count();
   },
 
   async claimEligible({ now, batchSize, canClaim }: ClaimEligibleInput): Promise<OutboxEntry[]> {

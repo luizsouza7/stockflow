@@ -5,6 +5,10 @@ export interface BusinessSummary {
   name: string;
 }
 
+export interface PersistedBusinessContext extends BusinessSummary {
+  userId: string;
+}
+
 interface BusinessContextApi {
   listAvailable(): Promise<{ data: unknown; error: { message: string } | null }>;
   validateMembership(
@@ -23,9 +27,11 @@ export interface BusinessContextService {
   isConfigured(): boolean;
   listAvailable(): Promise<BusinessSummary[]>;
   validateMembership(userId: string, businessId: string): Promise<boolean>;
-  select(userId: string, businessId: string): Promise<void>;
+  select(userId: string, businessId: string, businessName?: string): Promise<void>;
   getSelected(userId: string): string | undefined;
+  getSelectedContext?(userId: string): PersistedBusinessContext | undefined;
   clearSelected(userId: string): void;
+  subscribe?(listener: () => void): () => void;
 }
 
 const UUID_PATTERN =
@@ -36,6 +42,12 @@ export function createBusinessContextService(
   api?: BusinessContextApi,
   storage: BusinessSelectionStorage = getDefaultStorage(),
 ): BusinessContextService {
+  const listeners = new Set<() => void>();
+
+  function notifySelectionChanged() {
+    listeners.forEach((listener) => listener());
+  }
+
   return {
     isConfigured: () => api !== undefined,
 
@@ -59,24 +71,93 @@ export function createBusinessContextService(
       return isMembershipRecord(data, businessId);
     },
 
-    async select(userId, businessId) {
+    async select(userId, businessId, businessName) {
       if (!(await this.validateMembership(userId, businessId))) {
         throw new Error('Selecione um estabelecimento ativo vinculado a sua conta.');
       }
 
-      storage.setItem(storageKey(userId), businessId);
+      const name = sanitizeBusinessName(businessName);
+      storage.setItem(
+        storageKey(userId),
+        JSON.stringify({
+          userId,
+          id: businessId,
+          name,
+        } satisfies PersistedBusinessContext),
+      );
+      notifySelectionChanged();
     },
 
     getSelected(userId) {
       if (!isUuid(userId)) return undefined;
-      const selected = storage.getItem(storageKey(userId)) ?? '';
-      return isUuid(selected) ? selected : undefined;
+      return parseStoredContext(storage.getItem(storageKey(userId)), userId)?.id;
+    },
+
+    getSelectedContext(userId) {
+      if (!isUuid(userId)) return undefined;
+      return parseStoredContext(storage.getItem(storageKey(userId)), userId);
     },
 
     clearSelected(userId) {
-      if (isUuid(userId)) storage.removeItem(storageKey(userId));
+      if (isUuid(userId)) {
+        storage.removeItem(storageKey(userId));
+        notifySelectionChanged();
+      }
+    },
+
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
   };
+}
+
+function parseStoredContext(
+  value: string | null,
+  expectedUserId: string,
+): PersistedBusinessContext | undefined {
+  if (!value) return undefined;
+
+  // Seleções anteriores à Parte 6H-C armazenavam somente o UUID. Elas continuam
+  // válidas offline e recebem um rótulo neutro até a próxima seleção online.
+  if (isUuid(value)) {
+    return {
+      userId: expectedUserId,
+      id: value,
+      name: 'Estabelecimento selecionado',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('userId' in parsed) ||
+      !('id' in parsed) ||
+      !('name' in parsed) ||
+      parsed.userId !== expectedUserId ||
+      typeof parsed.id !== 'string' ||
+      !isUuid(parsed.id) ||
+      typeof parsed.name !== 'string' ||
+      !parsed.name.trim()
+    ) {
+      return undefined;
+    }
+
+    return {
+      userId: expectedUserId,
+      id: parsed.id,
+      name: parsed.name.trim(),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizeBusinessName(name: string | undefined): string {
+  const sanitized = name?.trim();
+  return sanitized || 'Estabelecimento selecionado';
 }
 
 function toBusinessSummary(value: unknown): BusinessSummary {

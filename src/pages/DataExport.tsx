@@ -93,8 +93,9 @@ export function DataExport() {
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold text-slate-950">Backup completo</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Inclui categorias, produtos e movimentacoes, inclusive registros excluidos logicamente
-          e o historico disponivel. O arquivo e local: ele nao e enviado para a nuvem.
+          Inclui categorias, produtos e movimentacoes de todos os contextos presentes neste
+          dispositivo: dados locais sem estabelecimento e dados de todos os estabelecimentos,
+          inclusive registros excluidos logicamente. O arquivo nao e enviado para a nuvem.
         </p>
         <button
           type="button"
@@ -109,7 +110,8 @@ export function DataExport() {
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold text-slate-950">Planilhas CSV</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Gere arquivos separados para consultar produtos ou movimentacoes em uma planilha.
+          Gere arquivos device-wide, com todos os contextos, para consultar produtos ou
+          movimentacoes em uma planilha.
           Para preservar todos os dados e relacionamentos, prefira tambem guardar o backup JSON.
         </p>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -137,4 +139,3 @@ export function DataExport() {
     </div>
   );
 }
-

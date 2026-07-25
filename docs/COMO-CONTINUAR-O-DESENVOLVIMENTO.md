@@ -1,6 +1,6 @@
 # Como Continuar o Desenvolvimento do StockFlow
 
-> Guia de retomada consolidado em 17/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
+> Guia de retomada consolidado em 24/07/2026. Deve ser usado pelo desenvolvedor, parceiro de TCC, outra sessão do Codex ou outra IA. Nenhuma conversa anterior é necessária se os arquivos abaixo forem lidos e o repositório for verificado.
 
 O StockFlow é o TCC real. Não o trate, planeje ou adapte como Projeto Integrador sem uma nova solicitação explícita do responsável.
 
@@ -19,13 +19,13 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa atual: 6H-B implementa associação manual integral do legado, com preview e rollback atômico. A UI principal ainda é device-scoped e pull, conflitos e sincronização automática continuam ausentes.
+- Etapa atual: 6H-C implementa runtime local integralmente orientado pelo escopo ativo. A associação manual integral da 6H-B permanece disponível; pull, conflitos e sincronização automática continuam ausentes.
 - Schema Dexie atual: versão 11.
-- Estado de testes comprovado: 50 arquivos, 531 testes aprovados na 6H-B.
-- Evolução mais recente consolidada: Parte 6H-B, com associação explícita do conjunto unscoped e preservação dos eventos existentes, sem carga remota ou pull. A Parte 3 permanece concluída.
-- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-B; regras 43–54 permanecem parcialmente atendidas**.
+- Estado de testes comprovado: 52 arquivos, 557 testes aprovados na 6H-C.
+- Evolução mais recente consolidada: Parte 6H-C, com isolamento explícito do conjunto unscoped e de cada business, sem carga remota ou pull. A Parte 3 permanece concluída.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-C; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: preservar 6D/6F e implementar, em etapa separada, a associação consciente do legado e o runtime scope-aware antes de retomar pull/cursor.
+- Próximo passo recomendado: preservar 6D/6F e definir, em etapa separada, carga inicial remota, cursor e aplicação local segura antes de retomar pull.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -142,7 +142,7 @@ A 6E adiciona `register_stock_movement` em migration nova e libera somente `move
 
 A 6F validou a RPC em Supabase real com entrada e saída, atualização atômica do saldo, incremento de versão, ledger de idempotência e recusa de snapshot divergente. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6F.md`. Naquele momento houve uma ressalva visual no botão “Enviando...”, corrigida em etapa posterior.
 
-A ressalva visual foi corrigida posteriormente. A 6G bloqueou o pull e a 6H-A adicionou o escopo opcional. A 6H-B associa o conjunto legado somente após preview e confirmação, sem inventar eventos ou enviar dados. O próximo avanço deve tornar o runtime scope-aware e definir carga inicial remota antes de qualquer pull.
+A ressalva visual foi corrigida posteriormente. A 6G bloqueou o pull, a 6H-A adicionou o escopo opcional e a 6H-B associa o conjunto legado somente após preview e confirmação. A 6H-C tornou o runtime scope-aware e passou a vincular novas outboxes business. O próximo avanço deve definir carga inicial remota, cursor e aplicação transacional antes de qualquer pull.
 
 Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
@@ -203,4 +203,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e os ADRs relevantes. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas. A 6H-B associa integralmente o legado após preview e confirmação, sem inventar outbox ou enviar dados. Preserve v11 e as validações 6D/6F; o próximo passo é runtime scope-aware e estratégia de carga inicial antes do pull; não faça commit ou push.
+> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e os ADRs relevantes. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas. A 6H-C isola o runtime local por escopo e preserva a associação manual da 6H-B. Preserve v11 e as validações 6D/6F; o próximo passo é estratégia de carga inicial/cursor antes do pull; não faça commit ou push.

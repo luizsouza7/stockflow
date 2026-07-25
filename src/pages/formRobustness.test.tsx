@@ -21,18 +21,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../hooks/useDexieQuery', () => ({ useDexieQuery: mocks.useDexieQuery }));
 vi.mock('../services/productService', () => ({
   productService: {
-    create: mocks.productCreate,
-    update: mocks.productUpdate,
+    createForScope: mocks.productCreate,
+    updateForScope: mocks.productUpdate,
   },
 }));
 vi.mock('../services/stockMovementService', () => ({
-  stockMovementService: { register: mocks.movementRegister },
+  stockMovementService: { registerForScope: mocks.movementRegister },
 }));
 vi.mock('../services/categoryService', () => ({
   categoryService: {
-    create: mocks.categoryCreate,
-    update: mocks.categoryUpdate,
-    softDelete: mocks.categoryDelete,
+    createForScope: mocks.categoryCreate,
+    updateForScope: mocks.categoryUpdate,
+    softDeleteForScope: mocks.categoryDelete,
   },
 }));
 
