@@ -1,9 +1,46 @@
 # Validação Supabase — carga inicial remota
 
-Status: **checklist preparado e ainda não executado contra o projeto Supabase real**.
+Status: **Parte 6H-D validada operacionalmente em Supabase real em 26 de julho de 2026**.
 
-Executar posteriormente apenas com usuário de teste e business descartável/vazio. Não registrar
-tokens, chaves ou UUIDs reais.
+A execução usou o estabelecimento descartável **Validação Carga Inicial 6H-D**. Este registro é
+sanitizado e não contém tokens, chaves, hashes, project refs ou UUIDs reais.
+
+## Resultado operacional confirmado
+
+- As migrations `202607250001_part6h_initial_cloud_load.sql` e
+  `20260726040320_harden_private_function_privileges.sql` foram aplicadas com sucesso; os
+  históricos local e remoto ficaram alinhados.
+- `initialize_business_inventory` e `get_business_inventory_initialization_state` foram
+  confirmadas como `SECURITY DEFINER`, owner `postgres`, `search_path = ''`, com `EXECUTE`
+  somente para `authenticated` e sem acesso para `anon`/`PUBLIC`.
+- `private.inventory_bootstrap_operations` foi confirmada com RLS ativa, sem policies e sem
+  acesso direto para `authenticated`, `anon` ou `PUBLIC`.
+- As funções privadas ficaram restritas conforme o hardening: `add_business_owner_membership`,
+  `set_updated_at` e `is_finite_timestamptz_text` somente para `postgres`;
+  `is_active_business_member` somente para `postgres` e `authenticated`.
+
+Antes da carga, o remoto possuía zero categorias, produtos, movimentos, `sync_operations` e
+operações de bootstrap. O snapshot local continha 1 categoria ativa, 3 produtos (2 ativos e 1
+soft-deleted), saldo total 43, 3 movimentos históricos, 8 eventos reserváveis e nenhum evento
+bloqueador.
+
+Depois da carga foram confirmados:
+
+- 1 categoria e 3 produtos remotos, todos inicialmente em `version = 1`;
+- `deleted_at` preservado no produto excluído e saldo remoto total igual a 43;
+- zero movimentos históricos e zero `sync_operations` normais criados pelo bootstrap;
+- uma única linha no ledger, com `payload_hash` e `idempotency_key` preenchidos;
+- os 8 eventos anteriores reservados e absorvidos, sem replay histórico.
+
+Uma segunda tentativa foi bloqueada porque o remoto já estava inicializado. Em seguida, uma nova
+entrada local de 2 unidades foi enviada pelo push manual normal: somente esse movimento foi criado
+remotamente, o saldo aumentou em 2, a versão do produto avançou de 1 para 2 e nenhuma segunda
+operação de bootstrap foi criada.
+
+## Checklist de regressão complementar
+
+Os itens abaixo permanecem como roteiro para futuras regressões operacionais. Itens não marcados
+não invalidam o resultado executado acima e não devem ser apresentados como já exercitados.
 
 ## Preparação
 

@@ -1,6 +1,6 @@
 # Estado Atual do Projeto StockFlow
 
-> Consolidado em 24/07/2026. Este documento descreve o estado funcional atual na branch `develop`. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem; hashes e histórico de commits devem ser consultados no Git.
+> Consolidado em 26/07/2026. Este documento descreve o estado funcional atual na branch `develop`. Em caso de divergência futura, o código, os testes executados e o histórico Git prevalecem; hashes e histórico de commits devem ser consultados no Git.
 
 ## Identificação e finalidade
 
@@ -17,7 +17,8 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 - A baseline `remoteVersion = 1` é monotônica e gravada atomicamente com a absorção. Dexie evoluiu para v12 porque a operação persistente precisa sobreviver a reload mesmo sem uma outbox âncora.
 - Todo push confirmado de categoria/produto atualiza a `remoteVersion` da entidade antes de arquivar o evento; `movement.created` aplica `productVersion` ao produto, e a próxima escrita usa a maior versão segura entre entidade e outbox synced.
 - Rejeição remota libera reservas; resposta perdida/falha local mantém reparo após reload com a mesma chave e payload. A RPC limita 5 MiB, 5.000 categorias e 20.000 produtos.
-- O ledger privado não concede acesso direto a `authenticated`; as RPCs do ledger usam `SECURITY DEFINER` restrito e a escrita usa lock `FOR UPDATE` no business. A migration ainda aguarda validação operacional real.
+- O ledger privado não concede acesso direto a `authenticated`; as RPCs do ledger usam `SECURITY DEFINER` restrito e a escrita usa lock `FOR UPDATE` no business. A carga inicial e o hardening de privilégios foram aplicados e validados operacionalmente em Supabase real.
+- A validação 6H-D confirmou snapshot com soft delete e saldo preservados, ausência de replay histórico, bloqueio de segunda carga e continuidade do push manual com movimento posterior e avanço de versão.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -240,7 +241,7 @@ O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalo
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
 - Parte 6: **em andamento pelas fatias 6A–6H-D**. O legado pode ser associado, a UI opera por escopo ativo e a carga inicial remota é manual e conservadora. Pull funcional, cursor, conflitos reais, central de conflitos e automação não foram implementados.
-- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a 6H-D possui checklist ainda não executado em `docs/VALIDACAO-SUPABASE-CARGA-INICIAL.md`. A evolução técnica de 6A a 6H-D está consolidada no relatório da Parte 6.
-- Próximo passo recomendado: validar operacionalmente a carga inicial em business descartável e, em etapa separada, definir cursor, aplicação local e reconciliação antes de liberar qualquer pull.
+- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e `docs/VALIDACAO-SUPABASE-CARGA-INICIAL.md`. A evolução técnica de 6A a 6H-D está consolidada no relatório da Parte 6.
+- Próximo passo recomendado: em etapa separada, definir cursor, aplicação local e reconciliação antes de liberar qualquer pull.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

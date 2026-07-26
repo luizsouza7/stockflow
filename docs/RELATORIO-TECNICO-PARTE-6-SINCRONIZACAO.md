@@ -184,7 +184,8 @@ O remoto precisa estar vazio de categorias, produtos, movimentos, operações de
 anterior. A RPC usa sessão, membership, RLS, hash, lock transacional e ledger da carga inteira.
 Categorias são inseridas antes dos produtos e `current_quantity` é escrito diretamente somente
 nesse bootstrap protegido, com `version = 1`. Não existe `upsert`, `DELETE`, sobrescrita ou
-alteração de dados locais de domínio. A validação operacional real está pendente no checklist dedicado.
+alteração de dados locais de domínio. A validação operacional real foi concluída em 26 de julho
+de 2026 e está registrada no checklist dedicado.
 
 A auditoria posterior identificou que `version = 1` precisava de representação local explícita.
 Category e Product agora possuem `remoteVersion?`, gravado atomicamente como 1 após sucesso ou
@@ -275,7 +276,24 @@ A evolução da Parte 6 foi apoiada por testes automatizados de:
 
 Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados, a 6E registrou 439, a revisão da 6G aprovou 461 em 45 arquivos e a 6H-A aprovou 494 em 48. A 6H-B aprovou 531 testes em 50 arquivos; a 6H-C aprovou 557 em 52, a base 6H-D aprovou 597 em 56, as revisões intermediárias aprovaram 614, 634, 652 e 653 em 58, e a auditoria final do lock persistido aprovou 669 em 58.
 
-Além da suíte automatizada, as etapas 6D e 6F foram validadas operacionalmente em Supabase real de teste. A 6D verificou a base remota, Auth, business/membership e push de categorias/produtos; a 6F verificou a RPC de estoque, seus efeitos transacionais e a recusa de snapshot divergente.
+Além da suíte automatizada, as etapas 6D, 6F e 6H-D foram validadas operacionalmente em Supabase
+real de teste. A 6D verificou a base remota, Auth, business/membership e push de
+categorias/produtos; a 6F verificou a RPC de estoque, seus efeitos transacionais e a recusa de
+snapshot divergente.
+
+Na 6H-D, as migrations da carga inicial e do hardening foram aplicadas com histórico local/remoto
+alinhado. Foram confirmados `SECURITY DEFINER`, owner `postgres`, `search_path` vazio, execução
+somente por `authenticated`, ledger privado com RLS sem policies e privilégios restritos das
+funções privadas.
+
+O business descartável **Validação Carga Inicial 6H-D** começou sem categorias, produtos,
+movimentos, `sync_operations` ou bootstrap. O snapshot de 1 categoria, 3 produtos — incluindo um
+soft-deleted —, saldo 43, 3 movimentos históricos e 8 eventos reserváveis resultou em 1 categoria
+e 3 produtos remotos em versão 1, saldo 43, nenhum movimento histórico, nenhuma
+`sync_operation` normal e uma única operação no ledger. Uma segunda carga foi bloqueada. Um novo
+movimento de entrada de 2 unidades foi então enviado normalmente, elevou saldo e versão do
+produto para 2 e não criou outro bootstrap. A evidência sanitizada está em
+[VALIDACAO-SUPABASE-CARGA-INICIAL.md](./VALIDACAO-SUPABASE-CARGA-INICIAL.md).
 
 ## 15. Limitações atuais
 
@@ -292,11 +310,10 @@ Por essas limitações, a Parte 6 permanece em andamento.
 
 ## 16. Próximos passos recomendados
 
-1. Validar operacionalmente a carga inicial 6H-D em business descartável.
-2. Definir cursor confiável, aplicação local transacional e reconciliação antes de liberar pull.
-3. Tratar conflitos básicos após a existência de um pull confiável.
-4. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
-5. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
+1. Definir cursor confiável, aplicação local transacional e reconciliação antes de liberar pull.
+2. Tratar conflitos básicos após a existência de um pull confiável.
+3. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
+4. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
 
 Cada passo deve permanecer separado e receber testes e validação proporcionais ao risco antes do avanço seguinte.
 
@@ -304,4 +321,7 @@ Cada passo deve permanecer separado e receber testes e validação proporcionais
 
 A Parte 6 avançou de maneira incremental, segura e testada: outbox, retry, push protegido, validações reais, RPC atômica, bloqueio consciente do pull, fundação local de escopo, associação explícita do legado, runtime isolado e carga inicial remota por snapshot.
 
-A Parte 6 ainda não está integralmente concluída. A base de push remoto está operacionalmente validada e a carga inicial segura foi implementada, mas ainda requer validação real. Pull funcional, cursor, conflitos reais, central de conflitos e sincronização automática permanecem evoluções futuras explícitas.
+A Parte 6 ainda não está integralmente concluída. A base de push remoto e a carga inicial segura
+estão operacionalmente validadas. Pull funcional, cursor, aplicação local de dados remotos,
+conflitos reais, central de conflitos e sincronização automática permanecem evoluções futuras
+explícitas.

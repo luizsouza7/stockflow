@@ -103,11 +103,25 @@ payload/chave após reload. A v12 não modifica v1–v11, inicia vazia nos upgra
 backup de domínio. `remoteVersion = 1` nunca reduz uma versão local maior; qualquer
 `remoteVersion` já conhecida na preview bloqueia bootstrap por contradizer remoto vazio.
 
+## Validação operacional
+
+A decisão foi validada em Supabase real em 26 de julho de 2026, no business descartável
+**Validação Carga Inicial 6H-D**. As migrations da carga e do hardening foram aplicadas com
+histórico alinhado. As RPCs, owners, `search_path`, grants e isolamento do ledger privado foram
+confirmados.
+
+Partindo de remoto vazio, o snapshot criou 1 categoria e 3 produtos em `version = 1`, preservou
+um produto soft-deleted e saldo total 43, absorveu 8 eventos e não criou movimentos históricos
+nem `sync_operations` normais. Nova tentativa foi bloqueada pelo estado inicializado. Um movimento
+posterior de entrada de 2 unidades seguiu pelo push normal, criou somente o movimento novo,
+incrementou saldo e versão do produto para 2 e não duplicou o ledger de bootstrap.
+
+Esse resultado confirma a decisão existente; não altera seu escopo ou suas consequências.
+
 ## Limitações
 
 Não existe sobrescrita, reset remoto ou carga parcial. Os limites escolhidos são proporcionais a
-pequenos comércios, mas a migration ainda precisa de validação operacional em business
-descartável.
+pequenos comércios.
 
 Pull, cursor, aplicação local remota, reconciliação, conflitos reais, central de conflitos e
 sincronização automática continuam ausentes.

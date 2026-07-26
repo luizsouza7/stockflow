@@ -69,7 +69,7 @@ Também é possível exportar produtos e movimentações em CSV. Os arquivos sã
 
 A rota **Conta** é carregada sob demanda e usa o cliente oficial Supabase quando `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` estão configuradas. Ela oferece cadastro, login, restauração/escuta da sessão e logout local, com mensagens amigáveis e cleanup do listener. Sem configuração ou sem login, o núcleo local permanece disponível. Copie `.env.example` para `.env.local`; nunca use chave `service_role`, senha do banco ou segredo administrativo em variáveis `VITE_*`.
 
-As migrations versionadas em `supabase/migrations` preparam perfis, estabelecimentos, memberships, categorias, produtos, movimentações e o ledger idempotente. As tabelas de negócio usam `business_id`, RLS e policies baseadas em membership ativa e `auth.uid()`. As migrations das Partes 5, 6C e 6E foram validadas operacionalmente; as evidências sanitizadas estão nos registros 6D e 6F.
+As migrations versionadas em `supabase/migrations` preparam perfis, estabelecimentos, memberships, categorias, produtos, movimentações e o ledger idempotente. As tabelas de negócio usam `business_id`, RLS e policies baseadas em membership ativa e `auth.uid()`. As migrations das Partes 5, 6C, 6E e 6H-D, incluindo o hardening de privilégios, foram validadas operacionalmente; as evidências sanitizadas estão nos registros 6D, 6F e 6H-D.
 
 ## Processamento local da outbox — Parte 6B
 
@@ -131,8 +131,8 @@ o ponto inicial remoto e `version` começa em 1. Movimentos históricos permanec
 A carga só ocorre quando previews local e remota comprovam ausência de outbox incompatível e
 business remoto vazio. Eventos `pending`/`error` compatíveis já refletidos no snapshot são
 reservados antes da RPC; eventos posteriores permanecem pendentes. A RPC é atômica, idempotente e serializada por business. Não há `upsert`,
-`DELETE`, sobrescrita, alteração de domínio local ou outbox artificial. A validação real ainda deve seguir
-`docs/VALIDACAO-SUPABASE-CARGA-INICIAL.md`.
+`DELETE`, sobrescrita, alteração de domínio local ou outbox artificial. A validação operacional
+real foi concluída e está registrada em `docs/VALIDACAO-SUPABASE-CARGA-INICIAL.md`.
 
 Após sucesso ou duplicata idempotente, Category e Product recebem localmente `remoteVersion = 1`
 em uma transação atômica, sem alterar estoque, timestamps, soft delete ou movimentos. A mesma
@@ -150,6 +150,11 @@ Se a resposta for perdida ou a finalização local falhar, `initialCloudLoads` p
 payload, hash e IDs reservados. O reparo continua após reload usando a mesma operação; rejeição
 remota definitiva restaura os status anteriores.
 
+Na validação real, um snapshot com 1 categoria, 3 produtos, saldo 43, 3 movimentos históricos e
+8 eventos reserváveis criou somente categorias/produtos em versão 1 e uma operação de bootstrap.
+A segunda carga foi bloqueada. Um movimento posterior de 2 unidades foi enviado normalmente,
+avançou saldo e versão do produto para 2 e não reenviou o histórico.
+
 ## Limitações atuais
 
 - Auth e o push dependem de configuração, aplicação das migrations e validação em um projeto Supabase real;
@@ -160,7 +165,9 @@ remota definitiva restaura os status anteriores.
 - não há testes E2E nem automação de navegador para instalação/offline da PWA, coverage configurada ou CI;
 - os dados permanecem no navegador e no dispositivo utilizados.
 
-Persistência remota manual de categorias/produtos e push atômico de movimentações rastreadas estão preparados; sincronização bidirecional, central de conflitos e validação operacional da migration 6E continuam futuras.
+Persistência remota manual de categorias/produtos, carga inicial e push atômico de movimentações
+rastreadas estão operacionalmente validados; sincronização bidirecional, aplicação local de dados
+remotos e central de conflitos continuam futuras.
 
 ## Estrutura resumida
 

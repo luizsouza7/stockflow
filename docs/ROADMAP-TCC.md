@@ -96,7 +96,14 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso da fatia 6H-D:** previews local/remota e confirmação explícita preparam categorias e produtos em business remoto vazio. Eventos compatíveis pré-snapshot são reservados, tornam-se `absorbed` após sucesso e nunca são enviados individualmente; eventos pós-snapshot permanecem normais. A v12 persiste a operação para recuperação após reload. A RPC atômica preserva UUIDs, soft deletes e saldo inicial, usa ledger idempotente, limita payload e não envia movimentos históricos ou sobrescreve dados. A baseline técnica é monotônica.
 
-**Pendente:** validação operacional real da 6H-D; cursor e aplicação local antes do pull; cenários multi-dispositivo amplos; retry automático, conflitos reais e central de conflitos.
+**Validação da fatia 6H-D:** as migrations da carga inicial e do hardening foram aplicadas em
+Supabase real com histórico alinhado. RPCs e ledger privado tiveram owner, `SECURITY DEFINER`,
+`search_path`, grants e RLS confirmados. O snapshot descartável preservou soft delete, saldo 43 e
+versões 1, absorveu 8 eventos sem criar movimentos históricos ou `sync_operations`; a segunda
+carga foi bloqueada. Um movimento posterior de 2 unidades seguiu pelo push normal, atualizou
+saldo/versão e não duplicou o bootstrap.
+
+**Pendente:** cursor e aplicação local antes do pull; cenários multi-dispositivo amplos; retry automático, conflitos reais e central de conflitos.
 
 **Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6H-D estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
 
@@ -192,4 +199,6 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Preservar os registros das validações 6D e 6F. Validar a carga inicial 6H-D em business descartável; depois definir cursor confiável, aplicação transacional e reconciliação. Só então o pull deve ser retomado. Conflitos reais permanecem etapa separada.
+Preservar os registros das validações 6D, 6F e 6H-D. Definir cursor confiável, aplicação
+transacional e reconciliação em etapa separada. Só então o pull deve ser retomado. Conflitos reais
+permanecem etapa separada.
