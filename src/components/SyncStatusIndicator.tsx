@@ -10,6 +10,8 @@ const EMPTY_SUMMARY: SyncStatusSummary = {
   processing: 0,
   error: 0,
   conflict: 0,
+  reserved: 0,
+  absorbed: 0,
   totalAwaitingAction: 0,
 };
 
@@ -69,6 +71,8 @@ export function SyncStatusIndicator({
       `${summary.error} ${summary.error === 1 ? 'alteracao com erro aguardando' : 'alteracoes com erro aguardando'} nova tentativa local`,
     summary.conflict > 0 &&
       `${summary.conflict} ${summary.conflict === 1 ? 'alteracao marcada' : 'alteracoes marcadas'} como conflito`,
+    summary.reserved > 0 &&
+      `${summary.reserved} ${summary.reserved === 1 ? 'alteracao reservada' : 'alteracoes reservadas'} pela carga inicial`,
   ].filter(Boolean);
 
   return (
@@ -80,6 +84,8 @@ export function SyncStatusIndicator({
           : 'Nenhuma alteracao local pendente.'}{' '}
       Sincronizacao automatica e bidirecional ainda nao esta disponivel. O envio remoto manual pode
       ser realizado na pagina Conta.
+      {summary.absorbed > 0 &&
+        ` ${summary.absorbed} ${summary.absorbed === 1 ? 'evento foi absorvido' : 'eventos foram absorvidos'} pelo snapshot inicial sem envio individual.`}
       {!isOnline && ' Sem internet; o uso local continua disponivel.'}
     </aside>
   );

@@ -4,6 +4,7 @@ import type { Product } from '../../types/Product';
 import type { Category } from '../../types/Category';
 import { generateUuid } from '../../utils/id';
 import type { OutboxEntry } from '../../types/Sync';
+import type { InitialCloudLoadOperation } from '../../types/InitialCloudLoad';
 
 interface LegacyProductWithDecimalPrice {
   price?: unknown;
@@ -59,6 +60,7 @@ export class StockFlowDatabase extends Dexie {
   movements!: Table<Movement, string>;
   categories!: Table<Category, string>;
   outbox!: Table<OutboxEntry, string>;
+  initialCloudLoads!: Table<InitialCloudLoadOperation, string>;
 
   constructor(databaseName = 'stockflow-local-db') {
     super(databaseName);
@@ -308,6 +310,10 @@ export class StockFlowDatabase extends Dexie {
       categories: categorySchemaWithBusiness,
       products: productSchemaWithBusiness,
       movements: movementSchemaWithBusiness,
+    });
+
+    this.version(12).stores({
+      initialCloudLoads: 'id, &businessId, userId, status, createdAt',
     });
   }
 }

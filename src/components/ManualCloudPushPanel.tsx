@@ -22,6 +22,14 @@ import {
   legacyDataAssociationService,
   type LegacyDataAssociationService,
 } from '../services/sync/legacyDataAssociationService';
+import {
+  InitialCloudLoadSection,
+  type InitialCloudLoadAction,
+} from './InitialCloudLoadSection';
+import {
+  initialCloudLoadService,
+  type InitialCloudLoadService,
+} from '../services/sync/initialCloudLoadService';
 
 const EMPTY_SUMMARY: LocalPushSummary = {
   unscoped: 0,
@@ -34,6 +42,7 @@ type ActiveAction =
   | 'bind'
   | 'push'
   | LegacyAssociationAction
+  | InitialCloudLoadAction
   | null;
 
 interface ManualCloudPushPanelProps {
@@ -43,6 +52,7 @@ interface ManualCloudPushPanelProps {
   pushService?: ManualPushService;
   pullService?: ManualPullService;
   associationService?: LegacyDataAssociationService;
+  initialLoadService?: InitialCloudLoadService;
   onBusyChange?(isBusy: boolean): void;
 }
 
@@ -53,6 +63,7 @@ export function ManualCloudPushPanel({
   pushService = manualPushService,
   pullService = manualPullService,
   associationService = legacyDataAssociationService,
+  initialLoadService = initialCloudLoadService,
   onBusyChange,
 }: ManualCloudPushPanelProps) {
   const userId = session.user.id;
@@ -73,7 +84,9 @@ export function ManualCloudPushPanel({
   const currentSelectedId = useRef(selectedId);
   const summaryRequestId = useRef(0);
   const isBusy = activeAction !== null;
-  const selectedBusinessName = businesses.find(({ id }) => id === selectedId)?.name;
+  const selectedBusinessName =
+    businesses.find(({ id }) => id === selectedId)?.name ??
+    contextService.getSelectedContext?.(userId)?.name;
 
   currentUserId.current = userId;
   currentSelectedId.current = selectedId;
@@ -366,9 +379,10 @@ export function ManualCloudPushPanel({
       <div className="mt-6 border-t border-slate-200 pt-5">
         <h4 className="font-semibold text-slate-950">Busca manual da nuvem</h4>
         <p className="mt-2 text-sm text-slate-600">
-          A busca permanece bloqueada porque ainda faltam carga inicial segura, cursor, aplicacao
-          local de dados remotos e tratamento real de conflitos. Esta verificacao e manual e nao
-          baixa dados.
+          A carga inicial segura foi implementada e ainda precisa de validacao operacional real.
+          A busca permanece bloqueada porque faltam cursor, leitura remota, aplicacao local
+          transacional, reconciliacao e tratamento real de conflitos. Esta verificacao e manual
+          e nao baixa dados.
         </p>
         {pullMessage && (
           <p role="status" className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -401,6 +415,21 @@ export function ManualCloudPushPanel({
           void refreshSummary().catch(() => undefined);
         }}
         service={associationService}
+      />
+
+      <InitialCloudLoadSection
+        userId={userId}
+        businessId={selectedId || undefined}
+        businessName={selectedBusinessName}
+        isOnline={isOnline}
+        isBusy={isBusy || isCheckingPull}
+        activeAction={
+          activeAction === 'initial-load-preview' || activeAction === 'initial-load-execute'
+            ? activeAction
+            : null
+        }
+        runCloudAction={runAction}
+        service={initialLoadService}
       />
     </section>
   );

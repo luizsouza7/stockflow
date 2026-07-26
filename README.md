@@ -9,10 +9,10 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Parte 3 do Prompt Mestre concluída.
 - Parte 4 (regras 30–35) concluída no escopo local.
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
-- Schema Dexie atual: **versão 11**, com outbox preservada e índices locais por `businessId`.
+- Schema Dexie atual: **versão 12**, com outbox preservada, índices por `businessId` e operação persistente da carga inicial.
 - Parte 5 concluída no escopo de Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 avançou até a 6H-C: o runtime local opera por escopo ativo, preservando a associação manual do legado e sem carga inicial, pull ou automação.
-- Suíte atual: **557 testes em 52 arquivos**.
+- Parte 6 avançou até a 6H-D: o runtime local opera por escopo ativo e oferece carga inicial remota manual por snapshot, sem replay histórico, pull ou automação.
+- Suíte atual: **669 testes em 58 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -61,7 +61,7 @@ O indicador usa `navigator.onLine` e eventos nativos `online`/`offline`; ele inf
 
 ## Backup e exportação local
 
-A página **Dados** gera, sem rede, um backup JSON device-wide com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `11` como metadado e coleções separadas de categorias, produtos e movimentações. A outbox não integra o arquivo de backup de domínio. A leitura inclui todos os escopos presentes no dispositivo, soft deletes, histórico e `businessId` quando presente, preservando sua ausência nos dados unscoped.
+A página **Dados** gera, sem rede, um backup JSON device-wide com identificador `stockflow-backup`, versão de formato `1`, data de exportação, schema Dexie `12` como metadado e coleções separadas de categorias, produtos e movimentações. A outbox e a store técnica `initialCloudLoads` não integram o arquivo de backup de domínio. A leitura inclui todos os escopos presentes no dispositivo, soft deletes, histórico e `businessId` quando presente, preservando sua ausência nos dados unscoped.
 
 Também é possível exportar produtos e movimentações em CSV. Os arquivos são baixados localmente e não alteram o banco nem são enviados a servidor. Não há importação/restauração, backup automático ou recuperação em nuvem; a importação permanece futura até existir estratégia rigorosamente validada e segura.
 
@@ -75,7 +75,7 @@ As migrations versionadas em `supabase/migrations` preparam perfis, estabelecime
 
 O processador local recebe um executor injetado e não é chamado pela UI, pelo boot, pelo login nem por eventos de conectividade. Em uma transação Dexie, ele seleciona `pending` e `error` cujo `nextAttemptAt` venceu, ordena por `createdAt` e `id`, limita o lote a 25 itens por padrão (máximo de 100) e marca o lote como `processing` antes do executor. O claim transacional impede que duas execuções concorrentes obtenham o mesmo evento; `updatedAt` também atua como token simples para não finalizar um claim que já tenha sido recuperado.
 
-Sucesso de executor local/testável remove o evento. O executor remoto da 6C solicita arquivamento como `synced` e guarda somente `remoteVersion`, necessária para updates otimistas posteriores. Falhas viram `error`, incrementam `attemptCount`, guardam `lastError` sanitizado e calculam `nextAttemptAt` em 1, 5, 15, 30 e, depois, no máximo 60 minutos. Não há retry automático; uma função manual permite recolocar `processing` antigo em `pending` após interrupção. `conflict` está previsto no contrato e no indicador, mas não é processado nem resolvido.
+Sucesso de executor local/testável remove o evento. O executor remoto da 6C solicita arquivamento como `synced` e guarda somente `remoteVersion`, necessária para updates otimistas posteriores. Falhas viram `error`, incrementam `attemptCount`, guardam `lastError` sanitizado e calculam `nextAttemptAt` em 1, 5, 15, 30 e, depois, no máximo 60 minutos. A carga inicial usa dois estados adicionais: `reserved` impede claim durante a operação e `absorbed` registra que o evento foi incorporado ao snapshot sem push individual. Não há retry automático; uma função manual permite recolocar `processing` antigo em `pending` após interrupção. `conflict` está previsto no contrato e no indicador, mas não é processado nem resolvido.
 
 ## Push remoto manual — Parte 6C
 
@@ -122,10 +122,38 @@ Trocar business não move nem associa dados, não dispara push/pull e invalida c
 formulários do contexto anterior. O layout identifica discretamente se novas operações usarão
 dados locais ou o estabelecimento selecionado.
 
+## Carga inicial remota — Parte 6H-D
+
+A Conta permite revisar e confirmar um snapshot das categorias e produtos do business ativo.
+UUIDs, soft deletes, relações, preços, estoque mínimo e saldo atual são preservados; o saldo vira
+o ponto inicial remoto e `version` começa em 1. Movimentos históricos permanecem locais.
+
+A carga só ocorre quando previews local e remota comprovam ausência de outbox incompatível e
+business remoto vazio. Eventos `pending`/`error` compatíveis já refletidos no snapshot são
+reservados antes da RPC; eventos posteriores permanecem pendentes. A RPC é atômica, idempotente e serializada por business. Não há `upsert`,
+`DELETE`, sobrescrita, alteração de domínio local ou outbox artificial. A validação real ainda deve seguir
+`docs/VALIDACAO-SUPABASE-CARGA-INICIAL.md`.
+
+Após sucesso ou duplicata idempotente, Category e Product recebem localmente `remoteVersion = 1`
+em uma transação atômica, sem alterar estoque, timestamps, soft delete ou movimentos. A mesma
+transação conclui os eventos reservados como `absorbed`, preservando-os para auditoria.
+Esse baseline é usado por updates/deletes posteriores quando ainda não existe push synced; uma
+versão posterior confirmada de categoria/produto também atualiza a entidade, e `movement.created`
+atualiza o produto com `productVersion` sem reaplicar estoque. A versão esperada é sempre o máximo
+seguro entre entidade e outbox synced. O ledger é privado e não concede acesso direto a
+`authenticated`. As RPCs do ledger usam `SECURITY DEFINER` restrito, validam auth/membership,
+e a escrita bloqueia a linha do business, revalida e protege a membership ativa, rejeita
+timestamps inválidos/não finitos, limita o payload a 5 MiB/5.000 categorias/20.000 produtos e
+coordena escritores filhos por suas FKs.
+
+Se a resposta for perdida ou a finalização local falhar, `initialCloudLoads` preserva chave,
+payload, hash e IDs reservados. O reparo continua após reload usando a mesma operação; rejeição
+remota definitiva restaura os status anteriores.
+
 ## Limitações atuais
 
 - Auth e o push dependem de configuração, aplicação das migrations e validação em um projeto Supabase real;
-- o push é parcial e manual; o pull funcional continua bloqueado por ausência de carga inicial segura, cursor, aplicação local remota e resolução real de conflitos;
+- o push e a carga inicial são manuais; o pull funcional continua bloqueado por ausência de cursor, aplicação local remota, reconciliação e resolução real de conflitos;
 - movimentações legadas sem snapshots continuam bloqueadas, e divergências de estoque permanecem em erro/backoff até uma etapa futura de conflitos;
 - eventos antigos sem `businessId` nunca são enviados automaticamente, e updates sem versão remota segura permanecem em erro;
 - não há importação/restauração, backup automático ou backup em nuvem;
@@ -174,13 +202,13 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 ## Testes
 
-A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, escopo local e lifecycle entre conexões, incluindo v1 → v11 e v10 → v11.
+A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, escopo local e lifecycle entre conexões, incluindo v1 → v12, v10 → v12 e v11 → v12.
 
-Estado validado nesta etapa: **557 testes aprovados em 52 arquivos**.
+Estado validado nesta etapa: **669 testes aprovados em 58 arquivos**.
 
 ## Banco local e migrations
 
-O banco padrão é `stockflow-local-db`. O schema final v11 contém `products`, `categories`, `movements` e `outbox`.
+O banco padrão é `stockflow-local-db`. O schema final v12 contém `products`, `categories`, `movements`, `outbox` e `initialCloudLoads`.
 
 | Versão | Evolução principal |
 | --- | --- |
@@ -191,9 +219,10 @@ O banco padrão é `stockflow-local-db`. O schema final v11 contém `products`, 
 | v5 | categorias convertidas em entidades |
 | v6–v9 | migração segura dos IDs e relações para UUID e limpeza das stores temporárias |
 | v10 | adição isolada da outbox persistente |
+| v12 | operação persistente de reserva/recuperação da carga inicial |
 | v11 | índices `businessId` nas três stores de domínio, sem backfill |
 
-As migrations preservam dados históricos e relações. O teste permanente v1 → v11 mantém o contrato histórico; v10 → v11 preserva também a outbox e comprova que um evento associado não atribui `businessId` à entidade.
+As migrations preservam dados históricos e relações. O teste permanente v1 → v12 mantém o contrato histórico; v10 → v12 preserva a outbox, e v11 → v12 adiciona somente a store técnica vazia.
 
 ## Decisões arquiteturais
 
@@ -230,7 +259,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-C, com runtime local isolado por escopo e associação explícita do legado sem upload automático. Carga inicial remota, pull/cursor, conflitos reais e sincronização automática continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-D, com runtime local isolado, associação explícita do legado e carga inicial remota manual por snapshot. Pull/cursor, conflitos reais e sincronização automática continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

@@ -88,7 +88,7 @@ afterAll(async () => {
 });
 
 describe('backup local JSON', () => {
-  it('gera formato proprio v1 com schema Dexie v11 e nome previsivel', async () => {
+  it('gera formato proprio v1 com schema Dexie v12 e nome previsivel', async () => {
     const file = await backupExportService.createJsonBackup(
       new Date('2026-07-15T15:30:00.000Z'),
     );
@@ -104,7 +104,7 @@ describe('backup local JSON', () => {
       exportedAt: '2026-07-15T15:30:00.000Z',
       databaseSchemaVersion: STOCKFLOW_DATABASE_SCHEMA_VERSION,
     });
-    expect(localDb.verno).toBe(11);
+    expect(localDb.verno).toBe(12);
   });
 
   it('preserva categorias, produtos ativos, soft deletes, campos opcionais e relacionamentos', async () => {
@@ -136,6 +136,19 @@ describe('backup local JSON', () => {
       previousQuantity: 5,
       resultingQuantity: 8,
     });
+  });
+
+  it('preserva remoteVersion no JSON e omite o metadado tecnico do CSV operacional', async () => {
+    await localDb.categories.update(category.id, { remoteVersion: 1 });
+    await localDb.products.update(activeProduct.id, { remoteVersion: 2 });
+
+    const json = JSON.parse((await backupExportService.createJsonBackup()).content);
+    const csv = await backupExportService.createProductsCsv();
+
+    expect(json.data.categories[0].remoteVersion).toBe(1);
+    expect(json.data.products.find(({ id }: Product) => id === activeProduct.id)?.remoteVersion)
+      .toBe(2);
+    expect(csv.content).not.toContain('remoteVersion');
   });
 
   it('preserva businessId quando presente e ausencia quando legado em JSON e CSV', async () => {
@@ -235,6 +248,15 @@ describe('backup local JSON', () => {
     expect(() => validateBackup(invalidLegacy)).toThrow(
       'Movimentacao legada nao pode conter snapshots de estoque.',
     );
+
+    expect(() => validateBackup({
+      ...invalidLegacy,
+      data: {
+        ...invalidLegacy.data,
+        categories: [{ ...category, remoteVersion: 0 }],
+        movements: [],
+      },
+    })).toThrow('A versao remota conhecida deve ser um inteiro positivo.');
   });
 });
 

@@ -3,9 +3,14 @@ import type { Category } from '../types/Category';
 import {
   isEntityInBusiness,
   isUnscopedEntity,
+  isUuid,
   validateBusinessId,
   type DataScopeReference,
 } from '../domain/businessScope';
+import {
+  getValidatedRemoteVersion,
+  validateOptionalRemoteVersion,
+} from '../domain/remoteVersion';
 
 type CategoryChanges = Partial<Omit<Category, 'id' | 'businessId'>>;
 
@@ -64,6 +69,46 @@ export const categoryRepository = {
     validateBusinessId(businessId);
     const category = await localDb.categories.get(id);
     return category && isEntityInBusiness(category, businessId) ? category : undefined;
+  },
+
+  async findRemoteVersionForBusiness(
+    id: string,
+    businessId: string,
+  ): Promise<number | undefined> {
+    const category = await this.findByIdForBusiness(id, businessId);
+    return category
+      ? getValidatedRemoteVersion(category.remoteVersion)
+      : undefined;
+  },
+
+  async updateRemoteVersionForBusiness(
+    id: string,
+    businessId: string,
+    remoteVersion: number,
+  ): Promise<void> {
+    validateBusinessId(businessId);
+    if (!isUuid(id)) {
+      throw new Error('O identificador da categoria deve ser um UUID valido.');
+    }
+    validateOptionalRemoteVersion(remoteVersion);
+
+    await localDb.transaction('rw', localDb.categories, async () => {
+      const category = await localDb.categories.get(id);
+      if (!category || !isEntityInBusiness(category, businessId)) {
+        throw new Error(
+          'A categoria confirmada remotamente nao existe neste estabelecimento.',
+        );
+      }
+      const currentRemoteVersion = getValidatedRemoteVersion(
+        category.remoteVersion,
+      );
+      await localDb.categories.update(id, {
+        remoteVersion:
+          currentRemoteVersion === undefined
+            ? remoteVersion
+            : Math.max(currentRemoteVersion, remoteVersion),
+      });
+    });
   },
 
   async findByIdForScope(

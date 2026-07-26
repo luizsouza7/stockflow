@@ -9,6 +9,9 @@ import {
   syncRemoteGateway,
   type SyncRemoteGateway,
 } from './syncRemoteGateway';
+import { categoryRepository } from '../../repositories/categoryRepository';
+import { productRepository } from '../../repositories/productRepository';
+import { getValidatedRemoteVersion } from '../../domain/remoteVersion';
 
 interface ControlledPushInput {
   userId?: string;
@@ -122,6 +125,14 @@ export function createManualPushService(
         return blockedPush('O estabelecimento selecionado nao pertence mais a esta conta.');
       }
 
+      if (
+        await outboxRepository.hasBootstrapReservationForBusiness(businessId!)
+      ) {
+        return blockedPush(
+          'A carga inicial deste estabelecimento esta reservada. Conclua ou repare essa operacao antes do push manual.',
+        );
+      }
+
       const executor = createRemoteExecutor(gateway, userId!, businessId!);
       const result = await processOutboxBatch({
         executor,
@@ -152,23 +163,91 @@ function createRemoteExecutor(
     const isCreation = entry.operation.endsWith('.created');
     const expectedVersion = isCreation
       ? undefined
-      : await outboxRepository.findLatestSyncedVersion(
-          entry.entityType,
-          entry.entityId,
-          userId,
-          businessId,
-        );
+      : await resolveExpectedVersion(entry, userId, businessId);
 
     if (!isCreation && expectedVersion === undefined) {
       throw new Error('A alteracao local nao possui uma versao remota segura para atualizacao.');
     }
 
     const result = await gateway.push(entry, expectedVersion);
+    await persistConfirmedRemoteVersion(entry, businessId, result);
     return {
       archiveAsSynced: true,
       remoteVersion: result.remoteVersion,
     };
   };
+}
+
+async function resolveExpectedVersion(
+  entry: Parameters<OutboxExecutor>[0],
+  userId: string,
+  businessId: string,
+): Promise<number | undefined> {
+  const syncedVersion = await outboxRepository.findLatestSyncedVersion(
+    entry.entityType,
+    entry.entityId,
+    userId,
+    businessId,
+  );
+  let entityRemoteVersion: number | undefined;
+  if (entry.entityType === 'category') {
+    entityRemoteVersion = await categoryRepository.findRemoteVersionForBusiness(
+      entry.entityId,
+      businessId,
+    );
+  } else if (entry.entityType === 'product') {
+    entityRemoteVersion = await productRepository.findRemoteVersionForBusiness(
+      entry.entityId,
+      businessId,
+    );
+  }
+
+  if (syncedVersion === undefined) return entityRemoteVersion;
+  if (entityRemoteVersion === undefined) return syncedVersion;
+  return Math.max(syncedVersion, entityRemoteVersion);
+}
+
+async function persistConfirmedRemoteVersion(
+  entry: Parameters<OutboxExecutor>[0],
+  businessId: string,
+  result: Awaited<ReturnType<SyncRemoteGateway['push']>>,
+): Promise<void> {
+  if (entry.entityType === 'category') {
+    await categoryRepository.updateRemoteVersionForBusiness(
+      entry.entityId,
+      businessId,
+      getRequiredRemoteVersion(result.remoteVersion),
+    );
+    return;
+  }
+
+  if (entry.entityType === 'product') {
+    await productRepository.updateRemoteVersionForBusiness(
+      entry.entityId,
+      businessId,
+      getRequiredRemoteVersion(result.remoteVersion),
+    );
+    return;
+  }
+
+  const productId =
+    'productId' in entry.payload ? entry.payload.productId : undefined;
+  if (typeof productId !== 'string') {
+    throw new Error('A movimentacao confirmada nao identifica um produto valido.');
+  }
+  await productRepository.updateRemoteVersionForBusiness(
+    productId,
+    businessId,
+    getRequiredRemoteVersion(result.productVersion),
+  );
+}
+
+function getRequiredRemoteVersion(value: unknown): number {
+  const remoteVersion = getValidatedRemoteVersion(value);
+  if (remoteVersion === undefined) {
+    throw new Error('O servidor nao retornou uma versao remota valida.');
+  }
+  return remoteVersion;
 }
 
 function validatePrerequisites({

@@ -90,7 +90,7 @@ export function createManualPullService(
 
       return blocked(
         'pull-foundation-required',
-        'Busca remota bloqueada com seguranca: ainda nao existem estrategia segura de carga inicial, cursor, aplicacao local de dados remotos ou tratamento real de conflitos. Nenhum dado remoto foi baixado.',
+        'Busca remota bloqueada com seguranca: a carga inicial foi implementada e ainda precisa de validacao operacional real; faltam cursor, leitura remota, aplicacao local transacional, reconciliacao e tratamento real de conflitos. Nenhum dado remoto foi baixado.',
       );
     },
   };

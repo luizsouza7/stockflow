@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OutboxEntry, OutboxStatus } from '../../types/Sync';
+import type { InitialCloudLoadOperation } from '../../types/InitialCloudLoad';
 import { localDb } from '../db/localDb';
 import {
   MAX_OUTBOX_BACKOFF_MS,
@@ -19,6 +20,8 @@ function createEntry({
   updatedAt = createdAt,
   attemptCount = 0,
   nextAttemptAt,
+  businessId,
+  bootstrapReservation,
 }: Partial<OutboxEntry> & { status?: OutboxStatus } = {}): OutboxEntry {
   return {
     id,
@@ -37,12 +40,40 @@ function createEntry({
     createdAt,
     updatedAt,
     nextAttemptAt,
+    businessId,
+    bootstrapReservation,
     idempotencyKey: `test:${id}`,
   };
 }
 
 async function addEntries(...entries: OutboxEntry[]): Promise<void> {
   await localDb.outbox.bulkAdd(entries);
+}
+
+function createInitialLoadOperation(
+  businessId: string,
+  status: InitialCloudLoadOperation['status'],
+): InitialCloudLoadOperation {
+  const id = `inventory-bootstrap:${businessId}`;
+  return {
+    id,
+    userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    businessId,
+    businessName: 'Loja',
+    status,
+    idempotencyKey: id,
+    payloadText: '{"categories":[],"products":[]}',
+    payloadHash: 'a'.repeat(64),
+    localSignature: 'b'.repeat(64),
+    categoryIds: [],
+    productIds: [],
+    movementIds: [],
+    reservedEventIds: [],
+    createdAt: BASE_TIME.toISOString(),
+    ...(status === 'remote-confirmed'
+      ? { remoteResult: { categories: 0, products: 0, wasDuplicate: false } }
+      : {}),
+  };
 }
 
 describe('processamento local da outbox', () => {
@@ -87,6 +118,63 @@ describe('processamento local da outbox', () => {
     await processOutboxBatch({ executor, now: () => BASE_TIME });
 
     expect(executor).not.toHaveBeenCalled();
+  });
+
+  it.each(['reserved', 'absorbed'] as const)(
+    'nao seleciona evento %s pelo processador normal',
+    async (status) => {
+      await addEntries(createEntry({ status }));
+      const executor = vi.fn();
+
+      await processOutboxBatch({ executor, now: () => BASE_TIME });
+
+      expect(executor).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['reserved', 'remote-confirmed'] as const)(
+    'operacao %s sem eventos reservados bloqueia eventos pos-snapshot, mas nao outro business',
+    async (status) => {
+    const businessId = '11111111-1111-4111-8111-111111111111';
+    const otherBusinessId = '22222222-2222-4222-8222-222222222222';
+    const sameBusinessPending = createEntry({ businessId });
+    const otherBusinessPending = createEntry({ businessId: otherBusinessId });
+    await localDb.initialCloudLoads.add(
+      createInitialLoadOperation(businessId, status),
+    );
+    await addEntries(sameBusinessPending, otherBusinessPending);
+    const executor = vi.fn().mockResolvedValue(undefined);
+
+    const result = await processOutboxBatch({
+      executor,
+      now: () => BASE_TIME,
+    });
+
+    expect(result.claimed).toBe(1);
+    expect(executor).toHaveBeenCalledWith(
+      expect.objectContaining({ id: otherBusinessPending.id }),
+    );
+    expect(await localDb.outbox.get(sameBusinessPending.id)).toMatchObject({
+      status: 'pending',
+    });
+    },
+  );
+
+  it('operacao completed deixa de bloquear eventos posteriores', async () => {
+    const businessId = '11111111-1111-4111-8111-111111111111';
+    const pending = createEntry({ businessId });
+    await localDb.initialCloudLoads.add(
+      createInitialLoadOperation(businessId, 'completed'),
+    );
+    await addEntries(pending);
+    const executor = vi.fn().mockResolvedValue(undefined);
+
+    const result = await processOutboxBatch({ executor, now: () => BASE_TIME });
+
+    expect(result).toEqual({ claimed: 1, succeeded: 1, failed: 0 });
+    expect(executor).toHaveBeenCalledWith(
+      expect.objectContaining({ id: pending.id }),
+    );
   });
 
   it('nao seleciona evento processing recente', async () => {

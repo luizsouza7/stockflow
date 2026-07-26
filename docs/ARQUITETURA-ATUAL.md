@@ -94,7 +94,7 @@ Os repositories atuais são módulos concretos. Existe apenas a persistência lo
 - versões e funções de upgrade;
 - stores temporárias usadas somente na migration de UUID.
 
-O schema atual é a versão 11 e contém `products`, `movements`, `categories` e `outbox`. A v10 adicionou a outbox; a v11 adiciona somente índices `businessId` às três stores de domínio, sem backfill ou alteração dos registros. A biblioteca Dexie instalada é 4.4.4.
+O schema atual é a versão 12 e contém `products`, `movements`, `categories`, `outbox` e `initialCloudLoads`. A v10 adicionou a outbox; a v11 adicionou somente índices `businessId` às três stores de domínio; a v12 adiciona a operação técnica persistente da carga inicial, sem backfill ou alteração dos registros anteriores. A biblioteca Dexie instalada é 4.4.4.
 
 `src/services/db/databaseLifecycle.ts` observa a instância central antes do primeiro render. Em `versionchange`, a conexão antiga é fechada e a UI exige uma decisão explícita de reload. Em `blocked`, a aba que tenta o upgrade mostra orientação clara e envia somente `{ type: 'DATABASE_UPGRADE_BLOCKED' }` pelo canal `stockflow-database-lifecycle`; abas que reconhecem essa mensagem fecham suas conexões. Mensagens desconhecidas são ignoradas e o canal é opcional. As subscriptions da UI recebem estado, mas não controlam a instalação dos listeners Dexie.
 
@@ -114,7 +114,7 @@ As migrations preservam dados conhecidos e abortam diante de situações que nã
 
 ### Testes
 
-A arquitetura é verificada por 52 arquivos e 557 testes aprovados:
+A arquitetura é verificada por 58 arquivos e 669 testes aprovados:
 
 - domínio e formatadores: regras puras;
 - services/repositories: coordenação e persistência;
@@ -206,7 +206,7 @@ Categoria possui identidade, timestamps, soft delete e `syncStatus`. Produto gua
 
 ## Offline-first atual
 
-O IndexedDB continua sendo a fonte de verdade operacional. A outbox registra a intenção na mesma transação. O push remoto é uma ação manual adicional: não bloqueia o trabalho local e não altera entidades ao vincular contexto. A 6G acrescenta somente uma guarda manual de pull; ela não consulta entidades remotas nem escreve localmente.
+O IndexedDB continua sendo a fonte de verdade operacional. A outbox registra a intenção na mesma transação. O push remoto é uma ação manual adicional. A 6H-D acrescenta carga inicial manual por snapshot: lê o contexto local sem escrever e cria categorias/produtos somente após prova remota de vazio. A guarda de pull continua sem baixar ou aplicar entidades.
 
 O `OfflineBanner` comunica que a aplicação continua usando os dados armazenados no dispositivo. Ele não promete sincronização, nuvem ou compartilhamento entre dispositivos.
 
@@ -289,7 +289,7 @@ Nada chama `manualPushService.push()` no boot, Auth, `onAuthStateChange`, retorn
 
 ## Continuidade oficial
 
-O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6H-C: existe associação explícita do legado e runtime integral por escopo ativo, mas carga inicial, pull, conflitos reais e automação continuam ausentes. Snapshots não são Parte 4.
+O StockFlow é o TCC real e o Prompt Mestre, dividido oficialmente em 15 partes pelos intervalos de regras, é o plano oficial. As Partes 3 e 4 estão concluídas; a Parte 5 está concluída e validada. A Parte 6 avançou até a 6H-D: existe associação explícita do legado, runtime integral por escopo ativo e carga inicial remota por snapshot. Pull, conflitos reais e automação continuam ausentes. Snapshots não são Parte 4.
 
 ## Auth, sessão e isolamento remoto preparado
 
@@ -305,11 +305,15 @@ O vínculo da outbox 6C continua disponível para eventos antigos: associar pend
 
 A 6H-B adiciona `LegacyDataAssociationSection → legacyDataAssociationService → legacyDataAssociationRepository → Dexie`. A preview lê as quatro stores sem escrever. A confirmação repete validações e usa uma única transação `categories/products/movements/outbox`, condicionada à mesma assinatura de snapshot. Nenhuma outbox histórica é criada e nenhum gateway remoto participa da operação.
 
+A 6H-D adiciona `InitialCloudLoadSection → initialCloudLoadService → initialCloudLoadRepository / initialCloudLoadGateway`. A preview distingue eventos compatíveis `pending`/`error` de bloqueadores. Na confirmação, o repository relê o snapshot em uma transação, compara sua assinatura, persiste a operação em `initialCloudLoads` e move exatamente os eventos anteriores para `reserved`; o claim normal bloqueia o business enquanto a reserva estiver ativa. Após commit/duplicata, a mesma transação grava a baseline monotônica e muda os eventos para `absorbed` com motivo `initial-cloud-load-snapshot`. Eventos pós-snapshot permanecem `pending`; movimentos anteriores nunca são enviados, enquanto movimentos posteriores voltam ao push normal. `synced` continua significando confirmação individual.
+
+Todo push confirmado atualiza a versão da entidade antes de arquivar o evento; `movement.created` usa `productVersion` sem alterar novamente o estoque, e updates/deletes usam o máximo entre entidade e outbox synced. Falha remota definitiva restaura a reserva; resposta perdida ou falha local permanece recuperável após reload com a mesma chave/payload. `remoteVersion` já conhecida bloqueia bootstrap em remoto vazio. O gateway usa RPCs protegidas para preview e execução. As RPCs usam `SECURITY DEFINER` restrito porque o ledger privado não concede acesso direto a `authenticated`; ambas validam auth/membership, e `initialize_business_inventory` bloqueia a linha do business com `FOR UPDATE`, revalida/bloqueia a membership ativa com `FOR SHARE`, rejeita timestamps inválidos ou não finitos, limita o payload a 5 MiB/5.000 categorias/20.000 produtos, repete a prova de vazio e insere categorias antes de produtos. As FKs dos escritores filhos coordenam com o lock pai. Não há `stock_movements` históricos, outbox artificial, `upsert`, `DELETE`, cursor ou pull.
+
 ## Backup e exportação
 
 O fluxo é `UI → backupExportService → Dexie`. O acesso direto do service ao `localDb` é restrito à transação somente leitura que captura `categories`, `products` e `movements` como um único snapshot lógico; não foi criada uma abstração repository artificial para uma leitura atômica multi-tabela.
 
-O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. Ele permanece device-wide e inclui unscoped e todos os businesses presentes. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 11`, preserva `businessId` quando presente e sua ausência no legado, além de validar relações no mesmo escopo. Produtos e movimentações também são exportados em CSV device-wide com a coluna de escopo. Importação/restauração não foi implementada.
+O backup representa dados do StockFlow em JSON, não estruturas internas do IndexedDB. Ele permanece device-wide e inclui unscoped e todos os businesses presentes. O formato `stockflow-backup` v1 registra `exportedAt` e `databaseSchemaVersion: 12`, preserva `businessId` quando presente e sua ausência no legado, além de validar relações no mesmo escopo. A store técnica `initialCloudLoads` e a outbox não integram o backup de domínio. Produtos e movimentações também são exportados em CSV device-wide com a coluna de escopo. Importação/restauração não foi implementada.
 
 ## Referências arquiteturais
 

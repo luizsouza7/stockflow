@@ -14,13 +14,17 @@ function summary({
   processing = 0,
   error = 0,
   conflict = 0,
+  reserved = 0,
+  absorbed = 0,
 }: Partial<SyncStatusSummary> = {}): SyncStatusSummary {
   return {
     pending,
     processing,
     error,
     conflict,
-    totalAwaitingAction: pending + processing + error + conflict,
+    reserved,
+    absorbed,
+    totalAwaitingAction: pending + processing + error + conflict + reserved,
   };
 }
 
@@ -29,6 +33,8 @@ function renderIndicator({
   processing = 0,
   error = 0,
   conflict = 0,
+  reserved = 0,
+  absorbed = 0,
   isOnline = true,
   lifecycle = 'normal',
 }: {
@@ -36,13 +42,15 @@ function renderIndicator({
   processing?: number;
   error?: number;
   conflict?: number;
+  reserved?: number;
+  absorbed?: number;
   isOnline?: boolean;
   lifecycle?: DatabaseLifecycleState['status'];
 } = {}) {
   const service = {
     getStatusSummary: vi
       .fn()
-      .mockResolvedValue(summary({ pending, processing, error, conflict })),
+      .mockResolvedValue(summary({ pending, processing, error, conflict, reserved, absorbed })),
   };
   render(
     <SyncStatusIndicator
@@ -73,6 +81,12 @@ describe('indicador local de sincronizacao futura', () => {
   it('mostra conflict previsto sem prometer resolucao', async () => {
     renderIndicator({ conflict: 1 });
     expect(await screen.findByText(/1 alteracao marcada como conflito/)).toBeTruthy();
+  });
+
+  it('diferencia eventos reservados e absorvidos pelo bootstrap', async () => {
+    renderIndicator({ reserved: 1, absorbed: 2 });
+    expect(await screen.findByText(/1 alteracao reservada pela carga inicial/)).toBeTruthy();
+    expect(screen.getByText(/2 eventos foram absorvidos pelo snapshot inicial sem envio individual/)).toBeTruthy();
   });
 
   it('informa push manual sem prometer sincronizacao automatica ou bidirecional', async () => {

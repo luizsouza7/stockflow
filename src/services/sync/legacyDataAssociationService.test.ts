@@ -272,7 +272,7 @@ describe('associacao explicita integral de dados legados', () => {
       associated: { categories: 0, products: 0, movements: 0, outboxUpdated: 0 },
     });
     expect(await snapshotDatabase()).toEqual(afterFirst);
-    expect(localDb.verno).toBe(11);
+    expect(localDb.verno).toBe(12);
   });
 
   it('entidades ja scoped permanecem integralmente intactas', async () => {

@@ -84,6 +84,21 @@ function createVersionTenDatabase(name: string) {
   return database;
 }
 
+function createVersionElevenDatabase(name: string) {
+  const database = new Dexie(name);
+  database.version(11).stores({
+    products:
+      'id, businessId, name, code, categoryId, currentQuantity, minimumStock, syncStatus, updatedAt, deletedAt',
+    movements:
+      'id, businessId, productId, type, date, syncStatus',
+    categories:
+      'id, businessId, name, updatedAt, deletedAt, syncStatus',
+    outbox:
+      'id, [entityType+entityId], operation, status, createdAt, updatedAt, nextAttemptAt, &idempotencyKey, userId, businessId',
+  });
+  return database;
+}
+
 function schemaSignature(database: Dexie) {
   return database.tables
     .map((table) => ({
@@ -99,14 +114,14 @@ describe('migracoes do banco local', () => {
     await Promise.all(databaseNames.splice(0).map((name) => Dexie.delete(name)));
   });
 
-  it('v11 nao usa deleteDatabase, clear ou backfill de businessId', () => {
+  it('v12 nao usa deleteDatabase, clear ou backfill de businessId', () => {
     const source = readFileSync(new URL('./localDb.ts', import.meta.url), 'utf8');
     expect(source).not.toMatch(/deleteDatabase|\.clear\s*\(/);
     expect(source).not.toMatch(/businessId\s*[:=].*outbox|outbox.*businessId\s*[:=]/i);
   });
 
-  it('migra dados historicos diretamente da versao 1 ate o schema atual v11', async () => {
-    const databaseName = `stockflow-v1-to-v11-${crypto.randomUUID()}`;
+  it('migra dados historicos diretamente da versao 1 ate o schema atual v12', async () => {
+    const databaseName = `stockflow-v1-to-v12-${crypto.randomUUID()}`;
     databaseNames.push(databaseName);
     const legacyDatabase = createVersionOneDatabase(databaseName);
     const createdAt = '2025-01-10T09:00:00.000Z';
@@ -147,9 +162,10 @@ describe('migracoes do banco local', () => {
     const product = products[0];
     const movement = movements[0];
 
-    expect(migratedDatabase.verno).toBe(11);
+    expect(migratedDatabase.verno).toBe(12);
     expect(migratedDatabase.tables.map((table) => table.name).sort()).toEqual([
       'categories',
+      'initialCloudLoads',
       'movements',
       'outbox',
       'products',
@@ -158,6 +174,7 @@ describe('migracoes do banco local', () => {
     expect(movements).toHaveLength(1);
     expect(categories).toHaveLength(1);
     expect(await migratedDatabase.outbox.count()).toBe(0);
+    expect(await migratedDatabase.initialCloudLoads.count()).toBe(0);
     expect(product).toMatchObject({
       id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
       name: 'Cafe historico',
@@ -642,9 +659,10 @@ describe('migracoes do banco local', () => {
       reopenedMovements.map((movement) => [movement.note, movement]),
     );
 
-    expect(reopenedDatabase.verno).toBe(11);
+    expect(reopenedDatabase.verno).toBe(12);
     expect(reopenedDatabase.tables.map((table) => table.name).sort()).toEqual([
       'categories',
+      'initialCloudLoads',
       'movements',
       'outbox',
       'products',
@@ -785,7 +803,7 @@ describe('migracoes do banco local', () => {
     const migratedDatabase = new StockFlowDatabase(databaseName);
     await migratedDatabase.open();
 
-    expect(migratedDatabase.verno).toBe(11);
+    expect(migratedDatabase.verno).toBe(12);
     expect(await migratedDatabase.categories.get(categoryId)).toMatchObject({ name: 'Preservada' });
     expect(await migratedDatabase.products.get(productId)).toMatchObject({
       salePriceInCents: 1234,
@@ -815,8 +833,8 @@ describe('migracoes do banco local', () => {
     migratedDatabase.close();
   });
 
-  it('preserva integralmente v10 no upgrade para v11 sem inferir businessId', async () => {
-    const databaseName = `stockflow-v10-to-v11-${crypto.randomUUID()}`;
+  it('preserva integralmente v10 no upgrade para v12 sem inferir businessId', async () => {
+    const databaseName = `stockflow-v10-to-v12-${crypto.randomUUID()}`;
     databaseNames.push(databaseName);
     const databaseV10 = createVersionTenDatabase(databaseName);
     const businessId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -889,7 +907,7 @@ describe('migracoes do banco local', () => {
     const migratedDatabase = new StockFlowDatabase(databaseName);
     await migratedDatabase.open();
 
-    expect(migratedDatabase.verno).toBe(11);
+    expect(migratedDatabase.verno).toBe(12);
     expect(await migratedDatabase.categories.toArray()).toEqual([category]);
     expect(await migratedDatabase.products.toArray()).toEqual([product]);
     expect(await migratedDatabase.movements.toArray()).toEqual([movement]);
@@ -901,7 +919,39 @@ describe('migracoes do banco local', () => {
     migratedDatabase.close();
   });
 
-  it('produz o mesmo schema final v11 em fresh install e upgrade direto da v5', async () => {
+  it('cria store de operacao vazia no upgrade v11 para v12 sem alterar dados existentes', async () => {
+    const databaseName = `stockflow-v11-to-v12-${crypto.randomUUID()}`;
+    databaseNames.push(databaseName);
+    const databaseV11 = createVersionElevenDatabase(databaseName);
+    const categoryId = crypto.randomUUID();
+    const now = '2026-07-25T12:00:00.000Z';
+    await databaseV11.open();
+    await databaseV11.table('categories').add({
+      id: categoryId,
+      businessId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: 'Preservada',
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+    });
+    databaseV11.close();
+
+    const migratedDatabase = new StockFlowDatabase(databaseName);
+    await migratedDatabase.open();
+
+    expect(migratedDatabase.verno).toBe(12);
+    expect(await migratedDatabase.categories.get(categoryId)).toMatchObject({
+      name: 'Preservada',
+    });
+    expect(await migratedDatabase.initialCloudLoads.count()).toBe(0);
+    expect(migratedDatabase.initialCloudLoads.schema.primKey).toMatchObject({
+      keyPath: 'id',
+      auto: false,
+    });
+    migratedDatabase.close();
+  });
+
+  it('produz o mesmo schema final v12 em fresh install e upgrade direto da v5', async () => {
     const freshDatabaseName = `stockflow-fresh-schema-${crypto.randomUUID()}`;
     const migratedDatabaseName = `stockflow-migrated-schema-${crypto.randomUUID()}`;
     databaseNames.push(freshDatabaseName, migratedDatabaseName);
@@ -914,14 +964,19 @@ describe('migracoes do banco local', () => {
     await freshDatabase.open();
     await migratedDatabase.open();
 
-    expect(freshDatabase.verno).toBe(11);
-    expect(migratedDatabase.verno).toBe(11);
+    expect(freshDatabase.verno).toBe(12);
+    expect(migratedDatabase.verno).toBe(12);
     expect(schemaSignature(migratedDatabase)).toEqual(schemaSignature(freshDatabase));
     expect(schemaSignature(freshDatabase)).toEqual([
       {
         name: 'categories',
         primaryKey: 'id',
         indexes: ['businessId', 'deletedAt', 'name', 'syncStatus', 'updatedAt'],
+      },
+      {
+        name: 'initialCloudLoads',
+        primaryKey: 'id',
+        indexes: ['&businessId', 'createdAt', 'status', 'userId'],
       },
       {
         name: 'movements',

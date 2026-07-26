@@ -114,7 +114,9 @@ describe('rotas e formulario orientados pelo escopo ativo', () => {
     active.state = businessState(BUSINESS_B, 'Loja B');
     view.rerender(keyedCreateTree());
     expect(await screen.findByText('Estabelecimento: Loja B')).toBeTruthy();
-    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('');
+    await waitFor(() => {
+      expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('');
+    });
 
     await act(async () => {
       pendingCreation.resolve('88888888-8888-4888-8888-888888888888');

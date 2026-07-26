@@ -19,13 +19,15 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa atual: 6H-C implementa runtime local integralmente orientado pelo escopo ativo. A associação manual integral da 6H-B permanece disponível; pull, conflitos e sincronização automática continuam ausentes.
-- Schema Dexie atual: versão 11.
-- Estado de testes comprovado: 52 arquivos, 557 testes aprovados na 6H-C.
-- Evolução mais recente consolidada: Parte 6H-C, com isolamento explícito do conjunto unscoped e de cada business, sem carga remota ou pull. A Parte 3 permanece concluída.
-- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-C; regras 43–54 permanecem parcialmente atendidas**.
+- Etapa atual: 6H-D implementa carga inicial remota manual por snapshot para business vazio. Runtime 6H-C e associação 6H-B permanecem; pull, conflitos e sincronização automática continuam ausentes.
+- Eventos pré-snapshot compatíveis são reservados e depois `absorbed`; eventos posteriores permanecem `pending`, e movimentos históricos não são reenviados. A v12 persiste a operação para recuperação após reload.
+- Após bootstrap, `remoteVersion = 1` é baseline monotônica para updates/deletes; pushes confirmados avançam a entidade, movimentos aplicam `productVersion`, e a maior versão entre entidade/outbox synced prevalece. O ledger não aceita acesso autenticado direto e a migration 6H-D ainda não foi validada no Supabase real.
+- Schema Dexie atual: versão 12.
+- Estado de testes comprovado: 58 arquivos, 669 testes aprovados na revisão funcional final da 6H-D.
+- Evolução mais recente consolidada: Parte 6H-D, com carga inicial atômica/idempotente, sem replay histórico ou pull. A Parte 3 permanece concluída.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-D; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: preservar 6D/6F e definir, em etapa separada, carga inicial remota, cursor e aplicação local segura antes de retomar pull.
+- Próximo passo recomendado: preservar 6D/6F, validar operacionalmente a 6H-D e definir cursor, aplicação local e reconciliação antes de retomar pull.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -142,7 +144,7 @@ A 6E adiciona `register_stock_movement` em migration nova e libera somente `move
 
 A 6F validou a RPC em Supabase real com entrada e saída, atualização atômica do saldo, incremento de versão, ledger de idempotência e recusa de snapshot divergente. O registro sanitizado está em `docs/VALIDACAO-SUPABASE-6F.md`. Naquele momento houve uma ressalva visual no botão “Enviando...”, corrigida em etapa posterior.
 
-A ressalva visual foi corrigida posteriormente. A 6G bloqueou o pull, a 6H-A adicionou o escopo opcional e a 6H-B associa o conjunto legado somente após preview e confirmação. A 6H-C tornou o runtime scope-aware e passou a vincular novas outboxes business. O próximo avanço deve definir carga inicial remota, cursor e aplicação transacional antes de qualquer pull.
+A ressalva visual foi corrigida posteriormente. A 6G bloqueou o pull, a 6H-A adicionou o escopo opcional, a 6H-B associa o legado e a 6H-C tornou o runtime scope-aware. A 6H-D prepara o snapshot atual na nuvem sem replay. O próximo avanço deve validar essa carga e definir cursor, aplicação transacional e reconciliação antes de qualquer pull.
 
 Até lá, não transformar o resumo local atual em sincronização simulada apresentada como pronta.
 
@@ -195,7 +197,7 @@ O relatório de entrega deve informar:
 
 - `docs/auditoria-fase-0.md` contém uma raiz anterior e retrata lacunas de 12/07/2026, algumas já resolvidas.
 - O ADR-001 teve sua numeração interna corrigida na consolidação documental de 15/07/2026.
-- O README representa o estado funcional, schema v11, migrations, arquitetura, limitações, suíte e roadmap atuais.
+- O README representa o estado funcional, schema v12, migrations, arquitetura, limitações, suíte e roadmap atuais.
 - O primeiro reload offline e o ciclo de atualização A → B já foram validados manualmente; a coordenação de abas deve ser conferida novamente quando houver um upgrade de schema legítimo.
 - O identificador de build é derivado automaticamente dos artefatos gerados; não deve ser substituído por incremento manual de cache.
 
@@ -203,4 +205,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro `docs/prompt/PROMPT-MESTRE-STOCKFLOW.md`, `docs/ESTADO-ATUAL-DO-PROJETO.md`, `docs/ROADMAP-TCC.md`, `docs/ARQUITETURA-ATUAL.md`, `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e os ADRs relevantes. Confirme raiz, branch e worktree antes de alterar arquivos. As Partes 3, 4 e 5 estão concluídas. A 6H-C isola o runtime local por escopo e preserva a associação manual da 6H-B. Preserve v11 e as validações 6D/6F; o próximo passo é estratégia de carga inicial/cursor antes do pull; não faça commit ou push.
+> Leia primeiro o Prompt Mestre, o estado atual, roadmap, arquitetura, validações 6D/6F/carga inicial e ADRs relevantes. Confirme raiz, branch e worktree. As Partes 3, 4 e 5 estão concluídas. A 6H-D prepara snapshot remoto sem replay e preserva o runtime 6H-C e a associação 6H-B. Preserve Dexie v12 e todas as migrations anteriores; valide a carga em business descartável antes de projetar cursor/aplicação local; não faça commit ou push sem autorização.

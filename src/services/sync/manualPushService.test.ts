@@ -1,7 +1,10 @@
 import 'fake-indexeddb/auto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
+import type { Movement } from '../../types/Movement';
+import type { Product } from '../../types/Product';
 import type { OutboxEntry } from '../../types/Sync';
+import type { InitialCloudLoadOperation } from '../../types/InitialCloudLoad';
 import type { BusinessContextService } from '../businessContextService';
 import { categoryService } from '../categoryService';
 import { localDb } from '../db/localDb';
@@ -96,6 +99,55 @@ describe('push remoto manual e controlado', () => {
     });
     expect(result.message).toMatch(/nao pertence mais/);
     expect(gateway.push).not.toHaveBeenCalled();
+  });
+
+  it.each(['reserved', 'remote-confirmed'] as const)(
+    'bloqueia o push manual com operacao %s mesmo sem eventos reservados',
+    async (status) => {
+    const postSnapshot = categoryEntry({
+      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      entityId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    });
+    await localDb.initialCloudLoads.add(initialLoadOperation(status));
+    await localDb.outbox.add(postSnapshot);
+    const gateway = createGateway();
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result).toMatchObject({
+      status: 'blocked',
+      claimed: 0,
+      message: expect.stringMatching(/carga inicial.*reservada/i),
+    });
+    expect(gateway.push).not.toHaveBeenCalled();
+    expect(await localDb.outbox.get(postSnapshot.id)).toMatchObject({ status: 'pending' });
+    },
+  );
+
+  it('operacao completed libera o push manual de eventos posteriores', async () => {
+    const pending = categoryEntry();
+    await localDb.initialCloudLoads.add(initialLoadOperation('completed'));
+    await localDb.categories.add({
+      ...(pending.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+    });
+    await localDb.outbox.add(pending);
+    const gateway = createGateway();
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result).toMatchObject({ status: 'completed', claimed: 1, succeeded: 1 });
+    expect(gateway.push).toHaveBeenCalledTimes(1);
   });
 
   it('nao processa evento sem businessId', async () => {
@@ -203,6 +255,10 @@ describe('push remoto manual e controlado', () => {
 
   it('envia categoria suportada e arquiva sucesso com versao remota', async () => {
     const entry = categoryEntry();
+    await localDb.categories.add({
+      ...(entry.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+    });
     await localDb.outbox.add(entry);
     const gateway = createGateway();
     const service = createTestService(gateway, createContext());
@@ -214,9 +270,93 @@ describe('push remoto manual e controlado', () => {
       status: 'synced',
       remoteVersion: 1,
     });
+    expect(await localDb.categories.get(entry.entityId)).toMatchObject({
+      remoteVersion: 1,
+    });
+  });
+
+  it.each([
+    'category.created',
+    'category.updated',
+    'category.deleted',
+  ] as const)('%s persiste remoteVersion sem alterar outros campos', async (operation) => {
+    const entry = categoryEntry({ operation });
+    const category = {
+      ...(entry.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+      syncStatus: operation === 'category.deleted' ? 'pending' as const : 'error' as const,
+      ...(operation === 'category.deleted'
+        ? { deletedAt: '2026-07-19T10:30:00.000Z' }
+        : {}),
+      ...(operation === 'category.created' ? {} : { remoteVersion: 1 }),
+    };
+    await localDb.categories.add(category);
+    await localDb.outbox.add(entry);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({
+      remoteVersion: 7,
+      wasDuplicate: false,
+    });
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result).toMatchObject({ succeeded: 1, failed: 0 });
+    expect(await localDb.categories.get(entry.entityId)).toEqual({
+      ...category,
+      remoteVersion: 7,
+    });
+    expect(await localDb.outbox.count()).toBe(1);
+  });
+
+  it.each([
+    'product.created',
+    'product.updated',
+    'product.deleted',
+  ] as const)('%s persiste remoteVersion sem alterar outros campos', async (operation) => {
+    const entry = productEntry({ operation });
+    const product: Product = {
+      ...(entry.payload as Product),
+      businessId: BUSINESS_ID,
+      syncStatus: operation === 'product.deleted' ? 'pending' as const : 'error' as const,
+      ...(operation === 'product.deleted'
+        ? { deletedAt: '2026-07-19T10:30:00.000Z' }
+        : {}),
+      ...(operation === 'product.created' ? {} : { remoteVersion: 1 }),
+    };
+    await localDb.products.add(product);
+    await localDb.outbox.add(entry);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({
+      remoteVersion: 8,
+      wasDuplicate: false,
+    });
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result).toMatchObject({ succeeded: 1, failed: 0 });
+    expect(await localDb.products.get(entry.entityId)).toEqual({
+      ...product,
+      remoteVersion: 8,
+    });
+    expect(await localDb.outbox.count()).toBe(1);
   });
 
   it('usa versao do ultimo sucesso para update otimista', async () => {
+    await localDb.categories.add({
+      ...(categoryEntry().payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+      remoteVersion: 1,
+    });
     const synced = categoryEntry({ status: 'synced', remoteVersion: 3 });
     const update = categoryEntry({
       id: '77777777-7777-4777-8777-777777777777',
@@ -232,6 +372,132 @@ describe('push remoto manual e controlado', () => {
 
     expect(gateway.push).toHaveBeenCalledWith(expect.objectContaining({ id: update.id }), 3);
     expect(await localDb.outbox.get(update.id)).toMatchObject({ status: 'synced', remoteVersion: 4 });
+  });
+
+  it('usa baseline explicita quando ainda nao existe push synced', async () => {
+    const update = categoryEntry({ operation: 'category.updated' });
+    await localDb.categories.add({
+      ...(update.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+      remoteVersion: 1,
+    });
+    await localDb.outbox.add(update);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({ remoteVersion: 2, wasDuplicate: false });
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result).toMatchObject({ succeeded: 1, failed: 0 });
+    expect(gateway.push).toHaveBeenCalledWith(
+      expect.objectContaining({ id: update.id }),
+      1,
+    );
+  });
+
+  it('usa a remoteVersion da entidade quando ela supera a outbox synced', async () => {
+    const update = categoryEntry({ operation: 'category.updated' });
+    await localDb.categories.add({
+      ...(update.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+      remoteVersion: 2,
+    });
+    await localDb.outbox.bulkAdd([
+      categoryEntry({ status: 'synced', remoteVersion: 1 }),
+      update,
+    ]);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({ remoteVersion: 3, wasDuplicate: false });
+    const service = createTestService(gateway, createContext());
+
+    await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(gateway.push).toHaveBeenCalledWith(
+      expect.objectContaining({ id: update.id }),
+      2,
+    );
+  });
+
+  it('usa a mesma maior versao quando entidade e outbox synced empatam', async () => {
+    const update = categoryEntry({ operation: 'category.updated' });
+    await localDb.categories.add({
+      ...(update.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+      remoteVersion: 3,
+    });
+    await localDb.outbox.bulkAdd([
+      categoryEntry({ status: 'synced', remoteVersion: 3 }),
+      update,
+    ]);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({ remoteVersion: 4, wasDuplicate: false });
+    const service = createTestService(gateway, createContext());
+
+    await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(gateway.push).toHaveBeenCalledWith(
+      expect.objectContaining({ id: update.id }),
+      3,
+    );
+  });
+
+  it('usa somente a outbox synced quando a entidade ainda nao tem remoteVersion', async () => {
+    const update = categoryEntry({ operation: 'category.updated' });
+    await localDb.categories.add({
+      ...(update.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: BUSINESS_ID,
+    });
+    await localDb.outbox.bulkAdd([
+      categoryEntry({ status: 'synced', remoteVersion: 2 }),
+      update,
+    ]);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({ remoteVersion: 3, wasDuplicate: false });
+    const service = createTestService(gateway, createContext());
+
+    await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(gateway.push).toHaveBeenCalledWith(
+      expect.objectContaining({ id: update.id }),
+      2,
+    );
+  });
+
+  it('nao usa baseline de entidade pertencente a outro business', async () => {
+    const update = categoryEntry({ operation: 'category.updated' });
+    await localDb.categories.add({
+      ...(update.payload as Extract<OutboxEntry['payload'], { name: string }>),
+      businessId: '99999999-9999-4999-8999-999999999999',
+      remoteVersion: 1,
+    });
+    await localDb.outbox.add(update);
+    const gateway = createGateway();
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result.failed).toBe(1);
+    expect(gateway.push).not.toHaveBeenCalled();
   });
 
   it('usa a maior versao arquivada mesmo quando timestamps de sucesso empatam', async () => {
@@ -275,6 +541,13 @@ describe('push remoto manual e controlado', () => {
 
   it('envia movement.created rastreado e arquiva sucesso com productVersion', async () => {
     const movement = movementEntry();
+    const product = productEntity();
+    await localDb.products.add(product);
+    await localDb.movements.add({
+      ...(movement.payload as Movement),
+      businessId: BUSINESS_ID,
+    });
+    const localMovementBefore = await localDb.movements.get(movement.entityId);
     await localDb.outbox.add(movement);
     const gateway = createGateway();
     gateway.push.mockResolvedValue({ remoteVersion: 4, productVersion: 4, wasDuplicate: false });
@@ -286,7 +559,186 @@ describe('push remoto manual e controlado', () => {
     expect(result).toMatchObject({ succeeded: 1, failed: 0 });
     expect(gateway.push).toHaveBeenCalledWith(expect.objectContaining({ id: movement.id }), undefined);
     expect(persisted).toMatchObject({ status: 'synced', remoteVersion: 4 });
+    expect(await localDb.products.get(product.id)).toEqual({
+      ...product,
+      remoteVersion: 4,
+    });
+    expect(await localDb.movements.get(movement.entityId)).toEqual(localMovementBefore);
     expect(await localDb.outbox.where('operation').equals('product.updated').count()).toBe(0);
+  });
+
+  it('movimento de outro business nao altera produto e permanece recuperavel', async () => {
+    const movement = movementEntry();
+    const foreignProduct = {
+      ...productEntity(),
+      businessId: '99999999-9999-4999-8999-999999999999',
+    };
+    await localDb.products.add(foreignProduct);
+    await localDb.outbox.add(movement);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({
+      remoteVersion: 2,
+      productVersion: 2,
+      wasDuplicate: false,
+    });
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result).toMatchObject({ succeeded: 0, failed: 1 });
+    expect(await localDb.products.get(foreignProduct.id)).toEqual(foreignProduct);
+    expect(await localDb.outbox.get(movement.id)).toMatchObject({
+      status: 'error',
+      lastError: expect.stringMatching(/nao existe neste estabelecimento/),
+    });
+  });
+
+  it('retry duplicado repara productVersion antes de finalizar movement como synced', async () => {
+    const movement = movementEntry();
+    const product = productEntity();
+    await localDb.products.add(product);
+    await localDb.outbox.add(movement);
+    const gateway = createGateway();
+    gateway.push
+      .mockImplementationOnce(async () => {
+        await localDb.products.delete(product.id);
+        return {
+          remoteVersion: 2,
+          productVersion: 2,
+          wasDuplicate: false,
+        };
+      })
+      .mockResolvedValueOnce({
+        remoteVersion: 2,
+        productVersion: 2,
+        wasDuplicate: true,
+      });
+    const service = createTestService(gateway, createContext());
+
+    const first = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+    expect(first).toMatchObject({ succeeded: 0, failed: 1 });
+    expect(await localDb.outbox.get(movement.id)).toMatchObject({
+      status: 'error',
+    });
+
+    await localDb.products.add(product);
+    await localDb.outbox.update(movement.id, {
+      status: 'pending',
+      nextAttemptAt: undefined,
+    });
+    const retry = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(retry).toMatchObject({ succeeded: 1, failed: 0 });
+    expect(gateway.push).toHaveBeenCalledTimes(2);
+    expect(await localDb.products.get(product.id)).toEqual({
+      ...product,
+      remoteVersion: 2,
+    });
+    expect(await localDb.outbox.get(movement.id)).toMatchObject({
+      status: 'synced',
+      remoteVersion: 2,
+    });
+  });
+
+  it.each([
+    ['category', 'category.created'],
+    ['product', 'product.created'],
+  ] as const)('%s inexistente apos resposta remota mantem evento em erro', async (entityType, operation) => {
+    const entry =
+      entityType === 'category'
+        ? categoryEntry({ operation })
+        : productEntry({ operation });
+    await localDb.outbox.add(entry);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValue({ remoteVersion: 1, wasDuplicate: false });
+    const service = createTestService(gateway, createContext());
+
+    const result = await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(result).toMatchObject({ succeeded: 0, failed: 1 });
+    expect(await localDb.outbox.get(entry.id)).toMatchObject({
+      status: 'error',
+      lastError: expect.stringMatching(/nao existe neste estabelecimento/),
+    });
+  });
+
+  it('usa no update do produto a productVersion confirmada pelo movimento anterior', async () => {
+    const productCreated = productEntry();
+    await localDb.products.add({
+      ...(productCreated.payload as Product),
+      businessId: BUSINESS_ID,
+      remoteVersion: 1,
+    });
+    await localDb.outbox.add({
+      ...productCreated,
+      status: 'synced',
+      remoteVersion: 1,
+    });
+
+    const movement = movementEntry();
+    await localDb.outbox.add(movement);
+    const gateway = createGateway();
+    gateway.push.mockResolvedValueOnce({
+      remoteVersion: 2,
+      productVersion: 2,
+      wasDuplicate: false,
+    });
+    const service = createTestService(gateway, createContext());
+
+    await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+    expect(await localDb.products.get(productCreated.entityId)).toMatchObject({
+      remoteVersion: 2,
+    });
+
+    const productUpdate: OutboxEntry = {
+      ...productCreated,
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      operation: 'product.updated',
+      status: 'pending',
+      remoteVersion: undefined,
+      createdAt: '2026-07-19T11:00:00.000Z',
+      updatedAt: '2026-07-19T11:00:00.000Z',
+      idempotencyKey: 'product-update-after-movement',
+    };
+    await localDb.outbox.add(productUpdate);
+    gateway.push.mockResolvedValueOnce({
+      remoteVersion: 3,
+      wasDuplicate: false,
+    });
+
+    await service.push({
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+      isOnline: true,
+    });
+
+    expect(await localDb.products.get(productCreated.entityId)).toMatchObject({
+      remoteVersion: 3,
+    });
+    expect(gateway.push).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: productUpdate.id }),
+      2,
+    );
   });
 
   it('movimento legado permanece em erro amigavel sem chamada remota', async () => {
@@ -458,6 +910,31 @@ function createSession(): Session {
   };
 }
 
+function initialLoadOperation(
+  status: InitialCloudLoadOperation['status'],
+): InitialCloudLoadOperation {
+  const id = 'inventory-bootstrap:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  return {
+    id,
+    userId: USER_ID,
+    businessId: BUSINESS_ID,
+    businessName: 'Loja',
+    status,
+    idempotencyKey: id,
+    payloadText: '{"categories":[],"products":[]}',
+    payloadHash: 'a'.repeat(64),
+    localSignature: 'b'.repeat(64),
+    categoryIds: [],
+    productIds: [],
+    movementIds: [],
+    reservedEventIds: [],
+    createdAt: '2026-07-19T10:00:00.000Z',
+    ...(status === 'remote-confirmed'
+      ? { remoteResult: { categories: 0, products: 0, wasDuplicate: false } }
+      : {}),
+  };
+}
+
 function createGateway(configured = true) {
   return {
     isConfigured: vi.fn<SyncRemoteGateway['isConfigured']>().mockReturnValue(configured),
@@ -506,7 +983,7 @@ function categoryEntry(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
   };
 }
 
-function productEntry(): OutboxEntry {
+function productEntry(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
   const createdAt = '2026-07-19T09:00:00.000Z';
   return {
     id: '77777777-7777-4777-8777-777777777777',
@@ -531,6 +1008,16 @@ function productEntry(): OutboxEntry {
     userId: USER_ID,
     businessId: BUSINESS_ID,
     idempotencyKey: 'product-event',
+    ...overrides,
+  };
+}
+
+function productEntity(): Product {
+  const entry = productEntry();
+  return {
+    ...(entry.payload as Product),
+    businessId: BUSINESS_ID,
+    remoteVersion: 1,
   };
 }
 

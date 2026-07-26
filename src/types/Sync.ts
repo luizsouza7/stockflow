@@ -13,7 +13,25 @@ export type SyncOperation =
   | 'product.deleted'
   | 'movement.created';
 
-export type OutboxStatus = 'pending' | 'processing' | 'synced' | 'error' | 'conflict';
+export type OutboxStatus =
+  | 'pending'
+  | 'processing'
+  | 'synced'
+  | 'error'
+  | 'conflict'
+  | 'reserved'
+  | 'absorbed';
+
+export interface BootstrapOutboxReservation {
+  operationId: string;
+  previousStatus: 'pending' | 'error';
+}
+
+export interface BootstrapOutboxAbsorption {
+  operationId: string;
+  reason: 'initial-cloud-load-snapshot';
+  absorbedAt: string;
+}
 
 export type OutboxPayload = Category | Product | Movement;
 
@@ -33,6 +51,8 @@ export interface OutboxEntry {
   businessId?: string;
   idempotencyKey: string;
   remoteVersion?: number;
+  bootstrapReservation?: BootstrapOutboxReservation;
+  bootstrapAbsorption?: BootstrapOutboxAbsorption;
 }
 
 export interface SyncStatusSummary {
@@ -40,5 +60,7 @@ export interface SyncStatusSummary {
   processing: number;
   error: number;
   conflict: number;
+  reserved: number;
+  absorbed: number;
   totalAwaitingAction: number;
 }

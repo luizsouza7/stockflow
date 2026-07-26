@@ -121,6 +121,79 @@ describe('repositories com escopo local', () => {
       ),
     ).toBeUndefined();
   });
+
+  it('atualiza somente a versao remota da categoria no business correto', async () => {
+    const id = '22222222-2222-4222-8222-222222222222';
+    const before = await localDb.categories.get(id);
+
+    await categoryRepository.updateRemoteVersionForBusiness(id, BUSINESS_A, 4);
+
+    expect(await localDb.categories.get(id)).toEqual({
+      ...before,
+      remoteVersion: 4,
+    });
+  });
+
+  it('atualiza somente a versao remota do produto no business correto', async () => {
+    const id = '66666666-6666-4666-8666-666666666666';
+    const before = await localDb.products.get(id);
+
+    await productRepository.updateRemoteVersionForBusiness(id, BUSINESS_A, 5);
+
+    expect(await localDb.products.get(id)).toEqual({
+      ...before,
+      remoteVersion: 5,
+    });
+  });
+
+  it('rejeita versao invalida, entidade ausente e entidade de outro business', async () => {
+    await expect(
+      categoryRepository.updateRemoteVersionForBusiness(
+        '22222222-2222-4222-8222-222222222222',
+        BUSINESS_A,
+        0,
+      ),
+    ).rejects.toThrow(/inteiro positivo/);
+    await expect(
+      categoryRepository.updateRemoteVersionForBusiness(
+        '33333333-3333-4333-8333-333333333333',
+        BUSINESS_A,
+        2,
+      ),
+    ).rejects.toThrow(/nao existe neste estabelecimento/);
+    await expect(
+      productRepository.updateRemoteVersionForBusiness(
+        '99999999-9999-4999-8999-999999999998',
+        BUSINESS_A,
+        2,
+      ),
+    ).rejects.toThrow(/nao existe neste estabelecimento/);
+  });
+
+  it('nunca rebaixa uma versao remota local mais nova', async () => {
+    const categoryId = '22222222-2222-4222-8222-222222222222';
+    const productId = '66666666-6666-4666-8666-666666666666';
+    await localDb.categories.update(categoryId, { remoteVersion: 6 });
+    await localDb.products.update(productId, { remoteVersion: 7 });
+
+    await categoryRepository.updateRemoteVersionForBusiness(
+      categoryId,
+      BUSINESS_A,
+      4,
+    );
+    await productRepository.updateRemoteVersionForBusiness(
+      productId,
+      BUSINESS_A,
+      5,
+    );
+
+    expect(await localDb.categories.get(categoryId)).toMatchObject({
+      remoteVersion: 6,
+    });
+    expect(await localDb.products.get(productId)).toMatchObject({
+      remoteVersion: 7,
+    });
+  });
 });
 
 function category(id: string, businessId?: string): Category {

@@ -6,10 +6,11 @@ import {
   assertSameBusinessScope,
   validateOptionalBusinessId,
 } from '../domain/businessScope';
+import { validateOptionalRemoteVersion } from '../domain/remoteVersion';
 
 export const STOCKFLOW_BACKUP_FORMAT = 'stockflow-backup';
 export const STOCKFLOW_BACKUP_FORMAT_VERSION = 1;
-export const STOCKFLOW_DATABASE_SCHEMA_VERSION = 11;
+export const STOCKFLOW_DATABASE_SCHEMA_VERSION = 12;
 
 export interface StockFlowBackup {
   format: typeof STOCKFLOW_BACKUP_FORMAT;
@@ -242,6 +243,7 @@ function validateCategory(value: Category): void {
   assertIsoDate(value.updatedAt, 'updatedAt da categoria');
   assertOptionalIsoDate(value.deletedAt, 'deletedAt da categoria');
   assertSyncStatus(value.syncStatus);
+  validateOptionalRemoteVersion(value.remoteVersion);
 }
 
 function validateProduct(value: Product): void {
@@ -258,6 +260,7 @@ function validateProduct(value: Product): void {
   assertIsoDate(value.updatedAt, 'updatedAt do produto');
   assertOptionalIsoDate(value.deletedAt, 'deletedAt do produto');
   assertSyncStatus(value.syncStatus);
+  validateOptionalRemoteVersion(value.remoteVersion);
 }
 
 function validateMovement(value: Movement): void {

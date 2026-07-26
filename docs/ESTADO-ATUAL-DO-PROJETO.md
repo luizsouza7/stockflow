@@ -12,7 +12,12 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa atual: a 6H-C tornou o runtime local integralmente orientado pelo escopo ativo. A associação explícita da 6H-B permanece manual e atômica; carga inicial, pull, cursor e conflitos reais ainda não existem.
+- Etapa atual: a 6H-D adicionou carga inicial remota manual, atômica e idempotente por snapshot. O runtime 6H-C e a associação 6H-B permanecem; pull, cursor e conflitos reais ainda não existem.
+- Eventos compatíveis anteriores ao snapshot são reservados e depois marcados `absorbed`; movimentos históricos integram somente o saldo inicial e não viram linhas remotas.
+- A baseline `remoteVersion = 1` é monotônica e gravada atomicamente com a absorção. Dexie evoluiu para v12 porque a operação persistente precisa sobreviver a reload mesmo sem uma outbox âncora.
+- Todo push confirmado de categoria/produto atualiza a `remoteVersion` da entidade antes de arquivar o evento; `movement.created` aplica `productVersion` ao produto, e a próxima escrita usa a maior versão segura entre entidade e outbox synced.
+- Rejeição remota libera reservas; resposta perdida/falha local mantém reparo após reload com a mesma chave e payload. A RPC limita 5 MiB, 5.000 categorias e 20.000 produtos.
+- O ledger privado não concede acesso direto a `authenticated`; as RPCs do ledger usam `SECURITY DEFINER` restrito e a escrita usa lock `FOR UPDATE` no business. A migration ainda aguarda validação operacional real.
 - O estado do worktree e os commits de referência devem ser verificados diretamente com Git a cada retomada.
 - Versão do projeto em `package.json`: `0.1.0`.
 
@@ -74,8 +79,8 @@ Existe uma **PWA parcial com cache e atualização controlados**:
 
 - Biblioteca instalada: Dexie 4.4.4.
 - Nome padrão do banco: `stockflow-local-db`.
-- **Versão real atual do schema local: 11**.
-- Tabelas finais: `products`, `movements`, `categories` e `outbox`.
+- **Versão real atual do schema local: 12**.
+- Tabelas finais: `products`, `movements`, `categories`, `outbox` e `initialCloudLoads`.
 - A instância central possui coordenação de lifecycle sem criar banco, tabela ou migration adicional.
 
 ### Entidades existentes
@@ -103,8 +108,9 @@ Os UUIDs são gerados por `crypto.randomUUID()` através de `src/utils/id.ts`. N
 | 9 | Remoção das stores temporárias; schema final contém somente as três tabelas públicas. |
 | 10 | Adição isolada da store `outbox`; as tabelas de domínio são preservadas e a fila começa vazia no upgrade. |
 | 11 | Adição de índices `businessId` em categorias, produtos e movimentações, sem backfill. |
+| 12 | Adição da store técnica `initialCloudLoads` para reserva/recuperação do bootstrap, sem alterar stores anteriores. |
 
-As versões 6 a 9 formam uma única sequência técnica de upgrade por limitação do IndexedDB/Dexie ao trocar a primary key; nenhuma migration antiga foi alterada. A v10 adiciona a outbox e a v11 somente os índices de escopo. Os testes verificam banco novo em v11, v10 → v11 com preservação integral e o caminho permanente v1 → v11. Nenhuma migration atribui `businessId` ao legado.
+As versões 6 a 9 formam uma única sequência técnica de upgrade por limitação do IndexedDB/Dexie ao trocar a primary key; nenhuma migration antiga foi alterada. A v10 adiciona a outbox, a v11 somente os índices de escopo e a v12 somente a operação técnica da carga inicial. Os testes verificam banco novo em v12, v11 → v12, v10 → v12 e o caminho permanente v1 → v12. Nenhuma migration atribui `businessId` ao legado.
 
 ## Regras de negócio consolidadas
 
@@ -144,8 +150,8 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 ## Testes comprovados
 
-- Arquivos de teste atuais: **50**.
-- Testes aprovados na 6H-C: **557 de 557**.
+- Arquivos de teste atuais: **58**.
+- Testes aprovados na revisão funcional final da 6H-D: **669 de 669**.
 - Comando: `npm run test`.
 - Cobertura existente: regras puras, formatação monetária, repository de produtos, services de categorias e dashboard, transações e migrations Dexie, hook reativo e robustez de formulários/rotas.
 - Existem testes unitários da política de cache, do gerenciador de atualização, da conectividade, dos banners e do lifecycle do IndexedDB. Um teste com fake-indexeddb mantém uma conexão antiga aberta, observa o bloqueio real e confirma a liberação do upgrade após o fechamento. Testes de página comprovam cleanup em `pagehide`, reabertura explícita e preservação de dados após BFCache, ausência de listeners/canais duplicados, invalidação de `open()` pendente por estado terminal ou novo `pagehide` e proibição de conexão reaberta em `reload-required`. Ainda não existem Playwright/E2E, automação de navegador para o fluxo offline/instalação, coverage configurada ou CI.
@@ -175,7 +181,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - backup JSON versionado e exportação CSV device-wide de produtos e movimentações, preservando unscoped e todos os businesses do dispositivo;
 - Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
 - migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
-- suíte atual de 557 testes em 52 arquivos aprovada.
+- suíte atual de 669 testes em 58 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -216,7 +222,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - A unicidade local por código é validada no service e não cobre concorrência futura com nuvem ou múltiplos dispositivos.
 - Soft delete de produto não valida previamente se o registro já está excluído; a UI evita o fluxo comum, mas a regra poderia ser mais explícita.
 - O executor remoto só é criado pelo serviço manual e usa a sessão atual e RLS; o processador local genérico continua testável sem Supabase.
-- Sucesso remoto de categoria/produto ou movimento arquiva o evento como `synced` com `remoteVersion`; para movimentos, a versão corresponde ao produto após a RPC. Isso confirma apenas o push daquela operação, não pull, convergência ou sincronização completa.
+- Sucesso remoto de categoria/produto ou movimento primeiro persiste a versão na entidade e depois arquiva o evento como `synced`; para movimentos, `productVersion` avança o produto sem reaplicar o estoque. Isso confirma apenas o push daquela operação, não pull, convergência ou sincronização completa.
 - Divergência de `previousQuantity` ou `resultingQuantity` é recusada e preservada como erro/backoff amigável; ainda não existe entidade nem central de conflito.
 - Não há Error Boundary, coverage, Prettier, E2E ou CI.
 - O README foi atualizado para representar o núcleo local, a arquitetura, as migrations, a suíte atual, as limitações e o roadmap oficial.
@@ -227,14 +233,14 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalos de regras: Parte 1 (1–11), Parte 2 (12–18), Parte 3 (19–29), Parte 4 (30–35), Parte 5 (36–42), Parte 6 (43–54), Parte 7 (55–69), Parte 8 (70–79), Parte 9 (80–86), Parte 10 (87–98), Parte 11 (99–106), Parte 12 (107–118), Parte 13 (119–128), Parte 14 (129–138) e Parte 15 (139–143).
 
-- Evolução mais recente consolidada: Parte 6H-C, com consultas, rotas e mutações isoladas pelo escopo ativo, sem associação automática ou sync automática.
+- Evolução mais recente consolidada: Parte 6H-D, com snapshot manual de categorias/produtos para business remoto vazio, sem movimentos históricos ou sync automática.
 - Parte principal atual: **Parte 6 em andamento**. A Parte 3 permanece concluída.
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
-- Parte 6: **em andamento pelas fatias 6A–6H-C**. O legado pode ser associado integralmente e a UI opera por escopo ativo. Pull funcional, cursor, carga inicial remota, conflitos reais, central de conflitos e automação não foram implementados.
-- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a evolução técnica de 6A a 6H-C está consolidada em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`.
-- Próximo passo recomendado: definir e implementar, em etapa separada, uma carga inicial remota segura e a base de cursor/aplicação local antes de liberar qualquer pull.
+- Parte 6: **em andamento pelas fatias 6A–6H-D**. O legado pode ser associado, a UI opera por escopo ativo e a carga inicial remota é manual e conservadora. Pull funcional, cursor, conflitos reais, central de conflitos e automação não foram implementados.
+- Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md` e `docs/VALIDACAO-SUPABASE-6F.md`; a 6H-D possui checklist ainda não executado em `docs/VALIDACAO-SUPABASE-CARGA-INICIAL.md`. A evolução técnica de 6A a 6H-D está consolidada no relatório da Parte 6.
+- Próximo passo recomendado: validar operacionalmente a carga inicial em business descartável e, em etapa separada, definir cursor, aplicação local e reconciliação antes de liberar qualquer pull.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

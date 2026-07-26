@@ -8,4 +8,5 @@ export interface Category {
   updatedAt: string;
   deletedAt?: string;
   syncStatus: SyncStatus;
+  remoteVersion?: number;
 }

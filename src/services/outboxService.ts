@@ -29,11 +29,13 @@ export const outboxService = {
   },
 
   async getStatusSummary(): Promise<SyncStatusSummary> {
-    const [pending, processing, error, conflict] = await Promise.all([
+    const [pending, processing, error, conflict, reserved, absorbed] = await Promise.all([
       outboxRepository.countByStatus('pending'),
       outboxRepository.countByStatus('processing'),
       outboxRepository.countByStatus('error'),
       outboxRepository.countByStatus('conflict'),
+      outboxRepository.countByStatus('reserved'),
+      outboxRepository.countByStatus('absorbed'),
     ]);
 
     return {
@@ -41,7 +43,9 @@ export const outboxService = {
       processing,
       error,
       conflict,
-      totalAwaitingAction: pending + processing + error + conflict,
+      reserved,
+      absorbed,
+      totalAwaitingAction: pending + processing + error + conflict + reserved,
     };
   },
 
@@ -49,18 +53,22 @@ export const outboxService = {
     context: LocalMutationContext,
   ): Promise<SyncStatusSummary> {
     validateMutationContext(context);
-    const [pending, processing, error, conflict] = await Promise.all([
+    const [pending, processing, error, conflict, reserved, absorbed] = await Promise.all([
       outboxRepository.countByStatusForScope('pending', context),
       outboxRepository.countByStatusForScope('processing', context),
       outboxRepository.countByStatusForScope('error', context),
       outboxRepository.countByStatusForScope('conflict', context),
+      outboxRepository.countByStatusForScope('reserved', context),
+      outboxRepository.countByStatusForScope('absorbed', context),
     ]);
     return {
       pending,
       processing,
       error,
       conflict,
-      totalAwaitingAction: pending + processing + error + conflict,
+      reserved,
+      absorbed,
+      totalAwaitingAction: pending + processing + error + conflict + reserved,
     };
   },
 };

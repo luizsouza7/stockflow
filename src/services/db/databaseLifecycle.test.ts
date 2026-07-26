@@ -255,7 +255,7 @@ describe('DatabaseLifecycleManager', () => {
     await opening;
 
     expect(manager.getState().status).toBe('normal');
-    expect(upgradingDatabase.verno).toBe(11);
+    expect(upgradingDatabase.verno).toBe(12);
     upgradingDatabase.close();
     unsubscribe();
   });

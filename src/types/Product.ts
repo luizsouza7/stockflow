@@ -13,9 +13,10 @@ export interface Product {
   updatedAt: string;
   deletedAt?: string;
   syncStatus: SyncStatus;
+  remoteVersion?: number;
 }
 
-export type CreateProductInput = Omit<Product, 'id' | 'businessId'>;
+export type CreateProductInput = Omit<Product, 'id' | 'businessId' | 'remoteVersion'>;
 
 export type UpdateProductInput = Partial<
   Pick<Product, 'name' | 'code' | 'categoryId' | 'salePriceInCents' | 'minimumStock'>

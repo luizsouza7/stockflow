@@ -56,7 +56,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso comprovado:** operações locais continuam usando IndexedDB; o estado inicial e os eventos de conectividade possuem testes e cleanup; a mensagem offline não promete sincronização; o service worker distingue navegações e caminhos estáticos conhecidos de APIs, rotas privadas, recursos externos e métodos mutáveis; o build injeta identificador determinístico e isola caches por versão; caches antigos do StockFlow são removidos por prefixo somente na ativação; o registro ocorre somente em produção; uma nova versão aguardando pode ser aplicada por ação do usuário com reload único controlado; o lifecycle do IndexedDB trata `versionchange`, upgrade bloqueado, cleanup e aviso entre abas sem compartilhar dados de domínio; e a página Dados exporta backup JSON versionado e CSVs de produtos/movimentações, offline, sem modificar o banco ou enviar dados para servidor. O primeiro reload offline e o ciclo real de atualização A → B com preservação do IndexedDB foram validados manualmente.
 
-**Pendente neste recorte:** nenhuma. Importação/restauração não integra a entrega segura atual e permanece futura; a coordenação de múltiplas abas deve ser novamente validada em navegador com o schema atual v11, que preserva a outbox criada na v10.
+**Pendente neste recorte:** nenhuma. Importação/restauração não integra a entrega segura atual e permanece futura; a coordenação de múltiplas abas deve ser novamente validada em navegador com o schema atual v12, que preserva v1–v11 e acrescenta somente a operação técnica da carga inicial.
 
 ## Parte 5 — regras 36–42
 
@@ -72,7 +72,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento. 6A–6H-C permanecem concluídas nos respectivos escopos. A associação do legado é explícita e o runtime opera por escopo ativo; pull e sincronização bidirecional continuam ausentes.
+**Status:** em andamento. 6A–6H-D permanecem concluídas nos respectivos escopos. A associação do legado é explícita, o runtime opera por escopo ativo e a carga inicial remota é manual; pull e sincronização bidirecional continuam ausentes.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
@@ -94,9 +94,11 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Progresso da fatia 6H-C:** a fonte única `ActiveDataScope` isola leituras, rotas e mutações entre local, business A e business B. O contexto validado permanece utilizável offline; novas mutações business gravam `userId`/`businessId` na outbox; troca de contexto não associa dados nem dispara sync. Backup e CSV permanecem device-wide.
 
-**Pendente:** estratégia separada de carga inicial antes do pull/cursor; cenários multi-dispositivo amplos; retry automático, conflitos reais e central de conflitos.
+**Progresso da fatia 6H-D:** previews local/remota e confirmação explícita preparam categorias e produtos em business remoto vazio. Eventos compatíveis pré-snapshot são reservados, tornam-se `absorbed` após sucesso e nunca são enviados individualmente; eventos pós-snapshot permanecem normais. A v12 persiste a operação para recuperação após reload. A RPC atômica preserva UUIDs, soft deletes e saldo inicial, usa ledger idempotente, limita payload e não envia movimentos históricos ou sobrescreve dados. A baseline técnica é monotônica.
 
-**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6H-C estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
+**Pendente:** validação operacional real da 6H-D; cursor e aplicação local antes do pull; cenários multi-dispositivo amplos; retry automático, conflitos reais e central de conflitos.
+
+**Relatório técnico:** a evolução incremental, a arquitetura, as validações e os limites das etapas 6A–6H-D estão consolidados em `docs/RELATORIO-TECNICO-PARTE-6-SINCRONIZACAO.md`. A Parte 6 permanece em andamento.
 
 ## Parte 7 — regras 55–69
 
@@ -114,7 +116,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Status:** avançada.
 
-**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 52 arquivos com 557 testes aprovados na 6H-C, incluindo migrations v11, associação atômica, isolamento de runtime, rotas, outbox vinculada e ausência de automatismo.
+**Progresso comprovado:** Vitest, fake-indexeddb, React Testing Library, scripts de lint/typecheck/test/build e 58 arquivos com 669 testes aprovados na revisão funcional final da 6H-D, incluindo reserva/absorção, recuperação após reload, v11 → v12, propagação de versões, baseline monotônica, limites do payload, locks coordenados, preview, UI e ausência de automatismo.
 
 **Pendente:** Playwright/E2E, testes offline/PWA, coverage, lacunas de componentes, decisão sobre Prettier e revisão dos scripts/documentação sem alterar dependências fora de etapa autorizada.
 
@@ -190,4 +192,4 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 ## Próximo passo oficial
 
-Preservar os registros das validações 6D e 6F. O próximo passo seguro é definir uma estratégia separada de carga inicial remota, cursor confiável e aplicação transacional, sem replay histórico. Só depois o pull deve ser retomado. Conflitos reais permanecem etapa separada.
+Preservar os registros das validações 6D e 6F. Validar a carga inicial 6H-D em business descartável; depois definir cursor confiável, aplicação transacional e reconciliação. Só então o pull deve ser retomado. Conflitos reais permanecem etapa separada.

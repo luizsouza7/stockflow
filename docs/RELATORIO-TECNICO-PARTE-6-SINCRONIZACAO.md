@@ -4,7 +4,7 @@
 
 A Parte 6 trata da sincronização entre a base local offline-first, mantida em IndexedDB por meio do Dexie, e a base remota PostgreSQL disponibilizada pelo Supabase. Sua implementação foi dividida em etapas incrementais para preservar a integridade dos dados e tornar cada avanço verificável antes da introdução da etapa seguinte.
 
-Essa estratégia não cria nem apresenta uma sincronização simulada como se estivesse completa. A aplicação continua funcionando localmente e offline, e as operações de negócio são persistidas primeiro no dispositivo. No estado atual, dados elegíveis somente são enviados à nuvem por uma ação manual e controlada. A 6H-B associa o legado localmente sem representar upload e a 6H-C isola o runtime por escopo ativo; pull, conflitos e sincronização automática ainda não existem.
+Essa estratégia não cria nem apresenta uma sincronização simulada como se estivesse completa. A aplicação continua funcionando localmente e offline, e as operações de negócio são persistidas primeiro no dispositivo. No estado atual, dados elegíveis somente são enviados à nuvem por ação manual. A 6H-B associa o legado, a 6H-C isola o runtime e a 6H-D prepara um snapshot inicial remoto sem replay; pull, conflitos e sincronização automática ainda não existem.
 
 ## 2. Relação com o Prompt Mestre
 
@@ -66,7 +66,7 @@ Nessa etapa não havia acesso de negócio ao Supabase, push, pull ou qualquer en
 
 ## 5. Etapa 6B — Processamento local e retry
 
-A etapa 6B implementou o ciclo local da outbox com os estados `pending`, `processing`, `synced`, `error` e `conflict`. O processamento utiliza claim transacional para evitar que o mesmo evento seja assumido simultaneamente por mais de um executor local.
+A etapa 6B implementou o ciclo local da outbox com os estados `pending`, `processing`, `synced`, `error` e `conflict`. A 6H-D acrescentou `reserved` e `absorbed`: o primeiro protege eventos durante o bootstrap e o segundo registra absorção pelo snapshot sem fingir confirmação individual. O processamento utiliza claim transacional para evitar que o mesmo evento seja assumido simultaneamente por mais de um executor local.
 
 O executor é injetado no serviço, mantendo a lógica de processamento desacoplada do Supabase. Em caso de sucesso, o evento conclui seu ciclo conforme o contrato do processador. Em caso de falha, a outbox preserva o evento, incrementa as tentativas, registra `nextAttemptAt`, armazena `lastError` sanitizado e aplica backoff progressivo. Também foi criado um reset explícito para eventos que permaneceram em `processing` além do limite seguro.
 
@@ -131,7 +131,7 @@ Assim, na 6G, a opção C foi adotada. `manualPullService` exigia ação do usu�
 
 Na 6G, não foi criada Dexie v11; o schema ainda era v10 e todas as migrations históricas foram preservadas. Essas limitações locais foram tratadas posteriormente: a 6H-A criou a fundação e os índices v11 por `businessId`, a 6H-B adicionou a associação explícita do legado e a 6H-C tornou o runtime integralmente scope-aware.
 
-Atualmente, o pull continua bloqueado por `pull-foundation-required`. Ainda faltam estratégia segura de carga inicial, cursor, leitura e aplicação local de dados remotos, reconciliação com pendências locais e tratamento real de conflitos. Nenhuma dessas capacidades foi implementada pelas etapas 6H-A/B/C.
+Atualmente, o pull continua bloqueado por `pull-foundation-required`. A carga inicial segura foi implementada na 6H-D, mas ainda faltam cursor, leitura e aplicação local de dados remotos, reconciliação e tratamento real de conflitos.
 
 ### 10.1. Etapa 6H-A — fundação local de escopo por business
 
@@ -172,7 +172,55 @@ antigo.
 O indicador do layout usa o nome do estabelecimento, sem UUID como título. Associação do legado e
 push permanecem manuais. A troca de business não move dados, não associa, não envia e não baixa.
 Backup JSON e CSV continuam device-wide e incluem todos os escopos presentes no dispositivo.
-Dexie permanece v11 e o Service Worker não foi alterado.
+Ao fim da 6H-C, Dexie permanecia v11 e o Service Worker não foi alterado.
+
+### 10.4. Etapa 6H-D — carga inicial remota sem replay histórico
+
+A Conta oferece preview local/remoto e confirmação explícita. O snapshot inclui categorias e
+produtos ativos ou soft-deleted do business selecionado, preserva UUIDs, relações, valores e
+saldo atual, e exclui movimentos e outbox. Eventos locais incompatíveis bloqueiam a operação.
+
+O remoto precisa estar vazio de categorias, produtos, movimentos, operações de sync e bootstrap
+anterior. A RPC usa sessão, membership, RLS, hash, lock transacional e ledger da carga inteira.
+Categorias são inseridas antes dos produtos e `current_quantity` é escrito diretamente somente
+nesse bootstrap protegido, com `version = 1`. Não existe `upsert`, `DELETE`, sobrescrita ou
+alteração de dados locais de domínio. A validação operacional real está pendente no checklist dedicado.
+
+A auditoria posterior identificou que `version = 1` precisava de representação local explícita.
+Category e Product agora possuem `remoteVersion?`, gravado atomicamente como 1 após sucesso ou
+`wasDuplicate`. Todo push confirmado de categoria/produto passa a avançar esse metadado, e
+`movement.created` grava `productVersion` no produto sem alterar novamente o estoque ou criar
+`product.updated`. O push posterior usa o máximo entre a versão da entidade e a maior versão synced
+da outbox. Dados de outro business e versões inválidas são recusados.
+O metadado integra o backup JSON, mas é omitido do CSV operacional e dos formulários.
+
+A persistência da versão local antecede o status `synced`. Se ela falhar após o commit remoto, o
+evento permanece em erro e a repetição idempotente repara o metadado antes de concluir.
+
+A auditoria funcional final demonstrou um impasse: `pending`/`error` bloqueavam a carga, mas o
+push normal preenchia o remoto e também impedia o bootstrap. A solução reserva em uma transação
+Dexie todos os eventos compatíveis já refletidos no snapshot. Outra aba não pode reivindicá-los,
+nem eventos posteriores do mesmo business, enquanto a operação estiver ativa.
+
+Após sucesso/duplicata, baseline e absorção são finalizadas atomicamente. Eventos anteriores viram
+`absorbed` com motivo `initial-cloud-load-snapshot`; movimentos históricos não são inseridos
+remotamente e representam somente parte do saldo inicial. Eventos criados depois da captura
+permanecem `pending` e voltam ao push normal após a conclusão. `synced` permanece reservado a
+push individual realmente confirmado.
+
+Para recuperação após reload, o schema evolui para Dexie v12 com a store técnica
+`initialCloudLoads`, que persiste chave, payload, hash, IDs reservados e resultado remoto quando
+conhecido. Rejeição remota definitiva restaura os status anteriores; resposta perdida ou falha
+local mantém a reserva e reutiliza a mesma operação. Fresh v12 e upgrades v11 → v12 e v1 → v12
+são testados, sem alterar migrations históricas.
+
+O ledger privado não permite acesso direto por `authenticated`. Por isso, as duas RPCs do ledger
+usam `SECURITY DEFINER`, owner e `search_path` controlados, com auth/membership explícitas;
+`initialize_business_inventory` valida membership antes do lock, usa `FOR UPDATE` na linha do
+business e então revalida/protege a membership com `FOR SHARE` antes da idempotência e da prova
+de vazio. A RPC também rejeita timestamps inválidos ou não finitos. As FKs dos escritores normais
+coordenam com esse lock e impedem mistura concorrente silenciosa. O payload é limitado a 5 MiB,
+5.000 categorias e 20.000 produtos antes dos loops de validação.
 
 ## 11. Segurança e privacidade
 
@@ -225,13 +273,13 @@ A evolução da Parte 6 foi apoiada por testes automatizados de:
 - invariantes de escopo, isolamento de repositories, outbox scoped e migrations v1/v10 → v11 da 6H-A.
 - contexto ativo, rotas/mutações isoladas, continuidade offline e ausência de automação da 6H-C.
 
-Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados, a 6E registrou 439, a revisão da 6G aprovou 461 em 45 arquivos e a 6H-A aprovou 494 em 48. A 6H-B aprovou 531 testes em 50 arquivos; a 6H-C aprovou 557 em 52.
+Como fotografias das etapas, a entrega 6C registrou 406 testes aprovados, a 6E registrou 439, a revisão da 6G aprovou 461 em 45 arquivos e a 6H-A aprovou 494 em 48. A 6H-B aprovou 531 testes em 50 arquivos; a 6H-C aprovou 557 em 52, a base 6H-D aprovou 597 em 56, as revisões intermediárias aprovaram 614, 634, 652 e 653 em 58, e a auditoria final do lock persistido aprovou 669 em 58.
 
 Além da suíte automatizada, as etapas 6D e 6F foram validadas operacionalmente em Supabase real de teste. A 6D verificou a base remota, Auth, business/membership e push de categorias/produtos; a 6F verificou a RPC de estoque, seus efeitos transacionais e a recusa de snapshot divergente.
 
 ## 15. Limitações atuais
 
-- pull remoto funcional continua bloqueado por ausência de carga inicial segura, cursor, aplicação local remota e estratégia real de conflitos;
+- pull remoto funcional continua bloqueado por ausência de cursor, aplicação local remota, reconciliação e estratégia real de conflitos;
 - cursor de pull não foi criado porque não há aplicação segura que possa consumi-lo;
 - central de conflitos ainda não existe;
 - resolução real de conflitos ainda não existe;
@@ -244,8 +292,8 @@ Por essas limitações, a Parte 6 permanece em andamento.
 
 ## 16. Próximos passos recomendados
 
-1. Definir carga inicial remota sem replay histórico e com reconciliação das pendências locais.
-2. Definir cursor confiável e aplicação local transacional antes de liberar pull.
+1. Validar operacionalmente a carga inicial 6H-D em business descartável.
+2. Definir cursor confiável, aplicação local transacional e reconciliação antes de liberar pull.
 3. Tratar conflitos básicos após a existência de um pull confiável.
 4. Implementar uma central de conflitos, se necessária para os cenários reais do TCC.
 5. Realizar a revisão final da Parte 6 contra as regras 43–54 e seus critérios de aceite.
@@ -254,6 +302,6 @@ Cada passo deve permanecer separado e receber testes e validação proporcionais
 
 ## 17. Conclusão
 
-A Parte 6 avançou de maneira incremental, segura e testada: outbox, retry, push protegido, validações reais, RPC atômica, bloqueio consciente do pull, fundação local de escopo, associação explícita do legado e, na 6H-C, runtime isolado pelo escopo ativo.
+A Parte 6 avançou de maneira incremental, segura e testada: outbox, retry, push protegido, validações reais, RPC atômica, bloqueio consciente do pull, fundação local de escopo, associação explícita do legado, runtime isolado e carga inicial remota por snapshot.
 
-A Parte 6 ainda não está integralmente concluída. Entretanto, a base de push remoto está madura e operacionalmente validada para categorias, produtos e movimentações rastreadas compatíveis. Estratégia segura de carga inicial, pull funcional, cursor, conflitos reais, central de conflitos e sincronização automática permanecem como evoluções futuras explícitas.
+A Parte 6 ainda não está integralmente concluída. A base de push remoto está operacionalmente validada e a carga inicial segura foi implementada, mas ainda requer validação real. Pull funcional, cursor, conflitos reais, central de conflitos e sincronização automática permanecem evoluções futuras explícitas.

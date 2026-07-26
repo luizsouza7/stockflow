@@ -3,9 +3,14 @@ import type { CreateProductInput, Product } from '../types/Product';
 import {
   isEntityInBusiness,
   isUnscopedEntity,
+  isUuid,
   validateBusinessId,
   type DataScopeReference,
 } from '../domain/businessScope';
+import {
+  getValidatedRemoteVersion,
+  validateOptionalRemoteVersion,
+} from '../domain/remoteVersion';
 
 type ProductDetailsChanges = Partial<Omit<CreateProductInput, 'currentQuantity'>>;
 type ProductStockChanges = Pick<
@@ -68,6 +73,46 @@ export const productRepository = {
     validateBusinessId(businessId);
     const product = await localDb.products.get(id);
     return product && isEntityInBusiness(product, businessId) ? product : undefined;
+  },
+
+  async findRemoteVersionForBusiness(
+    id: string,
+    businessId: string,
+  ): Promise<number | undefined> {
+    const product = await this.findByIdForBusiness(id, businessId);
+    return product
+      ? getValidatedRemoteVersion(product.remoteVersion)
+      : undefined;
+  },
+
+  async updateRemoteVersionForBusiness(
+    id: string,
+    businessId: string,
+    remoteVersion: number,
+  ): Promise<void> {
+    validateBusinessId(businessId);
+    if (!isUuid(id)) {
+      throw new Error('O identificador do produto deve ser um UUID valido.');
+    }
+    validateOptionalRemoteVersion(remoteVersion);
+
+    await localDb.transaction('rw', localDb.products, async () => {
+      const product = await localDb.products.get(id);
+      if (!product || !isEntityInBusiness(product, businessId)) {
+        throw new Error(
+          'O produto confirmado remotamente nao existe neste estabelecimento.',
+        );
+      }
+      const currentRemoteVersion = getValidatedRemoteVersion(
+        product.remoteVersion,
+      );
+      await localDb.products.update(id, {
+        remoteVersion:
+          currentRemoteVersion === undefined
+            ? remoteVersion
+            : Math.max(currentRemoteVersion, remoteVersion),
+      });
+    });
   },
 
   async findByIdForScope(

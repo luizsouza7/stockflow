@@ -62,6 +62,21 @@ export const outboxRepository = {
     return localDb.outbox.where('status').equals(status).count();
   },
 
+  async hasBootstrapReservationForBusiness(
+    businessId: string,
+  ): Promise<boolean> {
+    return localDb.initialCloudLoads
+      .where('businessId')
+      .equals(businessId)
+      .filter(
+        (operation) =>
+          operation.status === 'reserved' ||
+          operation.status === 'remote-confirmed',
+      )
+      .first()
+      .then(Boolean);
+  },
+
   async countByStatusForScope(
     status: OutboxStatus,
     context: LocalMutationContext,
@@ -81,13 +96,29 @@ export const outboxRepository = {
   async claimEligible({ now, batchSize, canClaim }: ClaimEligibleInput): Promise<OutboxEntry[]> {
     const nowTimestamp = Date.parse(now);
 
-    return localDb.transaction('rw', localDb.outbox, async () => {
+    return localDb.transaction(
+      'rw',
+      localDb.outbox,
+      localDb.initialCloudLoads,
+      async () => {
+      const reservedBusinessIds = new Set(
+        (
+          await localDb.initialCloudLoads
+            .where('status')
+            .anyOf('reserved', 'remote-confirmed')
+            .toArray()
+        ).map(({ businessId }) => businessId),
+      );
       const candidates = await localDb.outbox
         .where('status')
         .anyOf('pending', 'error')
         .toArray();
       const eligible = candidates
         .filter((entry) => isEligible(entry, nowTimestamp))
+        .filter(
+          (entry) =>
+            !entry.businessId || !reservedBusinessIds.has(entry.businessId),
+        )
         .filter((entry) => canClaim?.(entry) ?? true)
         .sort(compareByCreatedAtAndId)
         .slice(0, batchSize)
@@ -98,7 +129,8 @@ export const outboxRepository = {
       }
 
       return eligible;
-    });
+      },
+    );
   },
 
   async removeClaimed(id: string, claimedAt: string): Promise<boolean> {
