@@ -30,6 +30,7 @@ import {
   initialCloudLoadService,
   type InitialCloudLoadService,
 } from '../services/sync/initialCloudLoadService';
+import { RemoteInventoryInspectionSection } from './RemoteInventoryInspectionSection';
 
 const EMPTY_SUMMARY: LocalPushSummary = {
   unscoped: 0,
@@ -290,8 +291,9 @@ export function ManualCloudPushPanel({
       <h3 className="text-lg font-semibold text-slate-950">Envio manual para a nuvem</h3>
       <p className="mt-2 text-sm text-slate-600">
         Esta etapa envia categorias, produtos e movimentacoes rastreadas compativeis. Movimentacoes
-        legadas sem snapshots permanecem bloqueadas. A busca remota e a resolucao de conflitos
-        ainda nao estao disponiveis.
+        legadas sem snapshots permanecem bloqueadas. A inspecao remota somente leitura esta
+        disponivel. A aplicacao local dos dados e a resolucao de conflitos ainda nao estao
+        disponiveis.
       </p>
 
       {!isOnline && (
@@ -379,10 +381,9 @@ export function ManualCloudPushPanel({
       <div className="mt-6 border-t border-slate-200 pt-5">
         <h4 className="font-semibold text-slate-950">Busca manual da nuvem</h4>
         <p className="mt-2 text-sm text-slate-600">
-          A carga inicial segura foi implementada e ainda precisa de validacao operacional real.
-          A busca permanece bloqueada porque faltam cursor, leitura remota, aplicacao local
-          transacional, reconciliacao e tratamento real de conflitos. Esta verificacao e manual
-          e nao baixa dados.
+          A leitura remota paginada existe somente para inspecao. A busca permanece bloqueada
+          porque ainda nao ha aplicacao local, cursor incremental persistente, reconciliacao nem
+          tratamento real de conflitos. Esta verificacao nao baixa nem aplica dados.
         </p>
         {pullMessage && (
           <p role="status" className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -398,6 +399,13 @@ export function ManualCloudPushPanel({
           {isCheckingPull ? 'Verificando busca...' : 'Verificar busca manual da nuvem'}
         </button>
       </div>
+
+      <RemoteInventoryInspectionSection
+        userId={userId}
+        businessId={selectedId || undefined}
+        isOnline={isOnline}
+        disabled={isBusy || isCheckingPull}
+      />
 
       <LegacyDataAssociationSection
         userId={userId}

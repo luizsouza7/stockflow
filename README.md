@@ -11,8 +11,8 @@ O sistema busca substituir controles manuais e planilhas dispersas por um fluxo 
 - Núcleo local funcional, persistido em IndexedDB pelo Dexie.
 - Schema Dexie atual: **versão 12**, com outbox preservada, índices por `businessId` e operação persistente da carga inicial.
 - Parte 5 concluída no escopo de Auth opcional e SQL PostgreSQL/RLS preparado.
-- Parte 6 avançou até a 6H-D: o runtime local opera por escopo ativo e oferece carga inicial remota manual por snapshot, sem replay histórico, pull ou automação.
-- Suíte atual: **669 testes em 58 arquivos**.
+- Parte 6 avançou até a 6I-A: o runtime local oferece carga inicial remota e leitura paginada somente para inspeção, sem aplicação local, pull ou automação.
+- Suíte atual: **768 testes em 62 arquivos**.
 - Planejamento oficial: [Prompt Mestre](docs/prompt/PROMPT-MESTRE-STOCKFLOW.md), dividido em 15 partes.
 
 ## Funcionalidades implementadas
@@ -158,7 +158,7 @@ avançou saldo e versão do produto para 2 e não reenviou o histórico.
 ## Limitações atuais
 
 - Auth e o push dependem de configuração, aplicação das migrations e validação em um projeto Supabase real;
-- o push e a carga inicial são manuais; o pull funcional continua bloqueado por ausência de cursor, aplicação local remota, reconciliação e resolução real de conflitos;
+- o push e a carga inicial são manuais; a leitura remota é apenas de inspeção e o pull funcional continua bloqueado por ausência de cursor incremental persistente, aplicação local, reconciliação e resolução real de conflitos;
 - movimentações legadas sem snapshots continuam bloqueadas, e divergências de estoque permanecem em erro/backoff até uma etapa futura de conflitos;
 - eventos antigos sem `businessId` nunca são enviados automaticamente, e updates sem versão remota segura permanecem em erro;
 - não há importação/restauração, backup automático ou backup em nuvem;
@@ -211,7 +211,7 @@ Abra a URL informada pelo Vite. Os dados de desenvolvimento são armazenados no 
 
 A suíte usa Vitest. Testes de persistência e migrations usam fake-indexeddb; componentes e hooks usam React Testing Library com jsdom. Há cobertura de domínio, services, repositories, formulários, consultas reativas, transações, snapshots, UUIDs, outbox, escopo local e lifecycle entre conexões, incluindo v1 → v12, v10 → v12 e v11 → v12.
 
-Estado validado nesta etapa: **669 testes aprovados em 58 arquivos**.
+Estado validado nesta etapa: **768 testes aprovados em 62 arquivos**.
 
 ## Banco local e migrations
 
@@ -266,7 +266,7 @@ O Prompt Mestre possui 143 regras distribuídas oficialmente assim:
 | 14 | 129–138 | auditoria, schemas, migrations e checklist final |
 | 15 | 139–143 | continuidade, explicabilidade e independência de IA |
 
-A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6H-D, com runtime local isolado, associação explícita do legado e carga inicial remota manual por snapshot. Pull/cursor, conflitos reais e sincronização automática continuam futuros.
+A Parte 3 permanece concluída. A Parte 4 está concluída. A Parte 5 está concluída e validada operacionalmente. A Parte 6 avançou até a 6I-A: além do runtime isolado e da carga inicial, existe leitura remota paginada somente para inspeção. A migration nova ainda não foi aplicada. Aplicação local, cursor incremental persistente, conflitos reais e sincronização automática continuam futuros.
 
 Consulte [Roadmap TCC](docs/ROADMAP-TCC.md), [Estado Atual](docs/ESTADO-ATUAL-DO-PROJETO.md) e [Como Continuar](docs/COMO-CONTINUAR-O-DESENVOLVIMENTO.md) antes de evoluir o projeto.
 

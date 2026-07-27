@@ -196,9 +196,10 @@ describe('painel de push manual', () => {
     renderPanel({});
     expect(screen.getByText(/movimentacoes rastreadas compativeis/i)).toBeTruthy();
     expect(screen.getByText(/legadas sem snapshots permanecem bloqueadas/i)).toBeTruthy();
-    expect(screen.getByText(/busca remota e a resolucao de conflitos/i)).toBeTruthy();
-    expect(screen.getByText(/carga inicial segura foi implementada.*validacao operacional real/i)).toBeTruthy();
-    expect(screen.getByText(/faltam cursor, leitura remota, aplicacao local transacional/i)).toBeTruthy();
+    expect(screen.getByText(/inspecao remota somente leitura esta disponivel/i)).toBeTruthy();
+    expect(screen.getByText(/aplicacao local dos dados e a resolucao de conflitos/i)).toBeTruthy();
+    expect(screen.getByText(/leitura remota paginada existe somente para inspecao/i)).toBeTruthy();
+    expect(screen.getByText(/ainda nao ha aplicacao local, cursor incremental persistente/i)).toBeTruthy();
   });
 
   it('mostra a verificacao de pull apenas como acao manual bloqueada', async () => {
@@ -589,7 +590,7 @@ function blockedPullResult() {
   return {
     status: 'blocked' as const,
     reason: 'pull-foundation-required' as const,
-    message: 'Busca remota bloqueada com seguranca: a carga inicial foi implementada e ainda precisa de validacao operacional real; faltam cursor, leitura remota, aplicacao local transacional, reconciliacao e tratamento real de conflitos. Nenhum dado remoto foi baixado.',
+    message: 'Busca remota bloqueada com seguranca: existe leitura remota paginada somente para inspecao, com cursor apenas em memoria. Ainda nao existem aplicacao local, cursor incremental persistente, reconciliacao nem tratamento real de conflitos. Nenhum dado remoto foi baixado ou aplicado.',
     downloaded: 0 as const,
     applied: 0 as const,
     ignored: 0 as const,

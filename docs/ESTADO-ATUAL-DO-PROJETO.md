@@ -12,7 +12,7 @@ O StockFlow é o Trabalho de Conclusão de Curso real. Por decisão atual do res
 
 - Raiz Git verificada: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch verificada: `develop`.
-- Etapa atual: a 6H-D adicionou carga inicial remota manual, atômica e idempotente por snapshot. O runtime 6H-C e a associação 6H-B permanecem; pull, cursor e conflitos reais ainda não existem.
+- Etapa atual: a 6I-A adiciona leitura remota paginada somente para inspeção sobre a carga 6H-D já validada. Pull, aplicação local, cursor incremental persistente e conflitos reais ainda não existem.
 - Eventos compatíveis anteriores ao snapshot são reservados e depois marcados `absorbed`; movimentos históricos integram somente o saldo inicial e não viram linhas remotas.
 - A baseline `remoteVersion = 1` é monotônica e gravada atomicamente com a absorção. Dexie evoluiu para v12 porque a operação persistente precisa sobreviver a reload mesmo sem uma outbox âncora.
 - Todo push confirmado de categoria/produto atualiza a `remoteVersion` da entidade antes de arquivar o evento; `movement.created` aplica `productVersion` ao produto, e a próxima escrita usa a maior versão segura entre entidade e outbox synced.
@@ -182,7 +182,7 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 - backup JSON versionado e exportação CSV device-wide de produtos e movimentações, preservando unscoped e todos os businesses do dispositivo;
 - Auth opcional por e-mail/senha, sessão inicial, listener com cleanup e logout local;
 - migration PostgreSQL versionada com isolamento por estabelecimento e RLS preparada;
-- suíte atual de 669 testes em 58 arquivos aprovada.
+- suíte atual de 768 testes em 62 arquivos aprovada.
 
 “Concluído” acima significa concluído no escopo local atualmente implementado, não conclusão do produto TCC.
 
@@ -234,14 +234,14 @@ O título interno do primeiro ADR está alinhado ao nome do arquivo como `ADR-00
 
 O Prompt Mestre é o planejamento oficial. Sua divisão oficial é por intervalos de regras: Parte 1 (1–11), Parte 2 (12–18), Parte 3 (19–29), Parte 4 (30–35), Parte 5 (36–42), Parte 6 (43–54), Parte 7 (55–69), Parte 8 (70–79), Parte 9 (80–86), Parte 10 (87–98), Parte 11 (99–106), Parte 12 (107–118), Parte 13 (119–128), Parte 14 (129–138) e Parte 15 (139–143).
 
-- Evolução mais recente consolidada: Parte 6H-D, com snapshot manual de categorias/produtos para business remoto vazio, sem movimentos históricos ou sync automática.
+- Evolução mais recente consolidada: Parte 6I-A, com inspeção paginada das projeções remotas, sem escrita local ou sync automática.
 - Parte principal atual: **Parte 6 em andamento**. A Parte 3 permanece concluída.
 - Pendências conhecidas das regras 19–29: nenhuma.
 - Elementos transversais já utilizados: testes da Parte 8, documentação/ADRs da Parte 10 e critérios de qualidade da Parte 13.
 - Parte 4: **concluída**; regras 30–35 implementadas no escopo local.
 - Parte 5: **concluída e validada operacionalmente**; Auth, migrations, RLS, business e membership foram exercitados em Supabase real de teste.
-- Parte 6: **em andamento pelas fatias 6A–6H-D**. O legado pode ser associado, a UI opera por escopo ativo e a carga inicial remota é manual e conservadora. Pull funcional, cursor, conflitos reais, central de conflitos e automação não foram implementados.
+- Parte 6: **em andamento pelas fatias 6A–6I-A**. O legado pode ser associado, a UI opera por escopo ativo, a carga inicial remota é manual e existe leitura paginada somente para inspeção. Pull funcional, aplicação local, cursor incremental persistente, conflitos reais, central de conflitos e automação não foram implementados.
 - Evidências operacionais: `docs/VALIDACAO-SUPABASE-6D.md`, `docs/VALIDACAO-SUPABASE-6F.md` e `docs/VALIDACAO-SUPABASE-CARGA-INICIAL.md`. A evolução técnica de 6A a 6H-D está consolidada no relatório da Parte 6.
-- Próximo passo recomendado: em etapa separada, definir cursor, aplicação local e reconciliação antes de liberar qualquer pull.
+- Próximo passo recomendado: validar operacionalmente a RPC 6I-A e, em etapa separada, definir cursor incremental, aplicação local e reconciliação antes de liberar qualquer pull.
 
 Nenhuma parte futura deve ser considerada concluída apenas porque algum de seus critérios foi usado transversalmente.

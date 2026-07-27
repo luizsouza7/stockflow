@@ -131,7 +131,7 @@ Assim, na 6G, a opção C foi adotada. `manualPullService` exigia ação do usu�
 
 Na 6G, não foi criada Dexie v11; o schema ainda era v10 e todas as migrations históricas foram preservadas. Essas limitações locais foram tratadas posteriormente: a 6H-A criou a fundação e os índices v11 por `businessId`, a 6H-B adicionou a associação explícita do legado e a 6H-C tornou o runtime integralmente scope-aware.
 
-Atualmente, o pull continua bloqueado por `pull-foundation-required`. A carga inicial segura foi implementada na 6H-D, mas ainda faltam cursor, leitura e aplicação local de dados remotos, reconciliação e tratamento real de conflitos.
+Atualmente, o pull continua bloqueado por `pull-foundation-required`. A carga inicial segura foi implementada na 6H-D e a 6I-A permite somente leitura paginada de inspeção. Ainda faltam cursor incremental persistente, aplicação local de dados remotos, reconciliação e tratamento real de conflitos.
 
 ### 10.1. Etapa 6H-A — fundação local de escopo por business
 
@@ -322,6 +322,10 @@ Cada passo deve permanecer separado e receber testes e validação proporcionais
 A Parte 6 avançou de maneira incremental, segura e testada: outbox, retry, push protegido, validações reais, RPC atômica, bloqueio consciente do pull, fundação local de escopo, associação explícita do legado, runtime isolado e carga inicial remota por snapshot.
 
 A Parte 6 ainda não está integralmente concluída. A base de push remoto e a carga inicial segura
-estão operacionalmente validadas. Pull funcional, cursor, aplicação local de dados remotos,
+estão operacionalmente validadas. A 6I-A acrescenta RPC e UI de leitura paginada somente para
+inspeção, com watermark, cursor efêmero, soft deletes e proteção contra stale context; sua
+migration ainda não foi aplicada. O watermark inicial considera o maior `sortTime` finito visível,
+pois timestamps podem ser preservados do dispositivo; valores não finitos bloqueiam a leitura e
+o JSON de cada página é limitado a 5 MiB sem truncagem. Pull funcional, cursor incremental persistente, aplicação local de dados remotos,
 conflitos reais, central de conflitos e sincronização automática permanecem evoluções futuras
 explícitas.

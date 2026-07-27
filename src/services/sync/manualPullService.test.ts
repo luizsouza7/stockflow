@@ -101,14 +101,14 @@ describe('bloqueio planejado do pull manual', () => {
       applied: 0,
       ignored: 0,
     }));
-    expect(result.message).toMatch(/carga inicial foi implementada/i);
-    expect(result.message).toMatch(/validacao operacional real/i);
+    expect(result.message).toMatch(/leitura remota paginada somente para inspecao/i);
+    expect(result.message).toMatch(/cursor apenas em memoria/i);
     expect(result.message).toMatch(/cursor/i);
-    expect(result.message).toMatch(/leitura remota/i);
-    expect(result.message).toMatch(/aplicacao local transacional/i);
+    expect(result.message).toMatch(/aplicacao local/i);
+    expect(result.message).toMatch(/cursor incremental persistente/i);
     expect(result.message).toMatch(/reconciliacao/i);
     expect(result.message).toMatch(/conflitos/i);
-    expect(result.message).not.toMatch(/nao existe.*carga inicial|nao existem.*carga inicial/i);
+    expect(result.message).not.toMatch(/nao existe.*leitura remota|nao existem.*leitura remota/i);
     expect(result.message).not.toMatch(/nao estao separados por estabelecimento|businessId/i);
   });
 

@@ -19,15 +19,15 @@ Depois, leia o código e os testes apenas da área que será alterada. O Prompt 
 
 - Raiz esperada nesta fotografia: `C:/Users/lufel/Desktop/TCC/StockFlow`.
 - Branch de trabalho nesta fotografia: `develop`.
-- Etapa atual: 6H-D implementa carga inicial remota manual por snapshot para business vazio. Runtime 6H-C e associação 6H-B permanecem; pull, conflitos e sincronização automática continuam ausentes.
+- Etapa atual: 6I-A implementa leitura remota paginada somente para inspeção sobre a carga 6H-D. Pull, aplicação local, cursor incremental persistente, conflitos e sincronização automática continuam ausentes.
 - Eventos pré-snapshot compatíveis são reservados e depois `absorbed`; eventos posteriores permanecem `pending`, e movimentos históricos não são reenviados. A v12 persiste a operação para recuperação após reload.
-- Após bootstrap, `remoteVersion = 1` é baseline monotônica para updates/deletes; pushes confirmados avançam a entidade, movimentos aplicam `productVersion`, e a maior versão entre entidade/outbox synced prevalece. O ledger não aceita acesso autenticado direto e a migration 6H-D ainda não foi validada no Supabase real.
+- Após bootstrap, `remoteVersion = 1` é baseline monotônica para updates/deletes; pushes confirmados avançam a entidade, movimentos aplicam `productVersion`, e a maior versão entre entidade/outbox synced prevalece. O ledger não aceita acesso autenticado direto e a 6H-D foi validada no Supabase real.
 - Schema Dexie atual: versão 12.
-- Estado de testes comprovado: 58 arquivos, 669 testes aprovados na revisão funcional final da 6H-D.
-- Evolução mais recente consolidada: Parte 6H-D, com carga inicial atômica/idempotente, sem replay histórico ou pull. A Parte 3 permanece concluída.
-- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6H-D; regras 43–54 permanecem parcialmente atendidas**.
+- Estado de testes comprovado: 62 arquivos, 768 testes aprovados após a auditoria final da 6I-A.
+- Evolução mais recente consolidada: Parte 6I-A, com inspeção remota paginada, sem aplicação local ou pull. A Parte 3 permanece concluída.
+- Parte principal atual: **Parte 6 em andamento pelas fatias 6A–6I-A; regras 43–54 permanecem parcialmente atendidas**.
 - Pendências conhecidas das regras 19–29: nenhuma.
-- Próximo passo recomendado: preservar 6D/6F, validar operacionalmente a 6H-D e definir cursor, aplicação local e reconciliação antes de retomar pull.
+- Próximo passo recomendado: preservar 6D/6F/6H-D, validar operacionalmente a RPC 6I-A e definir cursor incremental, aplicação local e reconciliação antes de retomar pull.
 
 Esses dados devem ser verificados novamente na retomada; não devem ser copiados como verdade eterna.
 
@@ -205,4 +205,4 @@ Essas divergências devem ser consideradas ao retomar. Não corrija todas automa
 
 # Prompt mínimo para retomar o projeto em outra IA
 
-> Leia primeiro o Prompt Mestre, o estado atual, roadmap, arquitetura, validações 6D/6F/carga inicial e ADRs relevantes. Confirme raiz, branch e worktree. As Partes 3, 4 e 5 estão concluídas. A 6H-D prepara snapshot remoto sem replay e preserva o runtime 6H-C e a associação 6H-B. Preserve Dexie v12 e todas as migrations anteriores; valide a carga em business descartável antes de projetar cursor/aplicação local; não faça commit ou push sem autorização.
+> Leia primeiro o Prompt Mestre, o estado atual, roadmap, arquitetura, validações 6D/6F/carga inicial e ADRs relevantes. Confirme raiz, branch e worktree. As Partes 3, 4 e 5 estão concluídas. A 6H-D prepara snapshot remoto sem replay; a 6I-A acrescenta somente inspeção remota paginada e sua migration ainda precisa de revisão/validação operacional. Preserve Dexie v12 e todas as migrations anteriores; não trate o cursor efêmero como cursor incremental nem aplique dados localmente; não faça commit ou push sem autorização.

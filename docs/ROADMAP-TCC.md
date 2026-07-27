@@ -72,7 +72,7 @@ Snapshots de estoque pertencem ao histórico e à rastreabilidade das movimenta�
 
 **Objetivo real:** implementar sincronização real com outbox local, estados, push, retry, pull, exclusões, conflitos, concorrência de estoque, operação atômica remota e UX de sincronização/conflitos.
 
-**Status:** em andamento. 6A–6H-D permanecem concluídas nos respectivos escopos. A associação do legado é explícita, o runtime opera por escopo ativo e a carga inicial remota é manual; pull e sincronização bidirecional continuam ausentes.
+**Status:** em andamento. 6A–6H-D permanecem concluídas nos respectivos escopos e a 6I-A oferece somente inspeção remota paginada. Pull, aplicação local e sincronização bidirecional continuam ausentes.
 
 **Progresso da fatia 6A:** a v10 adiciona outbox persistente; categorias, produtos e movimentações geram eventos pending na mesma transação das mutações locais; contratos incluem estados, idempotência e campos de retry futuro; a UI mostra a quantidade local sem prometer nuvem. Isso não é sincronização funcional.
 
@@ -199,6 +199,6 @@ saldo/versão e não duplicou o bootstrap.
 
 ## Próximo passo oficial
 
-Preservar os registros das validações 6D, 6F e 6H-D. Definir cursor confiável, aplicação
-transacional e reconciliação em etapa separada. Só então o pull deve ser retomado. Conflitos reais
-permanecem etapa separada.
+Preservar os registros das validações 6D, 6F e 6H-D. Revisar e validar operacionalmente a leitura
+paginada 6I-A sem tratá-la como pull. Depois, definir cursor incremental persistente, aplicação
+transacional e reconciliação em etapa separada. Conflitos reais permanecem etapa separada.

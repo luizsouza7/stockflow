@@ -325,6 +325,15 @@ O backup representa dados do StockFlow em JSON, não estruturas internas do Inde
 - `docs/arquitetura/adrs/ADR-005-identificadores-uuid-para-produtos-e-movimentacoes.md`;
 - `docs/arquitetura/adrs/ADR-006-escopo-local-por-business-e-legado-unscoped.md`;
 - `docs/arquitetura/adrs/ADR-007-associacao-explicita-e-atomica-de-dados-legados.md`;
-- `docs/arquitetura/adrs/ADR-008-runtime-local-orientado-por-escopo-ativo.md`.
+- `docs/arquitetura/adrs/ADR-008-runtime-local-orientado-por-escopo-ativo.md`;
+- `docs/arquitetura/adrs/ADR-009-carga-inicial-remota-por-snapshot.md`;
+- `docs/arquitetura/adrs/ADR-010-leitura-remota-paginada-somente-inspecao.md`.
 
 Este documento resume as decisões; os ADRs preservam contexto e consequências específicas e não são duplicados integralmente aqui.
+
+## Leitura remota de inspeção — Parte 6I-A
+
+`get_business_inventory_page` consulta as três projeções sob RLS, com cursor efêmero, watermark e
+chave global `sortTime + rank + UUID`. Gateway e service validam resposta, sessão, membership e
+stale context. A UI mantém somente a página atual em memória. Não há escrita no Dexie, outbox,
+cursor persistido ou pull funcional; o schema permanece v12.
